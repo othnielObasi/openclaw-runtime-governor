@@ -32,6 +32,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 import httpx
+import json
 
 from moltbook_client import MoltbookClient, PostResult
 from post_composer import GovernorSnapshot, PostType, compose_post
@@ -228,6 +229,32 @@ def post_update(
             content=composed.content,
             tags=composed.tags,
         )
+        # Handle verification challenge if present
+        try:
+            raw = result.raw if hasattr(result, "raw") else {}
+            post_obj = raw.get("post", raw) if isinstance(raw, dict) else {}
+            verification = post_obj.get("verification") or raw.get("verification")
+        except Exception:
+            verification = None
+
+        if verification:
+            cfg_dir = os.path.expanduser("~/.config/moltbook")
+            os.makedirs(cfg_dir, exist_ok=True)
+            pending = {
+                "verification_code": verification.get("verification_code"),
+                "challenge_text": verification.get("challenge_text"),
+                "expires_at": verification.get("expires_at"),
+                "post_id": post_obj.get("id"),
+            }
+            pending_path = os.path.join(cfg_dir, "pending_verification.json")
+            with open(pending_path, "w") as f:
+                json.dump(pending, f)
+
+            logger.warning(
+                "Moltbook returned a verification challenge. Saved to %s. "
+                "Solve the challenge and run openclaw-skills/moltbook-reporter/verify_challenge.py to submit the answer.",
+                pending_path,
+            )
         logger.info(
             "✅ Posted to Moltbook submolt=%r post_id=%s",
             MOLTBOOK_SUBMOLT, result.post_id,

@@ -446,6 +446,16 @@ class MoltbookClient:
         self._request("DELETE", f"/agents/{agent_name}/follow")
         return True
 
+    def verify(self, verification_code: str, answer: str) -> Dict[str, Any]:
+        """
+        Submit a verification challenge answer.
+
+        Body: { verification_code: str, answer: "15.00" }
+        Returns the parsed JSON response.
+        """
+        payload = {"verification_code": verification_code, "answer": answer}
+        return self._request("POST", "/verify", json=payload)
+
     # ------------------------------------------------------------------
     # Search
     # ------------------------------------------------------------------

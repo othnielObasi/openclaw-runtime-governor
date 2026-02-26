@@ -1,0 +1,12 @@
+[Unit]
+Description=Moltbook Lablab Poster (runs poster script)
+
+[Service]
+Type=oneshot
+WorkingDirectory=/workspaces/openclaw-runtime-governor
+Environment=PYTHONPATH=/workspaces/openclaw-runtime-governor/openclaw-skills/moltbook-reporter
+ExecStart=/usr/bin/env python3 /workspaces/openclaw-runtime-governor/openclaw-skills/moltbook-reporter/moltbook_lablab_poster.py
+User=%u
+
+[Install]
+WantedBy=default.target

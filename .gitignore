@@ -1,0 +1,7 @@
+/.config/moltbook/credentials.json
+.env
+__pycache__/
+*.pyc
+node_modules/
+dist/
+build/
