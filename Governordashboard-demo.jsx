@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
 // ═══════════════════════════════════════════════════════════
-// DESIGN TOKENS — NOVTIA Sovereign
+// DESIGN TOKENS — Sovereign AI Lab
 // One hue (navy), four depths for panel hierarchy.
 // Text:    p1 primary | p2 secondary | p3 tertiary
 // Signals: green=allow | amber=review | red=block
