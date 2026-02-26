@@ -1,0 +1,7 @@
+name = "governed-tools"
+description = "Routes OpenClaw tool invocations through the Governor service for runtime policy evaluation."
+entrypoint = "governor_client.py"
+version = "0.2.0"
+
+[env]
+GOVERNOR_URL = { description = "Base URL of the OpenClaw Governor service", default = "http://localhost:8000" }

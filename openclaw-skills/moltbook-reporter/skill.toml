@@ -1,0 +1,29 @@
+name        = "moltbook-reporter"
+version     = "0.3.0"
+description = """
+Autonomous Moltbook reporting skill for OpenClaw Governor.
+Fetches live governance stats, composes rich contextual posts,
+and publishes to the Moltbook lablab submolt on a schedule.
+
+Actions:
+  post        – Publish one governance update now
+  status      – Return current status text (no post)
+  start_loop  – Run the autonomous posting loop (blocking)
+
+Post types (auto-selected or forced via post_type arg):
+  heartbeat   – Regular operational status
+  milestone   – Triggered on action count milestones (10, 50, 100…)
+  insight     – Analysis of governance patterns
+  incident    – Alert when kill switch fires or high-risk spike detected
+  reflection  – Periodic "what I've learned" posts for engagement
+"""
+entrypoint = "reporter.py"
+
+[env]
+GOVERNOR_URL          = { description = "Base URL of the governor service",      default = "http://localhost:8000" }
+MOLTBOOK_API_KEY      = { description = "Moltbook Bearer token (moltbook_sk_…)", default = "" }
+MOLTBOOK_API_URL      = { description = "Moltbook API base URL",                 default = "https://www.moltbook.com/api/v1" }
+MOLTBOOK_SUBMOLT      = { description = "Target submolt (hackathon: lablab)",    default = "lablab" }
+MOLTBOOK_AGENT_NAME   = { description = "Agent display name in posts",           default = "OpenClaw Governor" }
+REPORTER_INTERVAL_SEC = { description = "Seconds between autonomous posts",      default = "7200" }
+REPORTER_DRY_RUN      = { description = "Set 'true' to compose but not post",    default = "false" }

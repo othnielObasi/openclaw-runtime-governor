@@ -1,0 +1,79 @@
+# Base policies – loaded from YAML at startup.
+# These are the always-on, file-based rules.
+# Additional dynamic policies can be created via the /policies API.
+
+- id: shell-dangerous
+  description: Block obviously destructive shell commands.
+  severity: 90
+  match:
+    tool: shell
+    args_regex: "(rm -rf /|mkfs|format [cC]:|drop database|dd if=/dev/zero)"
+  action: block
+
+- id: shell-elevated
+  description: Flag shell commands that use elevated privileges for review.
+  severity: 60
+  match:
+    tool: shell
+    args_regex: "(sudo|su -|chmod 777|chown root)"
+  action: review
+
+- id: external-http-review
+  description: Review all external HTTP calls (non-localhost).
+  severity: 40
+  match:
+    tool: http_request
+    url_regex: "^https?://(?!localhost|127\\.0\\.0\\.1|\\[::1\\])"
+  action: review
+
+- id: messaging-bulk-review
+  description: Review bulk messaging actions (any messaging tool).
+  severity: 60
+  match:
+    tool: messaging_send
+  action: review
+
+- id: surge-block
+  description: Block all surge_ prefixed tools – these are high-blast-radius ops.
+  severity: 85
+  match:
+    args_regex: "surge_"
+  action: block
+
+- id: credential-exfil-block
+  description: Block actions that appear to exfiltrate credentials or secrets.
+  severity: 95
+  match:
+    args_regex: "(api[_\\s]?key|access[_\\s]?token|private[_\\s]?key|client[_\\s]?secret)"
+  action: block
+
+# ── SURGE Token Governance Policies ─────────────────────────
+
+- id: surge-token-launch-review
+  description: All SURGE token launch operations require human review.
+  severity: 70
+  match:
+    tool: surge_launch_token
+  action: review
+
+- id: surge-trade-high-value
+  description: Flag high-value SURGE trades (> threshold) for review.
+  severity: 75
+  match:
+    tool: surge_trade
+    args_regex: "(amount|value)"
+  action: review
+
+- id: surge-wallet-transfer-review
+  description: Review all wallet-to-wallet SURGE token transfers.
+  severity: 65
+  match:
+    tool: surge_transfer
+  action: review
+
+- id: surge-ownership-transfer-block
+  description: Block automated token ownership transfers — require explicit admin approval.
+  severity: 90
+  match:
+    tool: surge_transfer_ownership
+  action: block
