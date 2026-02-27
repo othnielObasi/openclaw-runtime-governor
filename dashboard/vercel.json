@@ -4,5 +4,6 @@
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
   "env": {
+    "NEXT_PUBLIC_GOVERNOR_API": "https://openclaw-governor.fly.dev"
   }
 }
