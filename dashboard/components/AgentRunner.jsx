@@ -307,7 +307,7 @@ policies.forEach(p =>
 // ═══════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════
-export default function AgentRunner() {
+export default function AgentRunner({ onResult }) {
   const API_BASE = (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_GOVERNOR_API) || "";
   const getToken = () => typeof window !== "undefined" ? localStorage.getItem("ocg_token") : null;
 
@@ -498,6 +498,25 @@ export default function AgentRunner() {
         const result = await evaluateTool(phase, phase.tools[t]);
         allResults.push(result);
         setResults(prev => [...prev, result]);
+
+        // Push result to dashboard/audit/SURGE via onResult callback
+        if (onResult && result.decision !== "error") {
+          onResult(result.tool, {
+            decision: result.decision,
+            risk: result.risk,
+            policy: (result.policy || []).join(", ") || "api-pipeline",
+            expl: result.explanation,
+            trace: result.trace ? result.trace.map(s => ({
+              key: s.layer || s.key || "unknown",
+              outcome: s.outcome || s.decision || "allow",
+              matched: s.matched || [],
+              ms: s.duration_ms || 0,
+            })) : [],
+            chainAlert: result.chain_pattern ? { triggered: true, pattern: result.chain_pattern } : null,
+            piiHits: [],
+            trustTier: "internal",
+          }, "defi-research-agent");
+        }
 
         // Small delay between calls for visual effect
         if (!abortRef.current) await new Promise(r => setTimeout(r, 350));

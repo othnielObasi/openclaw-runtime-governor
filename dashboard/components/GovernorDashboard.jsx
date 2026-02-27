@@ -1261,6 +1261,9 @@ function DashboardTab({ gs }) {
 // TAB: ACTION TESTER
 // ═══════════════════════════════════════════════════════════
 function ActionTesterTab({ killSwitch, extraPolicies, sessionMemory, onResult }) {
+  const API_BASE = (typeof process!=="undefined" && process.env?.NEXT_PUBLIC_GOVERNOR_API) || null;
+  const getToken = () => typeof window!=="undefined" ? localStorage.getItem("ocg_token") : null;
+
   const [tool, setTool]   = useState("http_request");
   const [agent, setAgent] = useState("agent-demo-01");
   const [args, setArgs]   = useState(`{"url": "http://localhost/api/health"}`);
@@ -1268,6 +1271,7 @@ function ActionTesterTab({ killSwitch, extraPolicies, sessionMemory, onResult })
   const [result, setResult] = useState(null);
   const [busy, setBusy]   = useState(false);
   const [pipeState, setPipe] = useState(Object.fromEntries(LAYERS_ORDER.map(k=>[k,"standby"])));
+  const [mode, setMode]   = useState(API_BASE ? "live" : "local"); // "live" = real API, "local" = client-side
 
   const load = p => { setTool(p.tool); setArgs(p.args); setCtx(p.ctx); };
   const resetPipe = () => setPipe(Object.fromEntries(LAYERS_ORDER.map(k=>[k,"standby"])));
@@ -1275,15 +1279,102 @@ function ActionTesterTab({ killSwitch, extraPolicies, sessionMemory, onResult })
   const [outputText, setOutputText] = useState("");
   const [outputResult, setOutputResult] = useState(null);
 
-  const runEval = async () => {
-    setBusy(true); setResult(null); setOutputResult(null); resetPipe();
-    await sleep(60);
-    let a, c;
+  // ── Live API evaluation ──
+  const runLiveEval = async (a, c) => {
+    resetPipe();
+    // Animate "scanning" through each layer sequentially
+    for (const key of LAYERS_ORDER.filter(k=>k!=="output")) {
+      setPipe(prev => ({...prev, [key]:"scanning"}));
+      await sleep(120);
+    }
+
     try {
-      a = JSON.parse(args||"{}");
-      c = JSON.parse(ctx||"{}");
-      c.agent_id = agent;
-    } catch(e) { alert("JSON error: "+e.message); setBusy(false); return; }
+      const res = await fetch(`${API_BASE}/actions/evaluate`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ tool, args: a, context: { ...c, agent_id: agent } }),
+      });
+
+      if (!res.ok) {
+        const txt = await res.text().catch(()=>"");
+        throw new Error(`HTTP ${res.status}: ${txt.slice(0,120)}`);
+      }
+
+      const data = await res.json();
+
+      // Map execution_trace to the layer pipeline visualization
+      const apiTrace = data.execution_trace || [];
+      let blocked = false;
+      for (const step of apiTrace) {
+        const key = step.layer || step.key;
+        if (!LAYER_META[key]) continue;
+        const outcome = step.outcome || step.decision || "allow";
+        setPipe(prev => ({...prev, [key]:outcome==="block"?"blocked":outcome==="review"?"review":"passed"}));
+        if (outcome==="block") {
+          blocked = true;
+          const idx = LAYERS_ORDER.indexOf(key);
+          const remaining = LAYERS_ORDER.slice(idx+1);
+          setPipe(prev => { const n={...prev}; remaining.forEach(k=>{n[k]="skipped";}); return n; });
+          break;
+        }
+      }
+      // If we didn't see all layers in trace, mark remaining as passed
+      if (!blocked) {
+        for (const key of LAYERS_ORDER.filter(k=>k!=="output")) {
+          setPipe(prev => prev[key]==="scanning" ? {...prev, [key]:"passed"} : prev);
+        }
+      }
+
+      // Convert API response to match local evaluate() shape
+      const r = {
+        decision: data.decision,
+        risk: data.risk_score,
+        policy: (data.matched_policies || []).join(", ") || "api-pipeline",
+        expl: data.explanation,
+        trace: apiTrace.map(s => ({
+          key: s.layer || s.key || "unknown",
+          outcome: s.outcome || s.decision || "allow",
+          matched: s.matched || [],
+          ms: s.duration_ms || 0,
+        })),
+        chainAlert: data.chain_pattern ? { triggered: true, pattern: data.chain_pattern, desc: data.chain_description } : null,
+        piiHits: [],
+        trustTier: "internal",
+        identityAlert: null,
+        confidenceGap: null,
+      };
+
+      // Layer 6 output validation (still local since API doesn't have it)
+      if (r.decision !== "block" && outputText.trim()) {
+        setPipe(prev => ({...prev, output:"scanning"}));
+        await sleep(220);
+        const or = evaluateOutput(outputText, c);
+        setOutputResult(or);
+        setPipe(prev => ({...prev, output:or.decision==="block"?"blocked":or.decision==="review"?"review":"passed"}));
+      } else {
+        setPipe(prev => ({...prev, output:"skipped"}));
+      }
+
+      return r;
+    } catch(e) {
+      // On error, mark all layers as failed
+      for (const key of LAYERS_ORDER) {
+        setPipe(prev => prev[key]==="scanning" ? {...prev, [key]:"skipped"} : prev);
+      }
+      return {
+        decision: "error", risk: 0,
+        policy: "api-error", expl: `API Error: ${e.message}`,
+        trace: [], chainAlert: null, piiHits: [], trustTier: "internal",
+        identityAlert: null, confidenceGap: null,
+      };
+    }
+  };
+
+  // ── Local client-side evaluation ──
+  const runLocalEval = async (a, c) => {
     const hist = sessionMemory[agent] || [];
     const r = evaluate(tool, a, c, extraPolicies, killSwitch, hist);
 
@@ -1304,7 +1395,7 @@ function ActionTesterTab({ killSwitch, extraPolicies, sessionMemory, onResult })
       await sleep(80);
     }
 
-    // Layer 6 — Output Validator (runs if tool call was allowed/review)
+    // Layer 6 — Output Validator
     if (r.decision !== "block" && outputText.trim()) {
       setPipe(prev => ({...prev, output:"scanning"}));
       await sleep(220);
@@ -1315,8 +1406,23 @@ function ActionTesterTab({ killSwitch, extraPolicies, sessionMemory, onResult })
       setPipe(prev => ({...prev, output:"skipped"}));
     }
 
+    return r;
+  };
+
+  const runEval = async () => {
+    setBusy(true); setResult(null); setOutputResult(null); resetPipe();
+    await sleep(60);
+    let a, c;
+    try {
+      a = JSON.parse(args||"{}");
+      c = JSON.parse(ctx||"{}");
+      c.agent_id = agent;
+    } catch(e) { alert("JSON error: "+e.message); setBusy(false); return; }
+
+    const r = mode === "live" ? await runLiveEval(a, c) : await runLocalEval(a, c);
+
     setResult(r);
-    onResult(tool, r, agent);
+    if (r.decision !== "error") onResult(tool, r, agent);
     setBusy(false);
   };
 
@@ -1396,8 +1502,26 @@ function ActionTesterTab({ killSwitch, extraPolicies, sessionMemory, onResult })
 
         <Btn onClick={runEval} variant="cyan" disabled={busy}
           style={{width:"100%", justifyContent:"center", marginTop:8, fontSize:14}}>
-          {busy ? "EVALUATING…" : "▶ EVALUATE"}
+          {busy ? "EVALUATING…" : `▶ EVALUATE (${mode === "live" ? "LIVE API" : "LOCAL"})`}
         </Btn>
+
+        {/* Mode toggle */}
+        <div style={{display:"flex",alignItems:"center",gap:8,marginTop:6}}>
+          <span style={{fontFamily:mono,fontSize:10,color:C.p3,letterSpacing:1}}>MODE:</span>
+          {["live","local"].map(m=>(
+            <button key={m} onClick={()=>setMode(m)} style={{
+              fontFamily:mono,fontSize:10,letterSpacing:1,padding:"3px 10px",cursor:"pointer",
+              border:`1px solid ${mode===m?(m==="live"?C.green:C.amber):C.line2}`,
+              color:mode===m?(m==="live"?C.green:C.amber):C.p3,
+              background:mode===m?(m==="live"?C.greenDim:C.amberDim):"transparent",
+              textTransform:"uppercase"}}>
+              {m==="live"?"⚡ LIVE API":"⚙ LOCAL SIM"}
+            </button>
+          ))}
+          <span style={{fontFamily:mono,fontSize:9,color:C.p3,marginLeft:4}}>
+            {mode==="live"?"Calls real backend pipeline":"Client-side simulation"}
+          </span>
+        </div>
 
         {result && (
           <div style={{marginTop:14}}>
@@ -3886,7 +4010,7 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
                 });
               setEPWithAudit(rebuilt, `Rollback to: ${snap.label}`);
             }}/>}
-          {tab==="agent"     && <AgentRunner/>}
+          {tab==="agent"     && <AgentRunner onResult={onResult}/>}
           {tab==="surge"     && <SurgeTab receipts={surgeReceipts} stakedPolicies={stakedPolicies} setStaked={setStakedPolicies} userRole={userRole}/>}
           {tab==="audit"     && <AuditTrailTab auditLog={auditLog} policySnapshots={policySnapshots}/>}
           {tab==="traces"    && <TracesTab/>}
