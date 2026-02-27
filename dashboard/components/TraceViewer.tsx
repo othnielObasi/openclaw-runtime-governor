@@ -219,7 +219,7 @@ function SpanRow({
     >
       {/* Tree connector */}
       {node.depth > 0 && (
-        <span style={{ color: C.line2, fontFamily: mono, fontSize: 14, userSelect: "none" }}>
+        <span style={{ color: C.line2, fontFamily: mono, fontSize:13, userSelect: "none" }}>
           {"└"}
         </span>
       )}
@@ -228,7 +228,7 @@ function SpanRow({
       <span
         style={{
           fontFamily: mono,
-          fontSize: 12,
+          fontSize:11,
           letterSpacing: 1,
           padding: "2px 6px",
           background: meta.bg,
@@ -246,7 +246,7 @@ function SpanRow({
       <span
         style={{
           fontFamily: mono,
-          fontSize: 14,
+          fontSize:13,
           color: C.p1,
           flex: 1,
           overflow: "hidden",
@@ -262,7 +262,7 @@ function SpanRow({
         <span
           style={{
             fontFamily: mono,
-            fontSize: 12,
+            fontSize:11,
             padding: "1px 6px",
             letterSpacing: 1,
             textTransform: "uppercase",
@@ -283,14 +283,14 @@ function SpanRow({
 
       {/* Status */}
       {s.status === "error" && (
-        <span style={{ fontFamily: mono, fontSize: 12, color: C.red }}>ERROR</span>
+        <span style={{ fontFamily: mono, fontSize:11, color: C.red }}>ERROR</span>
       )}
 
       {/* Duration */}
       <span
         style={{
           fontFamily: mono,
-          fontSize: 13,
+          fontSize:12,
           color: C.p3,
           flexShrink: 0,
           minWidth: 52,
@@ -318,7 +318,7 @@ function SpanDetail({ span }: { span: Span }) {
         <span
           style={{
             fontFamily: mono,
-            fontSize: 13,
+            fontSize:12,
             padding: "2px 8px",
             background: meta.bg,
             color: meta.color,
@@ -329,7 +329,7 @@ function SpanDetail({ span }: { span: Span }) {
         >
           {meta.icon} {span.kind}
         </span>
-        <span style={{ fontFamily: mono, fontSize: 15, color: C.p1, fontWeight: 700 }}>
+        <span style={{ fontFamily: mono, fontSize:14, color: C.p1, fontWeight: 700 }}>
           {span.name}
         </span>
       </div>
@@ -342,7 +342,7 @@ function SpanDetail({ span }: { span: Span }) {
           gap: "4px 10px",
           marginBottom: 14,
           fontFamily: mono,
-          fontSize: 14,
+          fontSize:13,
         }}
       >
         <span style={{ color: C.p3 }}>SPAN ID</span>
@@ -381,7 +381,7 @@ function SpanDetail({ span }: { span: Span }) {
           <div
             style={{
               fontFamily: mono,
-              fontSize: 12,
+              fontSize:11,
               letterSpacing: 1.5,
               color: C.p3,
               textTransform: "uppercase",
@@ -406,7 +406,7 @@ function SpanDetail({ span }: { span: Span }) {
                     background: C.bg0,
                     border: `1px solid ${C.line}`,
                     fontFamily: mono,
-                    fontSize: 13,
+                    fontSize:12,
                   }}
                 >
                   <span style={{ color: C.p3, width: 16 }}>L{step.layer}</span>
@@ -416,16 +416,16 @@ function SpanDetail({ span }: { span: Span }) {
                       color: clr,
                       textTransform: "uppercase",
                       letterSpacing: 1,
-                      fontSize: 12,
+                      fontSize:11,
                       fontWeight: 700,
                     }}
                   >
                     {oc}
                   </span>
                   {step.risk > 0 && (
-                    <span style={{ color: C.red, fontSize: 12 }}>RISK {step.risk}</span>
+                    <span style={{ color: C.red, fontSize:11 }}>RISK {step.risk}</span>
                   )}
-                  <span style={{ color: C.p3, fontSize: 12 }}>{fmtMs(step.duration_ms)}</span>
+                  <span style={{ color: C.p3, fontSize:11 }}>{fmtMs(step.duration_ms)}</span>
                 </div>
               );
             })}
@@ -439,7 +439,7 @@ function SpanDetail({ span }: { span: Span }) {
           <div
             style={{
               fontFamily: mono,
-              fontSize: 12,
+              fontSize:11,
               letterSpacing: 1.5,
               color: C.p3,
               textTransform: "uppercase",
@@ -454,7 +454,7 @@ function SpanDetail({ span }: { span: Span }) {
               gridTemplateColumns: "140px 1fr",
               gap: "3px 10px",
               fontFamily: mono,
-              fontSize: 14,
+              fontSize:13,
             }}
           >
             <span style={{ color: C.p3 }}>DECISION</span>
@@ -501,7 +501,7 @@ function SpanDetail({ span }: { span: Span }) {
           <div
             style={{
               fontFamily: mono,
-              fontSize: 12,
+              fontSize:11,
               letterSpacing: 1.5,
               color: C.p3,
               textTransform: "uppercase",
@@ -513,7 +513,7 @@ function SpanDetail({ span }: { span: Span }) {
           <pre
             style={{
               fontFamily: mono,
-              fontSize: 13,
+              fontSize:12,
               color: C.p2,
               background: C.bg0,
               border: `1px solid ${C.line}`,
@@ -533,7 +533,7 @@ function SpanDetail({ span }: { span: Span }) {
           <div
             style={{
               fontFamily: mono,
-              fontSize: 12,
+              fontSize:11,
               letterSpacing: 1.5,
               color: C.p3,
               textTransform: "uppercase",
@@ -545,7 +545,7 @@ function SpanDetail({ span }: { span: Span }) {
           <pre
             style={{
               fontFamily: mono,
-              fontSize: 13,
+              fontSize:12,
               color: C.p2,
               background: C.bg0,
               border: `1px solid ${C.line}`,
@@ -567,7 +567,7 @@ function SpanDetail({ span }: { span: Span }) {
           <div
             style={{
               fontFamily: mono,
-              fontSize: 12,
+              fontSize:11,
               letterSpacing: 1.5,
               color: C.p3,
               textTransform: "uppercase",
@@ -579,7 +579,7 @@ function SpanDetail({ span }: { span: Span }) {
           <pre
             style={{
               fontFamily: mono,
-              fontSize: 13,
+              fontSize:12,
               color: C.p2,
               background: C.bg0,
               border: `1px solid ${C.line}`,
@@ -600,7 +600,7 @@ function SpanDetail({ span }: { span: Span }) {
           <div
             style={{
               fontFamily: mono,
-              fontSize: 12,
+              fontSize:11,
               letterSpacing: 1.5,
               color: C.p3,
               textTransform: "uppercase",
@@ -614,7 +614,7 @@ function SpanDetail({ span }: { span: Span }) {
               key={i}
               style={{
                 fontFamily: mono,
-                fontSize: 13,
+                fontSize:12,
                 color: C.p2,
                 padding: "3px 8px",
                 background: C.bg0,
@@ -734,7 +734,7 @@ export default function TraceViewer() {
               }}
               style={{
                 fontFamily: mono,
-                fontSize: 13,
+                fontSize:12,
                 letterSpacing: 1,
                 padding: "4px 10px",
                 background: "transparent",
@@ -745,13 +745,13 @@ export default function TraceViewer() {
             >
               ← BACK
             </button>
-            <span style={{ fontFamily: mono, fontSize: 15, color: C.p1, fontWeight: 700 }}>
+            <span style={{ fontFamily: mono, fontSize:14, color: C.p1, fontWeight: 700 }}>
               TRACE
             </span>
-            <span style={{ fontFamily: mono, fontSize: 14, color: C.accent }}>
+            <span style={{ fontFamily: mono, fontSize:13, color: C.accent }}>
               {selectedTrace.trace_id}
             </span>
-            <span style={{ fontFamily: mono, fontSize: 13, color: C.p3 }}>
+            <span style={{ fontFamily: mono, fontSize:12, color: C.p3 }}>
               {selectedTrace.span_count} spans
               {selectedTrace.governance_count > 0 &&
                 ` · ${selectedTrace.governance_count} governance`}
@@ -762,7 +762,7 @@ export default function TraceViewer() {
               <span
                 style={{
                   fontFamily: mono,
-                  fontSize: 12,
+                  fontSize:11,
                   padding: "1px 6px",
                   background: C.redDim,
                   color: C.red,
@@ -779,7 +779,7 @@ export default function TraceViewer() {
             <span
               style={{
                 fontFamily: mono,
-                fontSize: 15,
+                fontSize:14,
                 color: C.p1,
                 fontWeight: 700,
                 letterSpacing: 1,
@@ -793,7 +793,7 @@ export default function TraceViewer() {
               placeholder="Filter: agent_id"
               style={{
                 fontFamily: mono,
-                fontSize: 14,
+                fontSize:13,
                 background: C.bg0,
                 border: `1px solid ${C.line2}`,
                 color: C.text,
@@ -807,7 +807,7 @@ export default function TraceViewer() {
               onChange={(e) => setFilter((f) => ({ ...f, has_blocks: e.target.value }))}
               style={{
                 fontFamily: mono,
-                fontSize: 14,
+                fontSize:13,
                 background: C.bg0,
                 border: `1px solid ${C.line2}`,
                 color: C.text,
@@ -823,7 +823,7 @@ export default function TraceViewer() {
               onClick={fetchTraces}
               style={{
                 fontFamily: mono,
-                fontSize: 13,
+                fontSize:12,
                 letterSpacing: 1,
                 padding: "4px 10px",
                 background: C.accentDim,
@@ -834,7 +834,7 @@ export default function TraceViewer() {
             >
               REFRESH
             </button>
-            <span style={{ fontFamily: mono, fontSize: 13, color: C.p3, marginLeft: "auto" }}>
+            <span style={{ fontFamily: mono, fontSize:12, color: C.p3, marginLeft: "auto" }}>
               {traces.length} traces
             </span>
           </>
@@ -846,7 +846,7 @@ export default function TraceViewer() {
         <div
           style={{
             fontFamily: mono,
-            fontSize: 14,
+            fontSize:13,
             color: C.red,
             padding: "10px 14px",
             background: C.redDim,
@@ -858,7 +858,7 @@ export default function TraceViewer() {
         >
           <span>{error}</span>
           {error.toLowerCase().includes("token") && (
-            <span style={{ fontSize: 13, color: C.amber }}>
+            <span style={{ fontSize:12, color: C.amber }}>
               — Try logging out and back in to refresh your session.
             </span>
           )}
@@ -867,7 +867,7 @@ export default function TraceViewer() {
             style={{
               marginLeft: "auto",
               fontFamily: mono,
-              fontSize: 12,
+              fontSize:11,
               padding: "4px 12px",
               border: `1px solid ${C.line2}`,
               color: C.p2,
@@ -885,7 +885,7 @@ export default function TraceViewer() {
         <div
           style={{
             fontFamily: mono,
-            fontSize: 14,
+            fontSize:13,
             color: C.p3,
             padding: "6px 14px",
             borderBottom: `1px solid ${C.line}`,
@@ -902,7 +902,7 @@ export default function TraceViewer() {
             <div
               style={{
                 fontFamily: mono,
-                fontSize: 14,
+                fontSize:13,
                 color: C.p3,
                 padding: 30,
                 textAlign: "center",
@@ -910,7 +910,7 @@ export default function TraceViewer() {
             >
               No traces found. Agents send trace spans via POST /traces/ingest.
               <br />
-              <span style={{ fontSize: 13, color: C.muted }}>
+              <span style={{ fontSize:12, color: C.muted }}>
                 Governance decisions with trace_id in context are auto-correlated.
               </span>
             </div>
@@ -920,7 +920,7 @@ export default function TraceViewer() {
                 width: "100%",
                 borderCollapse: "collapse",
                 fontFamily: mono,
-                fontSize: 14,
+                fontSize:13,
               }}
             >
               <thead>
@@ -933,7 +933,7 @@ export default function TraceViewer() {
                           padding: "6px 10px",
                           textAlign: "left",
                           fontFamily: mono,
-                          fontSize: 12,
+                          fontSize:11,
                           letterSpacing: 1.5,
                           color: C.p3,
                           textTransform: "uppercase",
@@ -989,7 +989,7 @@ export default function TraceViewer() {
                         {t.has_blocks && (
                           <span
                             style={{
-                              fontSize: 11,
+                              fontSize:10,
                               padding: "1px 4px",
                               background: C.redDim,
                               color: C.red,
@@ -1002,7 +1002,7 @@ export default function TraceViewer() {
                         {t.has_errors && (
                           <span
                             style={{
-                              fontSize: 11,
+                              fontSize:10,
                               padding: "1px 4px",
                               background: C.amberDim,
                               color: C.amber,
@@ -1013,7 +1013,7 @@ export default function TraceViewer() {
                           </span>
                         )}
                         {!t.has_blocks && !t.has_errors && (
-                          <span style={{ fontSize: 11, color: C.green }}>OK</span>
+                          <span style={{ fontSize:10, color: C.green }}>OK</span>
                         )}
                       </span>
                     </td>
@@ -1061,7 +1061,7 @@ export default function TraceViewer() {
                 <div
                   style={{
                     fontFamily: mono,
-                    fontSize: 12,
+                    fontSize:11,
                     letterSpacing: 1.5,
                     color: C.p3,
                     textTransform: "uppercase",
@@ -1082,12 +1082,12 @@ export default function TraceViewer() {
                       border: `1px solid ${C.line}`,
                       marginBottom: 2,
                       fontFamily: mono,
-                      fontSize: 13,
+                      fontSize:12,
                     }}
                   >
                     <span
                       style={{
-                        fontSize: 12,
+                        fontSize:11,
                         padding: "1px 5px",
                         background: C.redDim,
                         color: C.red,
@@ -1103,17 +1103,17 @@ export default function TraceViewer() {
                         color: DECISION_COLOR[d.decision] || C.p2,
                         fontWeight: 700,
                         textTransform: "uppercase",
-                        fontSize: 12,
+                        fontSize:11,
                         letterSpacing: 1,
                       }}
                     >
                       {d.decision}
                     </span>
-                    <span style={{ color: C.p3, fontSize: 12 }}>
+                    <span style={{ color: C.p3, fontSize:11 }}>
                       risk {d.risk_score}
                     </span>
                     <span
-                      style={{ color: C.p3, flex: 1, textAlign: "right", fontSize: 12 }}
+                      style={{ color: C.p3, flex: 1, textAlign: "right", fontSize:11 }}
                     >
                       {fmtTime(d.created_at)}
                     </span>

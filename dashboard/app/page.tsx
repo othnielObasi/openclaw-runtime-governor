@@ -100,13 +100,13 @@ function LayerPipeline() {
                 background: active ? `${layer.color}18` : C.bg1,
                 border: `1.5px solid ${active ? layer.color : C.line}`,
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 26, transition: "all 0.4s ease",
+                fontSize: 22, transition: "all 0.4s ease",
                 boxShadow: active ? `0 0 12px ${layer.color}33` : "none",
               }}>
                 {layer.icon}
               </div>
               <span style={{
-                fontFamily: mono, fontSize: 14, fontWeight: 600,
+                fontFamily: mono, fontSize: 10, fontWeight: 600,
                 color: active ? layer.color : C.p3,
                 letterSpacing: 1.2, textTransform: "uppercase",
                 transition: "color 0.4s ease", textAlign: "center",
@@ -114,7 +114,7 @@ function LayerPipeline() {
                 {layer.label}
               </span>
               <span style={{
-                fontFamily: sans, fontSize: 15, color: C.p3,
+                fontFamily: sans, fontSize: 11, color: C.p3,
                 textAlign: "center", lineHeight: 1.4,
               }}>
                 {layer.desc}
@@ -147,7 +147,7 @@ function SimulatedDecision() {
       background: C.bg1, border: `1px solid ${C.line}`,
       borderLeft: `3px solid ${s.color}`,
       padding: "16px 22px", maxWidth: 560, margin: "0 auto",
-      fontFamily: mono, fontSize: 16, transition: "border-color 0.4s ease",
+      fontFamily: mono, fontSize: 13, transition: "border-color 0.4s ease",
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
         <span style={{ color: C.p3, letterSpacing: 1.5 }}>EVALUATION</span>
@@ -158,7 +158,7 @@ function SimulatedDecision() {
           {s.decision}
         </span>
       </div>
-      <div style={{ display: "flex", gap: 20, color: C.p2, fontSize: 15 }}>
+      <div style={{ display: "flex", gap: 20, color: C.p2, fontSize: 12 }}>
         <span>tool: <span style={{ color: C.p1 }}>{s.tool}</span></span>
         <span>risk: <span style={{ color: s.color }}>{s.risk}</span></span>
         <span>policy: <span style={{ color: C.p1 }}>{s.policy}</span></span>
@@ -185,14 +185,14 @@ function LandingPage({ onSelect }: { onSelect: (mode: "demo" | "live") => void }
         <ClawIcon size={64} />
         <div>
           <h1 style={{
-            fontFamily: mono, fontSize: 32, fontWeight: 700,
+            fontFamily: mono, fontSize: 28, fontWeight: 700,
             color: C.p1, letterSpacing: 4, textTransform: "uppercase",
             margin: 0,
           }}>
             OpenClaw Governor
           </h1>
           <div style={{
-            fontFamily: mono, fontSize: 15, color: C.p3,
+            fontFamily: mono, fontSize: 11, color: C.p3,
             letterSpacing: 3, textTransform: "uppercase", marginTop: 4,
           }}>
             RUNTIME GOVERNANCE · SAFETY · AUDIT
@@ -230,7 +230,7 @@ function LandingPage({ onSelect }: { onSelect: (mode: "demo" | "live") => void }
         border: `1px solid ${C.line}`, borderRadius: 10,
       }}>
         <div style={{
-          fontFamily: mono, fontSize: 14, color: C.p3,
+          fontFamily: mono, fontSize: 10, color: C.p3,
           letterSpacing: 2.5, textTransform: "uppercase",
           textAlign: "center", marginBottom: 16,
         }}>
@@ -271,20 +271,20 @@ function LandingPage({ onSelect }: { onSelect: (mode: "demo" | "live") => void }
               background: C.green, boxShadow: `0 0 8px ${C.green}`,
             }} />
             <h2 style={{
-              fontFamily: mono, fontSize: 19, fontWeight: 700,
+              fontFamily: mono, fontSize: 16, fontWeight: 700,
               color: C.green, letterSpacing: 2.5, textTransform: "uppercase", margin: 0,
             }}>
               Demo Mode
             </h2>
           </div>
           <p style={{
-            fontFamily: sans, fontSize: 17, color: C.p2, margin: "0 0 16px", lineHeight: 1.6,
+            fontFamily: sans, fontSize: 14, color: C.p2, margin: "0 0 16px", lineHeight: 1.6,
           }}>
             Self-contained with simulated agents, tool calls, and policy decisions.
             No backend required — explore the full governance dashboard instantly.
           </p>
           <div style={{
-            fontFamily: mono, fontSize: 15, color: C.p3,
+            fontFamily: mono, fontSize: 11, color: C.p3,
             padding: "7px 14px", background: C.bg0,
             border: `1px solid ${C.line}`, letterSpacing: 0.5,
           }}>
@@ -317,20 +317,20 @@ function LandingPage({ onSelect }: { onSelect: (mode: "demo" | "live") => void }
               background: C.accent, boxShadow: `0 0 8px ${C.accent}`,
             }} />
             <h2 style={{
-              fontFamily: mono, fontSize: 19, fontWeight: 700,
+              fontFamily: mono, fontSize: 16, fontWeight: 700,
               color: C.accent, letterSpacing: 2.5, textTransform: "uppercase", margin: 0,
             }}>
               Live Mode
             </h2>
           </div>
           <p style={{
-            fontFamily: sans, fontSize: 17, color: C.p2, margin: "0 0 16px", lineHeight: 1.6,
+            fontFamily: sans, fontSize: 14, color: C.p2, margin: "0 0 16px", lineHeight: 1.6,
           }}>
             Connect to governor-service with JWT auth. Real-time policy enforcement,
             telemetry streams, and admin controls for production governance.
           </p>
           <div style={{
-            fontFamily: mono, fontSize: 15, color: C.p3,
+            fontFamily: mono, fontSize: 11, color: C.p3,
             padding: "7px 14px", background: C.bg0,
             border: `1px solid ${C.line}`, letterSpacing: 0.5,
           }}>
@@ -348,15 +348,15 @@ function LandingPage({ onSelect }: { onSelect: (mode: "demo" | "live") => void }
         <div style={{
           display: "flex", gap: 16, alignItems: "center",
         }}>
-          <span style={{ fontFamily: mono, fontSize: 15, color: C.p3, letterSpacing: 2 }}>
+          <span style={{ fontFamily: mono, fontSize: 11, color: C.p3, letterSpacing: 2 }}>
             SOVEREIGN AI LAB
           </span>
           <span style={{ color: C.line }}>·</span>
-          <span style={{ fontFamily: mono, fontSize: 15, color: C.p3, letterSpacing: 2 }}>
+          <span style={{ fontFamily: mono, fontSize: 11, color: C.p3, letterSpacing: 2 }}>
             TRACK 3 · DEV INFRA
           </span>
           <span style={{ color: C.line }}>·</span>
-          <span style={{ fontFamily: mono, fontSize: 15, color: C.p3, letterSpacing: 2 }}>
+          <span style={{ fontFamily: mono, fontSize: 11, color: C.p3, letterSpacing: 2 }}>
             SURGE × OPENCLAW
           </span>
         </div>
@@ -375,7 +375,7 @@ export default function Page() {
       <div style={{
         minHeight:"100vh", background:"#080e1a",
         display:"flex", alignItems:"center", justifyContent:"center",
-        fontFamily: mono, fontSize: 14, color: "#3d5e7a",
+        fontFamily: mono, fontSize: 10, color: "#3d5e7a",
         letterSpacing: 3, textTransform: "uppercase",
       }}>
         INITIALISING GOVERNOR…

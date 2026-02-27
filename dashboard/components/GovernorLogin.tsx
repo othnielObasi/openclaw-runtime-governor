@@ -216,11 +216,11 @@ export default function GovernorLogin({ onBack }: GovernorLoginProps) {
               textShadow: glitch ? `0 0 12px ${C.accent}` : "none",
               transition:"all 0.1s", marginBottom:4,
             }}>OPENCLAW</div>
-            <div style={{ fontSize:15, letterSpacing:5, color:C.p3, textTransform:"uppercase", marginBottom:8 }}>
+            <div style={{ fontSize:14, letterSpacing:5, color:C.p3, textTransform:"uppercase", marginBottom:8 }}>
               RUNTIME GOVERNOR
             </div>
             <div style={{
-              display:"inline-block", fontSize:12, letterSpacing:2, color:C.p3,
+              display:"inline-block", fontSize:11, letterSpacing:2, color:C.p3,
               padding:"2px 10px", border:`1px solid ${C.line2}`, textTransform:"uppercase",
             }}>
               SOVEREIGN AI LAB
@@ -235,7 +235,7 @@ export default function GovernorLogin({ onBack }: GovernorLoginProps) {
               onClick={() => !isScanning && !isSuccess && setMode("signup")}
               style={{
                 flex:1, padding:"10px 0",
-                fontFamily:mono, fontSize:13, fontWeight:mode==="signup"?700:400,
+                fontFamily:mono, fontSize:12, fontWeight:mode==="signup"?700:400,
                 letterSpacing:2, textTransform:"uppercase",
                 color: mode==="signup" ? C.accent : C.p3,
                 background:"transparent", border:"none", cursor:"pointer",
@@ -249,7 +249,7 @@ export default function GovernorLogin({ onBack }: GovernorLoginProps) {
               onClick={() => !isScanning && !isSuccess && setMode("login")}
               style={{
                 flex:1, padding:"10px 0",
-                fontFamily:mono, fontSize:13, fontWeight:mode==="login"?700:400,
+                fontFamily:mono, fontSize:12, fontWeight:mode==="login"?700:400,
                 letterSpacing:2, textTransform:"uppercase",
                 color: mode==="login" ? C.accent : C.p3,
                 background:"transparent", border:"none", cursor:"pointer",
@@ -304,7 +304,7 @@ export default function GovernorLogin({ onBack }: GovernorLoginProps) {
                   style={{
                     background:C.bg0, border:`1px solid ${C.line2}`,
                     borderBottom:`1px solid ${name ? C.accent : C.line2}`,
-                    color:C.p1, fontFamily:mono, fontSize:15,
+                    color:C.p1, fontFamily:mono, fontSize:14,
                     padding:"10px 12px", outline:"none", width:"100%", boxSizing:"border-box",
                     transition:"border-color 0.2s",
                   }}
@@ -327,7 +327,7 @@ export default function GovernorLogin({ onBack }: GovernorLoginProps) {
                 style={{
                   background:C.bg0, border:`1px solid ${C.line2}`,
                   borderBottom:`1px solid ${username ? C.accent : C.line2}`,
-                  color:C.p1, fontFamily:mono, fontSize:15,
+                  color:C.p1, fontFamily:mono, fontSize:14,
                   padding:"10px 12px", outline:"none", width:"100%", boxSizing:"border-box",
                   transition:"border-color 0.2s",
                 }}
@@ -349,7 +349,7 @@ export default function GovernorLogin({ onBack }: GovernorLoginProps) {
                   style={{
                     background:C.bg0, border:`1px solid ${C.line2}`,
                     borderBottom:`1px solid ${password ? C.accent : C.line2}`,
-                    color:C.p1, fontFamily:mono, fontSize:15,
+                    color:C.p1, fontFamily:mono, fontSize:14,
                     padding:"10px 44px 10px 12px", outline:"none",
                     width:"100%", boxSizing:"border-box",
                     transition:"border-color 0.2s",
@@ -384,7 +384,7 @@ export default function GovernorLogin({ onBack }: GovernorLoginProps) {
                         ? (confirmPass === password ? C.green : C.red)
                         : C.line2
                     }`,
-                    color:C.p1, fontFamily:mono, fontSize:15,
+                    color:C.p1, fontFamily:mono, fontSize:14,
                     padding:"10px 12px", outline:"none", width:"100%", boxSizing:"border-box",
                     transition:"border-color 0.2s",
                   }}
@@ -426,7 +426,7 @@ export default function GovernorLogin({ onBack }: GovernorLoginProps) {
             disabled={isScanning || isSuccess || !canSubmit}
             style={{
               width:"100%", padding:"12px",
-              fontFamily:mono, fontSize:15, fontWeight:700,
+              fontFamily:mono, fontSize:14, fontWeight:700,
               letterSpacing:2, textTransform:"uppercase",
               cursor: isScanning || isSuccess || !canSubmit ? "not-allowed" : "pointer",
               border:`1px solid ${isSuccess ? C.green : isError ? C.red : C.accent}`,
@@ -454,7 +454,7 @@ export default function GovernorLogin({ onBack }: GovernorLoginProps) {
               disabled={isScanning || isSuccess}
               style={{
                 background:"none", border:"none", cursor:"pointer",
-                fontFamily:mono, fontSize:13, letterSpacing:1, color:C.p2,
+                fontFamily:mono, fontSize:12, letterSpacing:1, color:C.p2,
               }}
             >
               {mode === "signup"
@@ -496,7 +496,7 @@ export default function GovernorLogin({ onBack }: GovernorLoginProps) {
               onClick={onBack}
               style={{
                 background:"none", border:`1px solid ${C.line}`,
-                fontFamily:mono, fontSize:13, letterSpacing:1.5, color:C.p3,
+                fontFamily:mono, fontSize:12, letterSpacing:1.5, color:C.p3,
                 padding:"6px 16px", cursor:"pointer", textTransform:"uppercase",
                 transition:"border-color 0.2s, color 0.2s",
               }}
