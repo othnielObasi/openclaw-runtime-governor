@@ -14,8 +14,11 @@
 // GovernorComplete is the self-contained single-file artifact that includes:
 //   LandingPage (mode selector) → LoginPage (demo or live) → GovernorDashboard
 // It is the recommended entry point for demo + live hybrid deployments.
-import GovernorApp from "../components/GovernorComplete";
+import GovernorDashboard from "../components/GovernorDashboard";
+import DemoDashboard from "../components/Governordashboard-demo";
+
+const IS_DEMO = process.env.NEXT_PUBLIC_GOVERNOR_DEMO === "true";
 
 export default function Page() {
-  return <GovernorApp />;
+  return IS_DEMO ? <DemoDashboard /> : <GovernorDashboard />;
 }
