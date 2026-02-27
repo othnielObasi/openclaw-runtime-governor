@@ -67,7 +67,7 @@ governor-service/
 │   ├── main.py               ← FastAPI app init, CORS, route registration
 │   ├── config.py             ← Settings (pydantic-settings, env vars)
 │   ├── database.py           ← SQLAlchemy engine, SessionLocal, db_session()
-│   ├── models.py             ← ActionLog, PolicyModel, User, GovernorState
+│   ├── models.py             ← ActionLog, PolicyModel, User, GovernorState, SurgeReceipt, SurgeStakedPolicy, SurgeWallet
 │   ├── schemas.py            ← Pydantic schemas (ActionInput, ActionDecision, etc.)
 │   ├── state.py              ← Kill switch — DB-persisted, thread-safe
 │   ├── session_store.py      ← Session history reconstruction for chain analysis
@@ -81,7 +81,7 @@ governor-service/
 │   │   ├── routes_traces.py  ← POST /traces/ingest, GET /traces, GET /traces/{id}, DELETE
 │   │   ├── routes_summary.py ← GET /summary/moltbook
 │   │   ├── routes_admin.py   ← GET /admin/status, POST /admin/kill|resume
-│   │   └── routes_surge.py   ← SURGE receipts, staking, fee gating
+│   │   └── routes_surge.py   ← SURGE receipts (DB), tiered fees, virtual wallets, policy staking
 │   ├── auth/
 │   │   ├── core.py           ← bcrypt hashing, JWT encode/decode, API key generation
 │   │   ├── dependencies.py   ← FastAPI deps: JWT/API key extraction, role guards
@@ -131,6 +131,9 @@ openclaw-skills/
 └── moltbook-reporter/
     ├── reporter.py           ← fetch_summary(), build_status_text()
     └── skill.toml
+
+demo_agent.py                     ← DeFi Research Agent — 5 phases, 17 tool calls, live governance demo
+governor_agent.py                 ← Autonomous observe→reason→act governance agent
 ```
 
 ## Key Design Decisions
@@ -151,6 +154,10 @@ openclaw-skills/
 | Context metadata indexed in DB | Enables efficient filtering by agent_id, user_id, channel |
 | CORS middleware on FastAPI | Allows dashboard on different origin (Vercel) to talk to backend (Fly.io) |
 | SURGE governance receipts (SHA-256) | Immutable attestation for on-chain governance proofs |
+| SURGE tiered fee pricing | Fees scale with risk — higher-risk evaluations cost more, incentivizing safe tool use |
+| DB-persisted SURGE models | Receipts, wallets, and stakes survive Fly.io restarts — no data loss on redeploy |
+| Virtual wallet with auto-provision | First evaluation auto-creates wallet (100 SURGE); 402 Payment Required when empty |
+| Wallet balance check before evaluation | Fee enforcement is a pre-pipeline gate — zero balance = zero access |
 | SSE over WebSocket for real-time streaming | Simpler protocol, auto-reconnect, works through HTTP proxies/CDNs, one-directional push is sufficient |
 | Trace span model (OpenTelemetry-inspired) | trace_id → span_id → parent_span_id tree; governance spans auto-created on evaluate when trace_id in context |
 | Governance span injection | Zero SDK changes: just pass trace_id in context and the Governor inserts its own span into the agent’s trace tree |

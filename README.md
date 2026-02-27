@@ -103,6 +103,7 @@ The Governor doesn't try to make the AI "behave better." It operates at the **ex
 | [`openclaw-skills/governed-tools/java-client/`](openclaw-skills/governed-tools/java-client/) | Java SDK (`dev.openclaw:governor-client` on Maven Central) — zero deps, Java 11+ | 0.3.0 |
 | [`openclaw-skills/moltbook-reporter/`](openclaw-skills/moltbook-reporter/) | Automated Moltbook status reporter | 0.3.0 |
 | [`governor_agent.py`](governor_agent.py) | Autonomous governance agent (observe → reason → act loop) | — |
+| [`demo_agent.py`](demo_agent.py) | DeFi Research Agent — live end-to-end governance demo (5 phases, 17 tool calls) | — |
 | [`docs/`](docs/) | Architecture docs, SDK comparison | — |
 
 ---
@@ -368,12 +369,25 @@ All protected endpoints accept:
 
 ## SURGE Token Governance
 
+The Governor integrates with the SURGE token economy to create an **economically-backed governance layer**. All data is DB-persisted (survives Fly.io restarts).
+
 | Feature | Description |
 |---------|-------------|
-| **Governance Receipts** | SHA-256 signed receipt for every evaluation — on-chain attestation ready |
-| **Policy Staking** | Operators stake $SURGE on policies to signal confidence |
-| **Fee Gating** | Optional micro-fee (0.001 $SURGE) per evaluation |
-| **Token-Aware Policies** | Built-in rules for `surge_launch`, `surge_trade`, `surge_transfer` |
+| **Governance Receipts** | SHA-256 signed receipt for every evaluation — DB-persisted, on-chain attestation ready |
+| **Tiered Fee Pricing** | Fees scale with risk: 0.001 (standard) → 0.005 (elevated) → 0.010 (high) → 0.025 (critical) $SURGE per evaluation |
+| **Virtual Wallets** | Each agent/org has a $SURGE wallet with balance enforcement. Auto-provisioned on first call (100 SURGE). Returns 402 Payment Required when empty |
+| **Fee Enforcement** | When enabled, `/evaluate` checks wallet balance *before* running the pipeline. Zero balance = zero access |
+| **Policy Staking** | Operators stake $SURGE on policies to signal confidence — DB-persisted with unstake support |
+| **Token-Aware Policies** | Built-in rules for `surge_launch`, `surge_trade`, `surge_transfer`, `surge_transfer_ownership` |
+
+### Fee tiers
+
+| Risk Score | Fee per Evaluation |
+|-----------|-------------------|
+| 0–39 (standard) | 0.001 $SURGE |
+| 40–69 (elevated) | 0.005 $SURGE |
+| 70–89 (high) | 0.010 $SURGE |
+| 90–100 (critical) | 0.025 $SURGE |
 
 ---
 
@@ -391,6 +405,38 @@ All protected endpoints accept:
 python governor_agent.py          # Full autonomous mode
 python governor_agent.py --demo   # Single observation cycle
 ```
+
+---
+
+## DeFi Research Agent Demo
+
+[`demo_agent.py`](demo_agent.py) is an end-to-end live governance demo — an autonomous DeFi research agent that makes real tool calls through the Governor, progressing from safe research to dangerous operations.
+
+| Phase | Tools | Expected Outcome |
+|-------|-------|------------------|
+| 1. Safe Research | `fetch_price`, `read_contract` | ✅ ALLOW |
+| 2. DeFi Analysis | `analyze_liquidity`, `query_pool`, `calculate_impermanent_loss` | ✅ ALLOW |
+| 3. Trade Execution | `execute_swap`, `http_request`, `messaging_send` | ⚠️ REVIEW |
+| 4. Dangerous Ops | `shell rm -rf`, `surge_transfer_ownership`, credential exfil | 🚫 BLOCK |
+| 5. Attack Chain | scope violation, injection attempt, `base64_decode` | 🚫 BLOCK + chain detection |
+
+Every evaluation includes `trace_id`/`span_id`, so the full session appears in the **Trace Viewer** with governance decisions inline.
+
+```bash
+# Run against local server
+python demo_agent.py
+
+# Run against production
+python demo_agent.py --url https://openclaw-governor.fly.dev
+
+# Show full execution trace per evaluation
+python demo_agent.py --verbose
+
+# Enable SURGE fee gating (shows wallet depletion)
+python demo_agent.py --fee-gating
+```
+
+Sample output: **17 evaluations** → 9 allowed, 2 reviewed, 6 blocked, avg risk 45.9. Chain analysis detects `browse-then-exfil` and `credential-then-http` patterns.
 
 ---
 
@@ -434,9 +480,16 @@ python governor_agent.py --demo   # Single observation cycle
 ### SURGE
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `GET` | `/surge/status` | Any | SURGE integration status |
-| `GET` | `/surge/receipts` | Any | List governance receipts |
+| `GET` | `/surge/status` | Any | SURGE integration status (tiered fees, totals) |
+| `GET` | `/surge/receipts` | Any | List governance receipts (DB-persisted) |
+| `GET` | `/surge/receipts/{id}` | Any | Get specific receipt by ID |
 | `POST` | `/surge/policies/stake` | Operator+ | Stake $SURGE on a policy |
+| `GET` | `/surge/policies/staked` | Any | List all staked policies |
+| `DELETE` | `/surge/policies/stake/{id}` | Operator+ | Unstake a policy |
+| `POST` | `/surge/wallets` | Operator+ | Create virtual $SURGE wallet |
+| `GET` | `/surge/wallets` | Any | List all wallets |
+| `GET` | `/surge/wallets/{id}` | Any | Get wallet balance |
+| `POST` | `/surge/wallets/{id}/topup` | Operator+ | Deposit $SURGE into wallet |
 
 ### Traces — Agent Lifecycle Observability
 | Method | Path | Auth | Description |
@@ -451,7 +504,7 @@ python governor_agent.py --demo   # Single observation cycle
 ## Testing
 
 ```bash
-# Backend — 68 tests (24 governance + 18 policy + 16 traces + 10 SSE streaming)
+# Backend — 79 tests (24 governance + 11 SURGE + 18 policy + 16 traces + 10 SSE streaming)
 cd governor-service && pytest tests/ -v
 
 # TypeScript/JS SDK — 10 tests

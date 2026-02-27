@@ -77,7 +77,7 @@ npm run dev
 |----------|---------|-------------|
 | `NEXT_PUBLIC_GOVERNOR_API` | `http://localhost:8000` | Governor service URL |
 
-### Autonomous Agent
+### Autonomous Agent (`governor_agent.py`)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -87,6 +87,24 @@ npm run dev
 | `GOVERNOR_HEARTBEAT_SEC` | `30` | Check interval in seconds |
 | `MOLTBOOK_API_KEY` | *(empty)* | Moltbook API key |
 | `MOLTBOOK_SUBMOLT` | `lablab` | Target submolt |
+
+### DeFi Demo Agent (`demo_agent.py`)
+
+```bash
+# Run against local server
+python demo_agent.py
+
+# Run against production
+python demo_agent.py --url https://openclaw-governor.fly.dev
+
+# Verbose output (full trace per evaluation)
+python demo_agent.py --verbose
+
+# Enable SURGE fee gating (shows wallet depletion)
+python demo_agent.py --fee-gating
+```
+
+The demo agent authenticates via JWT (logs in as admin) and runs 5 phases of tool calls through the Governor. No additional environment variables are required — it accepts `--url` (default `http://localhost:8000`) and uses the default credentials or the credentials you provide at the prompt.
 
 ---
 
