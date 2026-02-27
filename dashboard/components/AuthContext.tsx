@@ -10,7 +10,7 @@ import {
 } from "react";
 
 // ── Types ────────────────────────────────────────────────────
-export type Role = "admin" | "operator" | "auditor";
+export type Role = "superadmin" | "admin" | "operator" | "auditor";
 
 export interface AuthUser {
   username: string;
@@ -26,6 +26,7 @@ interface AuthContextValue {
   login: (username: string, password: string) => Promise<void>;
   signup: (name: string, username: string, password: string) => Promise<void>;
   logout: () => void;
+  isSuperAdmin: boolean;
   isAdmin: boolean;
   isOperator: boolean;
 }
@@ -109,8 +110,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       user, token, loading,
       login, signup, logout,
-      isAdmin:    user?.role === "admin",
-      isOperator: user?.role === "admin" || user?.role === "operator",
+      isSuperAdmin: user?.role === "superadmin",
+      isAdmin:    user?.role === "superadmin" || user?.role === "admin",
+      isOperator: user?.role === "superadmin" || user?.role === "admin" || user?.role === "operator",
     }}>
       {children}
     </AuthContext.Provider>

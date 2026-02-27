@@ -68,10 +68,26 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(256), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(128))
     password_hash: Mapped[str] = mapped_column(String(256))
-    role: Mapped[str] = mapped_column(String(32), index=True)  # admin | operator | auditor
+    role: Mapped[str] = mapped_column(String(32), index=True)  # superadmin | admin | operator | auditor
     api_key: Mapped[Optional[str]] = mapped_column(String(128), unique=True, nullable=True, index=True)
     is_active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    login_count: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class LoginHistory(Base):
+    """Tracks every login event per user."""
+
+    __tablename__ = "login_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    username: Mapped[str] = mapped_column(String(256), index=True)
+    ip_address: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    user_agent: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    method: Mapped[str] = mapped_column(String(16), default="jwt")  # jwt | api_key
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
 
 
 class TraceSpan(Base):

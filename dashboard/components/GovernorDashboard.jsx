@@ -2881,6 +2881,9 @@ function AdminUserManagementTab() {
   const [createErr, setCE]  = useState("");
   const [pending, setPending] = useState(null);
   const [form, setForm]     = useState({username:"",name:"",password:"",role:"operator"});
+  const [loginHistory, setLoginHistory] = useState([]);
+  const [histLoading, setHistLoad]      = useState(false);
+  const [showHistory, setShowHistory]   = useState(false);
 
   const headers = () => ({
     Authorization:`Bearer ${getToken()}`,
@@ -2926,7 +2929,7 @@ function AdminUserManagementTab() {
     finally { setCr(false); }
   };
 
-  const ROLE_C = {admin:C.accent, operator:C.amber, auditor:C.p2};
+  const ROLE_C = {superadmin:"#e040fb", admin:C.accent, operator:C.amber, auditor:C.p2};
   const active   = users.filter(u=>u.is_active);
   const inactive = users.filter(u=>!u.is_active);
 
@@ -2940,7 +2943,7 @@ function AdminUserManagementTab() {
             User Management
           </div>
           <div style={{fontFamily:mono,fontSize:9,color:C.p3,marginTop:3,letterSpacing:1}}>
-            {active.length} active · {inactive.length} revoked · admin access only
+            {active.length} active · {inactive.length} revoked · superadmin access only
           </div>
         </div>
         <button onClick={()=>setSC(s=>!s)} style={{
@@ -2987,6 +2990,7 @@ function AdminUserManagementTab() {
                 <option value="operator">operator</option>
                 <option value="auditor">auditor</option>
                 <option value="admin">admin</option>
+                <option value="superadmin">superadmin</option>
               </select>
             </div>
           </div>
@@ -3011,15 +3015,15 @@ function AdminUserManagementTab() {
       ) : (
         <>
           {/* Column headers */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 200px 90px 80px 220px",
+          <div style={{display:"grid",gridTemplateColumns:"1fr 140px 90px 80px 110px 170px",
             gap:8,padding:"6px 12px",marginBottom:4,borderBottom:`1px solid ${C.line}`}}>
-            {["OPERATOR","USERNAME","ROLE","STATUS","ACTIONS"].map(h=>(
+            {["OPERATOR","USERNAME","ROLE","STATUS","LAST LOGIN","ACTIONS"].map(h=>(
               <div key={h} style={{fontFamily:mono,fontSize:8,color:C.p3,letterSpacing:1.5,textTransform:"uppercase"}}>{h}</div>
             ))}
           </div>
 
           {active.map(u=>(
-            <div key={u.id} style={{display:"grid",gridTemplateColumns:"1fr 200px 90px 80px 220px",
+            <div key={u.id} style={{display:"grid",gridTemplateColumns:"1fr 140px 90px 80px 110px 170px",
               gap:8,alignItems:"center",padding:"10px 12px",borderBottom:`1px solid ${C.line}`}}>
               <div>
                 <div style={{fontFamily:mono,fontSize:11,fontWeight:600,color:C.p1}}>{u.name}</div>
@@ -3041,6 +3045,10 @@ function AdminUserManagementTab() {
                 <span style={{fontFamily:mono,fontSize:8,letterSpacing:1.5,
                   padding:"2px 8px",border:`1px solid ${C.green}`,color:C.green}}>ACTIVE</span>
               </div>
+              <div style={{fontFamily:mono,fontSize:8,color:C.p3}}>
+                {u.last_login_at ? new Date(u.last_login_at).toLocaleString() : "—"}
+                {u.login_count > 0 && <span style={{color:C.p3,marginLeft:4}}>({u.login_count})</span>}
+              </div>
               <div style={{display:"flex",gap:4}}>
                 <button onClick={()=>rotateKey(u.id)} style={{
                   fontFamily:mono,fontSize:8,padding:"3px 8px",cursor:"pointer",
@@ -3061,7 +3069,7 @@ function AdminUserManagementTab() {
               <div style={{fontFamily:mono,fontSize:8,color:C.p3,letterSpacing:2,
                 textTransform:"uppercase",padding:"12px 12px 4px"}}>REVOKED ACCOUNTS</div>
               {inactive.map(u=>(
-                <div key={u.id} style={{display:"grid",gridTemplateColumns:"1fr 200px 90px 80px 220px",
+                <div key={u.id} style={{display:"grid",gridTemplateColumns:"1fr 140px 90px 80px 110px 170px",
                   gap:8,alignItems:"center",padding:"10px 12px",borderBottom:`1px solid ${C.line}`,opacity:0.4}}>
                   <div style={{fontFamily:mono,fontSize:11,color:C.p2}}>{u.name}</div>
                   <div style={{fontFamily:mono,fontSize:9,color:C.p3}}>{u.username}</div>
@@ -3074,6 +3082,7 @@ function AdminUserManagementTab() {
                     <span style={{fontFamily:mono,fontSize:8,letterSpacing:1.5,
                       padding:"2px 8px",border:`1px solid ${C.red}`,color:C.red}}>REVOKED</span>
                   </div>
+                  <div style={{fontFamily:mono,fontSize:8,color:C.p3}}>—</div>
                   <div>
                     <button onClick={()=>restore(u.id)} style={{
                       fontFamily:mono,fontSize:8,padding:"3px 8px",cursor:"pointer",
@@ -3090,6 +3099,53 @@ function AdminUserManagementTab() {
             </div>
           )}
         </>
+      )}
+
+      {/* Login history toggle */}
+      <div style={{marginTop:22,borderTop:`1px solid ${C.line2}`,paddingTop:16}}>
+        <button onClick={toggleHistory} style={{
+          fontFamily:mono,fontSize:9,letterSpacing:1,padding:"6px 14px",
+          border:`1px solid ${C.accent}`,color:C.accent,background:C.accentDim,cursor:"pointer"}}>
+          {showHistory?"✕ HIDE LOGIN HISTORY":"◷ LOGIN HISTORY"}
+        </button>
+      </div>
+
+      {showHistory && (
+        <div style={{marginTop:12}}>
+          <div style={{fontFamily:mono,fontSize:9,color:C.accent,letterSpacing:2,marginBottom:10,textTransform:"uppercase"}}>
+            Recent Login History
+          </div>
+          {histLoading ? (
+            <div style={{fontFamily:mono,fontSize:9,color:C.p3,padding:"12px 0"}}>Loading…</div>
+          ) : loginHistory.length===0 ? (
+            <div style={{fontFamily:mono,fontSize:9,color:C.p3,padding:"12px 0"}}>No login history yet.</div>
+          ) : (
+            <>
+              <div style={{display:"grid",gridTemplateColumns:"140px 100px 120px 1fr 90px",
+                gap:8,padding:"6px 12px",marginBottom:4,borderBottom:`1px solid ${C.line}`}}>
+                {["TIMESTAMP","USERNAME","IP ADDRESS","USER AGENT","METHOD"].map(h=>(
+                  <div key={h} style={{fontFamily:mono,fontSize:8,color:C.p3,letterSpacing:1.5,textTransform:"uppercase"}}>{h}</div>
+                ))}
+              </div>
+              {loginHistory.map(h=>(
+                <div key={h.id} style={{display:"grid",gridTemplateColumns:"140px 100px 120px 1fr 90px",
+                  gap:8,alignItems:"center",padding:"8px 12px",borderBottom:`1px solid ${C.line}`}}>
+                  <div style={{fontFamily:mono,fontSize:9,color:C.p2}}>
+                    {new Date(h.created_at).toLocaleString()}
+                  </div>
+                  <div style={{fontFamily:mono,fontSize:9,color:C.p1,fontWeight:600}}>{h.username}</div>
+                  <div style={{fontFamily:mono,fontSize:9,color:C.p3}}>{h.ip_address||"—"}</div>
+                  <div style={{fontFamily:mono,fontSize:8,color:C.p3,overflow:"hidden",
+                    textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                    {h.user_agent||"—"}
+                  </div>
+                  <div><span style={{fontFamily:mono,fontSize:8,letterSpacing:1,
+                    padding:"2px 6px",border:`1px solid ${C.line2}`,color:C.p3}}>{h.method}</span></div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
       )}
     </div>
   );
@@ -3381,7 +3437,8 @@ function SurgeTab({ receipts: localReceipts, stakedPolicies: localStaked, setSta
 // ROLE_TABS + ALL_TABS (SURGE + Topology added)
 // ═══════════════════════════════════════════════════════════
 const ROLE_TABS = {
-  admin:    ["dashboard","agent","tester","policies","surge","audit","traces","topology","apikeys","users"],
+  superadmin: ["dashboard","agent","tester","policies","surge","audit","traces","topology","apikeys","users"],
+  admin:    ["dashboard","agent","tester","policies","surge","audit","traces","topology","apikeys"],
   operator: ["dashboard","agent","tester","policies","surge","audit","traces","topology","apikeys"],
   auditor:  ["dashboard","agent","surge","audit","traces","topology","apikeys"],
 };
@@ -3396,7 +3453,7 @@ const ALL_TABS = [
   { id:"traces",    label:"Traces",            icon:"⧉" },
   { id:"topology",  label:"Topology",          icon:"◎" },
   { id:"apikeys",   label:"API Keys",          icon:"🔑" },
-  { id:"users",     label:"User Management",   icon:"⚙", adminOnly:true },
+  { id:"users",     label:"User Management",   icon:"⚙", superadminOnly:true },
 ];
 
 export default function GovernorDashboard({ userRole="operator", userName="", onLogout=()=>{} }) {
@@ -3824,7 +3881,7 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
           {tab==="traces"    && <TracesTab/>}
           {tab==="topology"  && <TopologyTab gs={gs} killSwitch={killSwitch} degraded={degraded}/>}
           {tab==="apikeys"   && <ApiKeysTab/>}
-          {tab==="users"     && userRole==="admin" && <AdminUserManagementTab/>}
+          {tab==="users"     && userRole==="superadmin" && <AdminUserManagementTab/>}
         </div>
       </div>
     </div>

@@ -54,7 +54,7 @@ def seed_admin() -> None:
             username=username,
             name=name,
             password_hash=hash_password(password),
-            role="admin",
+            role="superadmin",
             api_key=generate_api_key(),
             is_active=True,
         )

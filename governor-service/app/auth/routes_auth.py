@@ -6,9 +6,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from .core import hash_password, verify_password, create_access_token, generate_api_key
-from .dependencies import get_current_user, require_admin
+from .dependencies import get_current_user, require_admin, require_superadmin
 from ..database import db_session
-from ..models import User
+from ..models import User, LoginHistory
 from ..rate_limit import limiter
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -39,6 +39,21 @@ class UserRead(BaseModel):
     is_active: bool
     api_key: Optional[str] = None
     created_at: datetime
+    last_login_at: Optional[datetime] = None
+    login_count: int = 0
+
+    class Config:
+        from_attributes = True
+
+
+class LoginHistoryRead(BaseModel):
+    id: int
+    user_id: int
+    username: str
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+    method: str
+    created_at: datetime
 
     class Config:
         from_attributes = True
@@ -54,12 +69,12 @@ class UserCreate(BaseModel):
     username: str
     name: str
     password: str
-    role: str = Field(default="operator", pattern="^(admin|operator|auditor)$")
+    role: str = Field(default="operator", pattern="^(superadmin|admin|operator|auditor)$")
 
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
-    role: Optional[str] = Field(default=None, pattern="^(admin|operator|auditor)$")
+    role: Optional[str] = Field(default=None, pattern="^(superadmin|admin|operator|auditor)$")
     is_active: Optional[bool] = None
     password: Optional[str] = None
 
@@ -89,6 +104,24 @@ def login(request: Request, body: LoginRequest) -> TokenResponse:
     if not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="Invalid credentials.")
+
+    # Track login history
+    with db_session() as session:
+        user_row = session.get(User, user.id)
+        if user_row:
+            user_row.last_login_at = datetime.now()
+            user_row.login_count = (user_row.login_count or 0) + 1
+
+        ip = request.client.host if request.client else None
+        ua = request.headers.get("user-agent", "")[:512]
+        history = LoginHistory(
+            user_id=user.id,
+            username=user.username,
+            ip_address=ip,
+            user_agent=ua,
+            method="jwt",
+        )
+        session.add(history)
 
     token = create_access_token(subject=user.username, role=user.role)
     return TokenResponse(
@@ -156,14 +189,14 @@ def me(current_user: User = Depends(get_current_user)) -> MeResponse:
 # ---------------------------------------------------------------------------
 
 @router.get("/users", response_model=List[UserRead])
-def list_users(admin: User = Depends(require_admin)) -> List[UserRead]:
+def list_users(admin: User = Depends(require_superadmin)) -> List[UserRead]:
     with db_session() as session:
         users = session.execute(select(User).order_by(User.created_at)).scalars().all()
         return [UserRead.model_validate(u) for u in users]
 
 
 @router.post("/users", response_model=UserRead, status_code=201)
-def create_user(body: UserCreate, admin: User = Depends(require_admin)) -> UserRead:
+def create_user(body: UserCreate, admin: User = Depends(require_superadmin)) -> UserRead:
     with db_session() as session:
         existing = session.execute(
             select(User).where(User.username == body.username)
@@ -188,7 +221,7 @@ def create_user(body: UserCreate, admin: User = Depends(require_admin)) -> UserR
 def update_user(
     user_id: int,
     body: UserUpdate,
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_superadmin),
 ) -> UserRead:
     with db_session() as session:
         user = session.get(User, user_id)
@@ -208,7 +241,7 @@ def update_user(
 
 
 @router.delete("/users/{user_id}", status_code=204)
-def revoke_user(user_id: int, admin: User = Depends(require_admin)) -> None:
+def revoke_user(user_id: int, admin: User = Depends(require_superadmin)) -> None:
     with db_session() as session:
         user = session.get(User, user_id)
         if not user:
@@ -218,7 +251,7 @@ def revoke_user(user_id: int, admin: User = Depends(require_admin)) -> None:
 
 
 @router.post("/users/{user_id}/rotate-key", response_model=UserRead)
-def rotate_api_key(user_id: int, admin: User = Depends(require_admin)) -> UserRead:
+def rotate_api_key(user_id: int, admin: User = Depends(require_superadmin)) -> UserRead:
     with db_session() as session:
         user = session.get(User, user_id)
         if not user:
@@ -227,6 +260,53 @@ def rotate_api_key(user_id: int, admin: User = Depends(require_admin)) -> UserRe
         session.flush()
         session.refresh(user)
         return UserRead.model_validate(user)
+
+
+# ---------------------------------------------------------------------------
+# Login history — superadmin only
+# ---------------------------------------------------------------------------
+
+@router.get("/login-history", response_model=List[LoginHistoryRead])
+def all_login_history(
+    limit: int = 100,
+    admin: User = Depends(require_superadmin),
+) -> List[LoginHistoryRead]:
+    """Return recent login history across all users (superadmin only)."""
+    with db_session() as session:
+        rows = (
+            session.execute(
+                select(LoginHistory)
+                .order_by(LoginHistory.created_at.desc())
+                .limit(limit)
+            )
+            .scalars()
+            .all()
+        )
+        return [LoginHistoryRead.model_validate(r) for r in rows]
+
+
+@router.get("/users/{user_id}/login-history", response_model=List[LoginHistoryRead])
+def user_login_history(
+    user_id: int,
+    limit: int = 50,
+    admin: User = Depends(require_superadmin),
+) -> List[LoginHistoryRead]:
+    """Return login history for a specific user (superadmin only)."""
+    with db_session() as session:
+        user = session.get(User, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found.")
+        rows = (
+            session.execute(
+                select(LoginHistory)
+                .where(LoginHistory.user_id == user_id)
+                .order_by(LoginHistory.created_at.desc())
+                .limit(limit)
+            )
+            .scalars()
+            .all()
+        )
+        return [LoginHistoryRead.model_validate(r) for r in rows]
 
 
 # ---------------------------------------------------------------------------
