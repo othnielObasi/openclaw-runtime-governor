@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import type React from "react";
 import { useAuth } from "./AuthContext";
 
 const C = {
