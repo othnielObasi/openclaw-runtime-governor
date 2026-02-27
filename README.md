@@ -72,9 +72,28 @@ The pipeline **short-circuits**: a kill switch fires before the injection scan e
 | Output filtering | After LLM response | ❌ Post-hoc | Partially | ❌ | ❌ |
 | Fine-tuning / RLHF | Model weights | ❌ Static | ❌ Probabilistic | ❌ | ❌ |
 | API rate limiting | HTTP layer | ✅ | ✅ | ❌ | Partially |
-| **OpenClaw Governor** | **Tool call interception** | **✅ Real-time** | **✅ 100%** | **✅ 6 patterns** | **✅ Full trace** |
+| Observability (Arize, Langfuse, LangSmith) | LLM layer | ✅ Passive | N/A — monitors, can't enforce | Post-hoc correlation | ✅ Logs only |
+| **OpenClaw Governor** | **Tool call interception** | **✅ Real-time** | **✅ 100%** | **✅ 6 patterns** | **✅ Full trace + attestation** |
 
 The Governor doesn't try to make the AI "behave better." It operates at the **execution boundary** — the moment an agent's decision becomes a real-world action — with deterministic, auditable, policy-driven rules that no prompt injection can bypass.
+
+### Why this isn't "another observability platform"
+
+Platforms like Arize AI, Langfuse, and LangSmith are excellent at **passive monitoring** — they trace LLM calls, measure token usage, detect embedding drift, and score hallucinations. They tell you *what happened*.
+
+The OpenClaw Governor is fundamentally different: it **actively prevents** dangerous actions from executing. By the time an observability platform shows you that an agent ran `rm -rf /`, the damage is done. The Governor intercepts that call *before execution* and returns a `block` verdict — the tool never fires.
+
+| Capability | Observability Platforms | OpenClaw Governor |
+|---|---|---|
+| **Can block a dangerous tool call?** | ❌ No — observe only | ✅ Yes — inline enforcement |
+| **Prompt injection defense** | Detect in LLM output (post-hoc) | Block in tool payload (pre-execution, 11 patterns) |
+| **Policy engine** | None — manual alert configuration | Full CRUD — YAML + DB policies, toggle, regex, PATCH |
+| **Kill switch** | No concept | Global emergency halt, DB-persisted |
+| **Multi-step attack detection** | Post-hoc trace correlation | Real-time — 6 chain patterns across 60-min session window |
+| **Cryptographic attestation** | No | SHA-256 SURGE receipts per decision |
+| **LLM-layer diagnostics** | ✅ Deep (tokens, latency, drift) | Not the focus — complementary |
+
+**In practice, you'd use both**: an observability platform to optimize your agent's LLM quality, and OpenClaw to ensure it can never do anything dangerous regardless of what the LLM outputs. Observe + Govern.
 
 ### Key differentiators:
 
