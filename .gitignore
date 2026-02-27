@@ -8,3 +8,5 @@ build/
 *.db
 dashboard/.next/
 **/target/
+.vercel
+.env*.local

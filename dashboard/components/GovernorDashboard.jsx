@@ -3327,6 +3327,11 @@ function SurgeTab({ receipts: localReceipts, stakedPolicies: localStaked, setSta
   const [spAmt, setSpAmt]     = useState("10");
   const [spWallet, setSpWallet] = useState("0x" + Math.random().toString(16).slice(2,10));
 
+  // Wallet creation form
+  const [newWalletId, setNewWalletId]     = useState("");
+  const [newWalletLabel, setNewWalletLabel] = useState("");
+  const [newWalletBal, setNewWalletBal]   = useState("100");
+
   // Wallet top-up form
   const [topUpId, setTopUpId]     = useState("");
   const [topUpAmt, setTopUpAmt]   = useState("100");
@@ -3380,6 +3385,23 @@ function SurgeTab({ receipts: localReceipts, stakedPolicies: localStaked, setSta
       await fetch(`${API_BASE}/surge/policies/stake/${encodeURIComponent(policyId)}`, {
         method:"DELETE", headers:headers(),
       });
+      load();
+    } catch (e) { setErr(e.message); }
+  };
+
+  const doCreateWallet = async () => {
+    if (!newWalletId.trim() || !API_BASE) return;
+    try {
+      const r = await fetch(`${API_BASE}/surge/wallets`, {
+        method:"POST", headers:headers(),
+        body: JSON.stringify({
+          wallet_id: newWalletId.trim(),
+          label: newWalletLabel || newWalletId.trim(),
+          initial_balance: newWalletBal || "100",
+        }),
+      });
+      if (!r.ok) { const d = await r.json().catch(()=>({})); setErr(d.detail || "Wallet creation failed"); return; }
+      setNewWalletId(""); setNewWalletLabel(""); setNewWalletBal("100");
       load();
     } catch (e) { setErr(e.message); }
   };
@@ -3445,9 +3467,30 @@ function SurgeTab({ receipts: localReceipts, stakedPolicies: localStaked, setSta
       {/* Wallets */}
       <div style={{background:C.bg1, padding:16, marginBottom:20, border:`1px solid ${C.line}`}}>
         <PanelHd title="Virtual $SURGE Wallets" tag={`${wallets.length}`} tagColor="#06b6d4"/>
+
+        {/* Create Wallet form */}
+        {canEdit && (
+          <div style={{background:C.bg0, padding:12, marginBottom:12, border:`1px solid ${C.line}`}}>
+            <div style={{fontFamily:mono, fontSize:11, letterSpacing:1.5, color:"#06b6d4",
+              textTransform:"uppercase", marginBottom:8}}>CREATE NEW WALLET</div>
+            <div style={{display:"grid", gridTemplateColumns:"1fr 1fr 100px auto", gap:10, alignItems:"end"}}>
+              <Fld label="Wallet ID">
+                <TextInput value={newWalletId} onChange={e=>setNewWalletId(e.target.value)} placeholder="agent-001 / my-org"/>
+              </Fld>
+              <Fld label="Label">
+                <TextInput value={newWalletLabel} onChange={e=>setNewWalletLabel(e.target.value)} placeholder="Demo agent wallet"/>
+              </Fld>
+              <Fld label="Initial $SURGE">
+                <TextInput value={newWalletBal} onChange={e=>setNewWalletBal(e.target.value)} placeholder="100"/>
+              </Fld>
+              <Btn onClick={doCreateWallet} variant="violet" style={{fontSize:12, padding:"6px 14px"}}>CREATE WALLET</Btn>
+            </div>
+          </div>
+        )}
+
         {wallets.length === 0 ? (
           <div style={{fontFamily:mono, fontSize:13, color:C.p3, textAlign:"center", padding:"20px 0"}}>
-            No wallets yet. Wallets are auto-provisioned on first evaluation, or create one manually.
+            No wallets yet. Wallets are auto-provisioned on first evaluation, or use the form above to create one.
           </div>
         ) : (
           <div style={{maxHeight:200, overflow:"auto"}}>
@@ -3482,6 +3525,28 @@ function SurgeTab({ receipts: localReceipts, stakedPolicies: localStaked, setSta
               <TextInput value={topUpAmt} onChange={e=>setTopUpAmt(e.target.value)} placeholder="100"/>
             </Fld>
             <Btn onClick={doTopUp} variant="violet" style={{fontSize:12, padding:"6px 14px"}}>TOP UP</Btn>
+          </div>
+        )}
+        {/* Create wallet form */}
+        {canEdit && (
+          <div style={{marginTop:12}}>
+            {!showCreateWallet ? (
+              <Btn onClick={()=>setShowCreateWallet(true)} variant="ghost" style={{fontSize:12, padding:"6px 14px", border:`1px dashed ${surgeColor}`, color:surgeColor}}>
+                + CREATE WALLET
+              </Btn>
+            ) : (
+              <div style={{display:"grid", gridTemplateColumns:"1fr 100px auto auto", gap:10, alignItems:"end",
+                padding:12, background:C.bg0, border:`1px solid ${surgeColor}`}}>
+                <Fld label="Label (optional)">
+                  <TextInput value={newWalletLabel} onChange={e=>setNewWalletLabel(e.target.value)} placeholder="my-agent-wallet"/>
+                </Fld>
+                <Fld label="Initial $SURGE">
+                  <TextInput value={newWalletBal} onChange={e=>setNewWalletBal(e.target.value)} placeholder="100"/>
+                </Fld>
+                <Btn onClick={doCreateWallet} variant="violet" style={{fontSize:12, padding:"6px 14px"}}>CREATE</Btn>
+                <Btn onClick={()=>setShowCreateWallet(false)} variant="ghost" style={{fontSize:12, padding:"6px 14px", color:C.p3}}>CANCEL</Btn>
+              </div>
+            )}
           </div>
         )}
       </div>
