@@ -62,7 +62,7 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-Default dev credentials: `admin@openclaw.io` / `changeme`
+Default dev credentials: `admin` / `changeme`
 
 The API is now live at `http://localhost:8000`. Check health:
 
@@ -88,7 +88,7 @@ Set `NEXT_PUBLIC_GOVERNOR_API` to point at your backend (default: `http://localh
 # Login
 TOKEN=$(curl -s -X POST http://localhost:8000/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@openclaw.io","password":"changeme"}' | jq -r .access_token)
+  -d '{"username":"admin","password":"changeme"}' | jq -r .access_token)
 
 # Evaluate a tool call
 curl -X POST http://localhost:8000/actions/evaluate \
@@ -340,7 +340,7 @@ Tests cover all 5 pipeline layers, chain analysis patterns, SURGE governance rec
 | `GOVERNOR_JWT_EXPIRE_MINUTES` | `480` | JWT token expiry (8 hours) |
 | `GOVERNOR_LOGIN_RATE_LIMIT` | `5/minute` | Login rate limit |
 | `GOVERNOR_EVALUATE_RATE_LIMIT` | `120/minute` | Evaluate rate limit |
-| `GOVERNOR_ADMIN_EMAIL` | `admin@openclaw.io` | Seed admin email |
+| `GOVERNOR_ADMIN_USERNAME` | `admin` | Seed admin username |
 | `GOVERNOR_ADMIN_PASSWORD` | `changeme` | Seed admin password |
 | `GOVERNOR_SURGE_GOVERNANCE_FEE_ENABLED` | `false` | Enable $SURGE micro-fees |
 | `GOVERNOR_SURGE_WALLET_ADDRESS` | *(empty)* | SURGE wallet address |

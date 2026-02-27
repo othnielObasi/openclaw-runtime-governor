@@ -2,7 +2,7 @@ from typing import List, Optional
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from .core import hash_password, verify_password, create_access_token, generate_api_key
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 # ---------------------------------------------------------------------------
 
 class LoginRequest(BaseModel):
-    email: str
+    username: str
     password: str
 
 
@@ -27,13 +27,13 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     role: str
-    email: str
+    username: str
     name: str
 
 
 class UserRead(BaseModel):
     id: int
-    email: str
+    username: str
     name: str
     role: str
     is_active: bool
@@ -46,12 +46,12 @@ class UserRead(BaseModel):
 
 class SignupRequest(BaseModel):
     name: str = Field(..., min_length=2, max_length=100)
-    email: str
+    username: str = Field(..., min_length=2, max_length=100)
     password: str = Field(..., min_length=6)
 
 
 class UserCreate(BaseModel):
-    email: str
+    username: str
     name: str
     password: str
     role: str = Field(default="operator", pattern="^(admin|operator|auditor)$")
@@ -65,7 +65,7 @@ class UserUpdate(BaseModel):
 
 
 class MeResponse(BaseModel):
-    email: str
+    username: str
     name: str
     role: str
     api_key: Optional[str] = None
@@ -80,7 +80,7 @@ class MeResponse(BaseModel):
 def login(request: Request, body: LoginRequest) -> TokenResponse:
     with db_session() as session:
         user = session.execute(
-            select(User).where(User.email == body.email)
+            select(User).where(User.username == body.username)
         ).scalar_one_or_none()
 
     if not user or not user.is_active:
@@ -90,11 +90,11 @@ def login(request: Request, body: LoginRequest) -> TokenResponse:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="Invalid credentials.")
 
-    token = create_access_token(subject=user.email, role=user.role)
+    token = create_access_token(subject=user.username, role=user.role)
     return TokenResponse(
         access_token=token,
         role=user.role,
-        email=user.email,
+        username=user.username,
         name=user.name,
     )
 
@@ -108,16 +108,16 @@ def login(request: Request, body: LoginRequest) -> TokenResponse:
 def signup(request: Request, body: SignupRequest) -> TokenResponse:
     with db_session() as session:
         existing = session.execute(
-            select(User).where(User.email == body.email)
+            select(User).where(User.username == body.username)
         ).scalar_one_or_none()
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="An account with this email already exists.",
+                detail="An account with this username already exists.",
             )
 
         user = User(
-            email=body.email,
+            username=body.username,
             name=body.name,
             password_hash=hash_password(body.password),
             role="operator",
@@ -128,11 +128,11 @@ def signup(request: Request, body: SignupRequest) -> TokenResponse:
         session.flush()
         session.refresh(user)
 
-        token = create_access_token(subject=user.email, role=user.role)
+        token = create_access_token(subject=user.username, role=user.role)
         return TokenResponse(
             access_token=token,
             role=user.role,
-            email=user.email,
+            username=user.username,
             name=user.name,
         )
 
@@ -144,7 +144,7 @@ def signup(request: Request, body: SignupRequest) -> TokenResponse:
 @router.get("/me", response_model=MeResponse)
 def me(current_user: User = Depends(get_current_user)) -> MeResponse:
     return MeResponse(
-        email=current_user.email,
+        username=current_user.username,
         name=current_user.name,
         role=current_user.role,
         api_key=current_user.api_key,
@@ -166,12 +166,12 @@ def list_users(admin: User = Depends(require_admin)) -> List[UserRead]:
 def create_user(body: UserCreate, admin: User = Depends(require_admin)) -> UserRead:
     with db_session() as session:
         existing = session.execute(
-            select(User).where(User.email == body.email)
+            select(User).where(User.username == body.username)
         ).scalar_one_or_none()
         if existing:
-            raise HTTPException(status_code=409, detail="Email already registered.")
+            raise HTTPException(status_code=409, detail="Username already registered.")
         user = User(
-            email=body.email,
+            username=body.username,
             name=body.name,
             password_hash=hash_password(body.password),
             role=body.role,

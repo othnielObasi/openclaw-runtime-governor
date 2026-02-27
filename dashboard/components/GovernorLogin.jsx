@@ -67,7 +67,7 @@ function GridBg() {
 
 // ── MAIN LOGIN COMPONENT ─────────────────────────────────────
 export default function GovernorLogin() {
-  const [email, setEmail]       = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [phase, setPhase]       = useState("idle"); // idle | scanning | error | success
   const [scanStep, setScanStep] = useState(0);
@@ -99,7 +99,7 @@ export default function GovernorLogin() {
   ];
 
   const handleAuth = async () => {
-    if (!email || !password) return;
+    if (!username || !password) return;
     setPhase("scanning");
     setScanStep(0);
 
@@ -308,23 +308,23 @@ export default function GovernorLogin() {
           {/* ── FORM FIELDS ── */}
           <div style={{ display:"flex", flexDirection:"column", gap:12, marginBottom:18 }}>
 
-            {/* Email */}
+            {/* Username */}
             <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
               <label style={{
                 fontSize:8, letterSpacing:2, color:C.p3,
                 textTransform:"uppercase",
-              }}>Operator Email</label>
+              }}>Operator Username</label>
               <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
+                type="text"
+                value={username}
+                onChange={e => setUsername(e.target.value)}
                 onKeyDown={handleKey}
                 disabled={isScanning || isSuccess}
-                placeholder="operator@organisation.io"
+                placeholder="your-username"
                 style={{
                   background:C.bg0,
                   border:`1px solid ${C.line2}`,
-                  borderBottom:`1px solid ${email ? C.accent : C.line2}`,
+                  borderBottom:`1px solid ${username ? C.accent : C.line2}`,
                   color:C.p1, fontFamily:mono, fontSize:11,
                   padding:"10px 12px", outline:"none", width:"100%",
                   boxSizing:"border-box",
@@ -332,7 +332,7 @@ export default function GovernorLogin() {
                   opacity: isScanning || isSuccess ? 0.5 : 1,
                 }}
                 onFocus={e => { e.target.style.borderColor = C.accent; }}
-                onBlur={e  => { e.target.style.borderColor = email ? C.accent : C.line2; }}
+                onBlur={e  => { e.target.style.borderColor = username ? C.accent : C.line2; }}
               />
             </div>
 
@@ -408,17 +408,17 @@ export default function GovernorLogin() {
           {/* ── AUTHENTICATE BUTTON ── */}
           <button
             onClick={handleAuth}
-            disabled={isScanning || isSuccess || !email || !password}
+            disabled={isScanning || isSuccess || !username || !password}
             style={{
               width:"100%", padding:"12px",
               fontFamily:mono, fontSize:11, fontWeight:700,
               letterSpacing:2, textTransform:"uppercase",
-              cursor: isScanning || isSuccess || !email || !password ? "not-allowed" : "pointer",
+              cursor: isScanning || isSuccess || !username || !password ? "not-allowed" : "pointer",
               border:`1px solid ${isSuccess ? C.green : isError ? C.red : C.accent}`,
               color: isSuccess ? C.green : isError ? C.red : C.accent,
               background: isSuccess ? C.greenDim : isError ? C.redDim : C.accentDim,
               transition:"all 0.2s",
-              opacity: !email || !password ? 0.4 : 1,
+              opacity: !username || !password ? 0.4 : 1,
               position:"relative", overflow:"hidden",
             }}>
             {isScanning ? "VERIFYING…" : isSuccess ? "✓ AUTHORISED" : isError ? "ACCESS DENIED" : "AUTHENTICATE →"}

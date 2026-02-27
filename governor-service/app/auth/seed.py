@@ -20,11 +20,11 @@ def seed_admin() -> None:
     overridden before deployment.
 
     Defaults (for local dev only — change before production):
-      GOVERNOR_ADMIN_EMAIL    = admin@openclaw.io
+      GOVERNOR_ADMIN_USERNAME = admin
       GOVERNOR_ADMIN_PASSWORD = changeme
       GOVERNOR_ADMIN_NAME     = Governor Admin
     """
-    email    = os.getenv("GOVERNOR_ADMIN_EMAIL",    "admin@openclaw.io")
+    username = os.getenv("GOVERNOR_ADMIN_USERNAME", "admin")
     password = os.getenv("GOVERNOR_ADMIN_PASSWORD", _DEFAULT_PASSWORD)
     name     = os.getenv("GOVERNOR_ADMIN_NAME",     "Governor Admin")
 
@@ -51,7 +51,7 @@ def seed_admin() -> None:
                 return
 
         admin = User(
-            email=email,
+            username=username,
             name=name,
             password_hash=hash_password(password),
             role="admin",
@@ -59,4 +59,4 @@ def seed_admin() -> None:
             is_active=True,
         )
         session.add(admin)
-        print(f"[seed] Default admin created: {email}")
+        print(f"[seed] Default admin created: {username}")

@@ -36,7 +36,7 @@ def create_access_token(
     minutes = expires_minutes or settings.jwt_expire_minutes
     expire = datetime.now(timezone.utc) + timedelta(minutes=minutes)
     payload = {
-        "sub": subject,          # email
+        "sub": subject,          # username
         "role": role,
         "exp": expire,
         "iat": datetime.now(timezone.utc),

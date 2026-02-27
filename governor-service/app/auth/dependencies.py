@@ -31,13 +31,13 @@ def get_current_user(
     if bearer and bearer.credentials:
         try:
             payload = decode_token(bearer.credentials)
-            email: str = payload.get("sub", "")
+            username: str = payload.get("sub", "")
         except JWTError:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                                 detail="Invalid or expired token.")
         with db_session() as session:
             user = session.execute(
-                select(User).where(User.email == email)
+                select(User).where(User.username == username)
             ).scalar_one_or_none()
         if not user or not user.is_active:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,

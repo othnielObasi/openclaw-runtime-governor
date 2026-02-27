@@ -22,7 +22,7 @@ if (!API) {
 
 interface User {
   id: number;
-  email: string;
+  username: string;
   name: string;
   role: string;
   is_active: boolean;
@@ -110,7 +110,7 @@ export default function UserManagement() {
   const [showCreate, setShowCreate]       = useState(false);
   const [creating, setCreating]           = useState(false);
   const [createErr, setCreateErr]         = useState("");
-  const [form, setForm] = useState({ email:"", name:"", password:"", role:"operator" });
+  const [form, setForm] = useState({ username:"", name:"", password:"", role:"operator" });
 
   const authHeaders = { Authorization: `Bearer ${token}`, "Content-Type":"application/json" };
 
@@ -150,7 +150,7 @@ export default function UserManagement() {
   };
 
   const handleCreate = async () => {
-    if (!form.email || !form.name || !form.password) { setCreateErr("All fields required."); return; }
+    if (!form.username || !form.name || !form.password) { setCreateErr("All fields required."); return; }
     setCreating(true); setCreateErr("");
     try {
       const res = await fetch(`${API}/auth/users`, {
@@ -161,7 +161,7 @@ export default function UserManagement() {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.detail || "Failed to create user.");
       }
-      setForm({ email:"", name:"", password:"", role:"operator" });
+      setForm({ username:"", name:"", password:"", role:"operator" });
       setShowCreate(false);
       fetchUsers();
     } catch (e: any) {
@@ -216,8 +216,8 @@ export default function UserManagement() {
             <Fld label="Name">
               <Input value={form.name} onChange={v => setForm(f => ({...f, name:v}))} placeholder="Jane Smith"/>
             </Fld>
-            <Fld label="Email">
-              <Input value={form.email} onChange={v => setForm(f => ({...f, email:v}))} placeholder="jane@org.io" type="email"/>
+            <Fld label="Username">
+              <Input value={form.username} onChange={v => setForm(f => ({...f, username:v}))} placeholder="jane" type="text"/>
             </Fld>
             <Fld label="Temp Password">
               <Input value={form.password} onChange={v => setForm(f => ({...f, password:v}))} placeholder="••••••••" type="password"/>
@@ -259,7 +259,7 @@ export default function UserManagement() {
             gap:8, padding:"6px 12px", marginBottom:4,
             borderBottom:`1px solid ${C.line}`,
           }}>
-            {["OPERATOR","EMAIL","ROLE","STATUS","ACTIONS"].map(h => (
+            {["OPERATOR","USERNAME","ROLE","STATUS","ACTIONS"].map(h => (
               <div key={h} style={{ fontSize:8, color:C.p3, letterSpacing:1.5, textTransform:"uppercase" }}>
                 {h}
               </div>
@@ -282,7 +282,7 @@ export default function UserManagement() {
                   </div>
                 )}
               </div>
-              <div style={{ fontSize:9, color:C.p2, fontFamily:mono }}>{u.email}</div>
+              <div style={{ fontSize:9, color:C.p2, fontFamily:mono }}>{u.username}</div>
               <div><Badge color={ROLE_COLOR[u.role] || C.p3}>{u.role}</Badge></div>
               <div><Badge color={C.green}>ACTIVE</Badge></div>
               <div style={{ display:"flex", gap:4 }}>
@@ -311,7 +311,7 @@ export default function UserManagement() {
                   borderBottom:`1px solid ${C.line}`, opacity:0.45,
                 }}>
                   <div style={{ fontSize:11, color:C.p2 }}>{u.name}</div>
-                  <div style={{ fontSize:9, color:C.p3 }}>{u.email}</div>
+                  <div style={{ fontSize:9, color:C.p3 }}>{u.username}</div>
                   <div><Badge color={ROLE_COLOR[u.role] || C.p3}>{u.role}</Badge></div>
                   <div><Badge color={C.red}>REVOKED</Badge></div>
                   <div>

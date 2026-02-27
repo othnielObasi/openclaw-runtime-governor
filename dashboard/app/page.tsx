@@ -289,7 +289,7 @@ function LandingPage({ onSelect }: { onSelect: (mode: "demo" | "live") => void }
             border: `1px solid ${C.line}`, letterSpacing: 0.5,
           }}>
             <span style={{ color: C.p3 }}>credentials:</span>{" "}
-            <span style={{ color: C.p2 }}>admin@openclaw.io</span>{" "}
+            <span style={{ color: C.p2 }}>admin</span>{" "}
             <span style={{ color: C.p3 }}>/</span>{" "}
             <span style={{ color: C.p2 }}>govern</span>
           </div>

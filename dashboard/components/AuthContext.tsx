@@ -13,7 +13,7 @@ import {
 export type Role = "admin" | "operator" | "auditor";
 
 export interface AuthUser {
-  email: string;
+  username: string;
   name: string;
   role: Role;
   api_key?: string;
@@ -23,8 +23,8 @@ interface AuthContextValue {
   user: AuthUser | null;
   token: string | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  signup: (name: string, email: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
+  signup: (name: string, username: string, password: string) => Promise<void>;
   logout: () => void;
   isAdmin: boolean;
   isOperator: boolean;
@@ -63,11 +63,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (username: string, password: string) => {
     const res = await fetch(`${API_BASE}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ username, password }),
     });
 
     if (!res.ok) {
@@ -78,14 +78,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const data = await res.json();
     localStorage.setItem(TOKEN_KEY, data.access_token);
     setToken(data.access_token);
-    setUser({ email: data.email, name: data.name, role: data.role });
+    setUser({ username: data.username, name: data.name, role: data.role });
   }, []);
 
-  const signup = useCallback(async (name: string, email: string, password: string) => {
+  const signup = useCallback(async (name: string, username: string, password: string) => {
     const res = await fetch(`${API_BASE}/auth/signup`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify({ name, username, password }),
     });
 
     if (!res.ok) {
@@ -96,7 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const data = await res.json();
     localStorage.setItem(TOKEN_KEY, data.access_token);
     setToken(data.access_token);
-    setUser({ email: data.email, name: data.name, role: data.role });
+    setUser({ username: data.username, name: data.name, role: data.role });
   }, []);
 
   const logout = useCallback(() => {

@@ -64,7 +64,7 @@ npm run dev
 Add to governor-service (Fly secrets or .env):
 ```
 GOVERNOR_JWT_SECRET=your-long-random-secret-here
-GOVERNOR_ADMIN_EMAIL=admin@yourorg.io
+GOVERNOR_ADMIN_USERNAME=admin
 GOVERNOR_ADMIN_PASSWORD=your-secure-password
 GOVERNOR_ADMIN_NAME=Governor Admin
 ```
@@ -72,7 +72,7 @@ GOVERNOR_ADMIN_NAME=Governor Admin
 On first startup, a default admin account is created automatically from these env vars.
 
 ### Default Credentials (local dev only)
-- Email: `admin@openclaw.io`
+- Username: `admin`
 - Password: `changeme`
 
 **Change these before any deployment.**

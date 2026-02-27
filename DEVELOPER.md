@@ -132,7 +132,7 @@ uvicorn app.main:app --reload --port 8000
 
 On first startup, the server:
 1. Creates all database tables (`SQLite` by default at `./governor.db`)
-2. Seeds a default admin account: `admin@openclaw.io` / `changeme`
+2. Seeds a default admin account: `admin` / `changeme`
 3. Loads base policies from `app/policies/base_policies.yml`
 
 Verify it's running:
@@ -493,7 +493,7 @@ See [`PUBLISHING.md`](PUBLISHING.md) for secrets setup and manual publish instru
 | `GOVERNOR_JWT_EXPIRE_MINUTES` | `480` | 8 hours default |
 | `GOVERNOR_LOGIN_RATE_LIMIT` | `5/minute` | slowapi format |
 | `GOVERNOR_EVALUATE_RATE_LIMIT` | `120/minute` | slowapi format |
-| `GOVERNOR_ADMIN_EMAIL` | `admin@openclaw.io` | First admin account email |
+| `GOVERNOR_ADMIN_USERNAME` | `admin` | First admin account username |
 | `GOVERNOR_ADMIN_PASSWORD` | `changeme` | First admin account password |
 | `GOVERNOR_SURGE_GOVERNANCE_FEE_ENABLED` | `false` | Enable $SURGE fee per eval |
 | `GOVERNOR_SURGE_WALLET_ADDRESS` | *(empty)* | SURGE wallet for fee collection |

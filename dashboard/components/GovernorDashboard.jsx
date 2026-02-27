@@ -2669,7 +2669,7 @@ function AdminUserManagementTab() {
   const [creating, setCr]   = useState(false);
   const [createErr, setCE]  = useState("");
   const [pending, setPending] = useState(null);
-  const [form, setForm]     = useState({email:"",name:"",password:"",role:"operator"});
+  const [form, setForm]     = useState({username:"",name:"",password:"",role:"operator"});
 
   const headers = () => ({
     Authorization:`Bearer ${getToken()}`,
@@ -2705,12 +2705,12 @@ function AdminUserManagementTab() {
   };
 
   const create = async () => {
-    if (!form.email||!form.name||!form.password){setCE("All fields required.");return;}
+    if (!form.username||!form.name||!form.password){setCE("All fields required.");return;}
     setCr(true); setCE("");
     try {
       const r = await fetch(`${API_BASE}/auth/users`, {method:"POST",headers:headers(),body:JSON.stringify(form)});
       if (!r.ok) { const e=await r.json().catch(()=>({})); throw new Error(e.detail||"Failed."); }
-      setForm({email:"",name:"",password:"",role:"operator"}); setSC(false); load();
+      setForm({username:"",name:"",password:"",role:"operator"}); setSC(false); load();
     } catch(e) { setCE(e.message); }
     finally { setCr(false); }
   };
@@ -2755,7 +2755,7 @@ function AdminUserManagementTab() {
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 120px",gap:10,marginBottom:14}}>
             {[
               {label:"Name",      key:"name",     type:"text",     ph:"Jane Smith"},
-              {label:"Email",     key:"email",    type:"email",    ph:"jane@org.io"},
+              {label:"Username",  key:"username", type:"text",     ph:"jane"},
               {label:"Password",  key:"password", type:"password", ph:"••••••••"},
             ].map(({label,key,type,ph})=>(
               <div key={key} style={{display:"flex",flexDirection:"column",gap:4}}>
@@ -2802,7 +2802,7 @@ function AdminUserManagementTab() {
           {/* Column headers */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 200px 90px 80px 220px",
             gap:8,padding:"6px 12px",marginBottom:4,borderBottom:`1px solid ${C.line}`}}>
-            {["OPERATOR","EMAIL","ROLE","STATUS","ACTIONS"].map(h=>(
+            {["OPERATOR","USERNAME","ROLE","STATUS","ACTIONS"].map(h=>(
               <div key={h} style={{fontFamily:mono,fontSize:8,color:C.p3,letterSpacing:1.5,textTransform:"uppercase"}}>{h}</div>
             ))}
           </div>
@@ -2818,7 +2818,7 @@ function AdminUserManagementTab() {
                   </div>
                 )}
               </div>
-              <div style={{fontFamily:mono,fontSize:9,color:C.p2}}>{u.email}</div>
+              <div style={{fontFamily:mono,fontSize:9,color:C.p2}}>{u.username}</div>
               <div>
                 <span style={{fontFamily:mono,fontSize:8,letterSpacing:1.5,
                   padding:"2px 8px",border:`1px solid ${ROLE_C[u.role]||C.p3}`,
@@ -2853,7 +2853,7 @@ function AdminUserManagementTab() {
                 <div key={u.id} style={{display:"grid",gridTemplateColumns:"1fr 200px 90px 80px 220px",
                   gap:8,alignItems:"center",padding:"10px 12px",borderBottom:`1px solid ${C.line}`,opacity:0.4}}>
                   <div style={{fontFamily:mono,fontSize:11,color:C.p2}}>{u.name}</div>
-                  <div style={{fontFamily:mono,fontSize:9,color:C.p3}}>{u.email}</div>
+                  <div style={{fontFamily:mono,fontSize:9,color:C.p3}}>{u.username}</div>
                   <div>
                     <span style={{fontFamily:mono,fontSize:8,letterSpacing:1.5,
                       padding:"2px 8px",border:`1px solid ${ROLE_C[u.role]||C.p3}`,

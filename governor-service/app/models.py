@@ -55,7 +55,7 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    email: Mapped[str] = mapped_column(String(256), unique=True, index=True)
+    username: Mapped[str] = mapped_column(String(256), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(128))
     password_hash: Mapped[str] = mapped_column(String(256))
     role: Mapped[str] = mapped_column(String(32), index=True)  # admin | operator | auditor

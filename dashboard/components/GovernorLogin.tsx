@@ -60,7 +60,7 @@ export default function GovernorLogin({ onBack }: GovernorLoginProps) {
   const [mode, setMode] = useState<"signup"|"login">("signup");
 
   // Common fields
-  const [email, setEmail]       = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
 
@@ -88,8 +88,8 @@ export default function GovernorLogin({ onBack }: GovernorLoginProps) {
   const scanSteps = mode === "signup" ? SCAN_STEPS_SIGNUP : SCAN_STEPS_LOGIN;
 
   const canSubmit = mode === "signup"
-    ? (name.trim() && email && password && confirmPass && password === confirmPass)
-    : (email && password);
+    ? (name.trim() && username && password && confirmPass && password === confirmPass)
+    : (username && password);
 
   const handleSubmit = async () => {
     if (!canSubmit || phase === "scanning") return;
@@ -119,9 +119,9 @@ export default function GovernorLogin({ onBack }: GovernorLoginProps) {
 
     try {
       if (mode === "signup") {
-        await signup(name.trim(), email, password);
+        await signup(name.trim(), username, password);
       } else {
-        await login(email, password);
+        await login(username, password);
       }
       setPhase("success");
     } catch (err: any) {
@@ -315,18 +315,18 @@ export default function GovernorLogin({ onBack }: GovernorLoginProps) {
             {/* Email */}
             <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
               <label style={{ fontSize:"8px", letterSpacing:2, color:C.p3, textTransform:"uppercase" }}>
-                Email Address
+                Username
               </label>
               <input
-                type="email" value={email}
-                onChange={e => setEmail(e.target.value)}
+                type="text" value={username}
+                onChange={e => setUsername(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && handleSubmit()}
                 disabled={isScanning || isSuccess}
-                placeholder="you@organisation.io"
+                placeholder="your-username"
                 autoFocus={mode === "login"}
                 style={{
                   background:C.bg0, border:`1px solid ${C.line2}`,
-                  borderBottom:`1px solid ${email ? C.accent : C.line2}`,
+                  borderBottom:`1px solid ${username ? C.accent : C.line2}`,
                   color:C.p1, fontFamily:mono, fontSize:11,
                   padding:"10px 12px", outline:"none", width:"100%", boxSizing:"border-box",
                   transition:"border-color 0.2s",

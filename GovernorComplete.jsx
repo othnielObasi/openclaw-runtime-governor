@@ -44,12 +44,12 @@ const sans = "'DM Sans', sans-serif";
 
 // ═══════════════════════════════════════════════════════════
 // AUTH STATE — simulated (no backend in artifact preview)
-// Credentials: admin@openclaw.io / govern
+// Credentials: admin / govern
 // ═══════════════════════════════════════════════════════════
 const DEMO_USERS = {
-  "admin@openclaw.io":    { password:"govern",   role:"admin",    name:"Governor Admin" },
-  "operator@openclaw.io": { password:"operate",  role:"operator", name:"Ops Operator" },
-  "auditor@openclaw.io":  { password:"audit",    role:"auditor",  name:"Audit Viewer" },
+  "admin":    { password:"govern",   role:"admin",    name:"Governor Admin" },
+  "operator": { password:"operate",  role:"operator", name:"Ops Operator" },
+  "auditor":  { password:"audit",    role:"auditor",  name:"Audit Viewer" },
 };
 
 const SCAN_STEPS = [
@@ -82,7 +82,7 @@ function ClawIcon({ size=54, pulse=false }) {
 
 // ── LOGIN PAGE ───────────────────────────────────────────────
 function LoginPage({ onLogin }) {
-  const [email, setEmail]       = useState("admin@openclaw.io");
+  const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("govern");
   const [showPass, setShowPass] = useState(false);
   const [phase, setPhase]       = useState("idle");
@@ -101,7 +101,7 @@ function LoginPage({ onLogin }) {
   }, []);
 
   const handleAuth = async () => {
-    if (!email || !password || phase === "scanning") return;
+    if (!username || !password || phase === "scanning") return;
     setPhase("scanning"); setScanStep(0); setErrorMsg("");
 
     for (let i = 0; i < SCAN_STEPS.length; i++) {
@@ -110,7 +110,7 @@ function LoginPage({ onLogin }) {
     }
     await new Promise(r => setTimeout(r, 300));
 
-    const user = DEMO_USERS[email.toLowerCase()];
+    const user = DEMO_USERS[username.toLowerCase()];
     if (!user || user.password !== password) {
       setErrorMsg("Invalid credentials.");
       setPhase("error");
@@ -118,7 +118,7 @@ function LoginPage({ onLogin }) {
       return;
     }
     setPhase("success");
-    setTimeout(() => onLogin({ email, name:user.name, role:user.role }), 600);
+    setTimeout(() => onLogin({ username, name:user.name, role:user.role }), 600);
   };
 
   const isScanning = phase === "scanning";
@@ -217,21 +217,21 @@ function LoginPage({ onLogin }) {
           }}>
             <div style={{color:C.p2,marginBottom:4,letterSpacing:1}}>DEMO CREDENTIALS — click to fill</div>
             {[
-              {e:"admin@openclaw.io",    p:"govern",  role:"Admin"},
-              {e:"operator@openclaw.io", p:"operate", role:"Operator"},
-              {e:"auditor@openclaw.io",  p:"audit",   role:"Auditor"},
+              {e:"admin",    p:"govern",  role:"Admin"},
+              {e:"operator", p:"operate", role:"Operator"},
+              {e:"auditor",  p:"audit",   role:"Auditor"},
             ].map(u=>(
-              <div key={u.e} onClick={()=>{setEmail(u.e);setPassword(u.p);}}
+              <div key={u.e} onClick={()=>{setUsername(u.e);setPassword(u.p);}}
                 style={{
                   cursor:"pointer",padding:"3px 6px",marginBottom:2,
-                  background:email===u.e?`${C.accent}18`:"transparent",
-                  border:`1px solid ${email===u.e?C.accent:"transparent"}`,
+                  background:username===u.e?`${C.accent}18`:"transparent",
+                  border:`1px solid ${username===u.e?C.accent:"transparent"}`,
                   transition:"all 0.15s",display:"flex",alignItems:"center",gap:6,
                 }}>
-                <span style={{color:email===u.e?C.accent:C.p3,width:8}}>
-                  {email===u.e?"▶":"·"}
+                <span style={{color:username===u.e?C.accent:C.p3,width:8}}>
+                  {username===u.e?"▶":"·"}
                 </span>
-                <span style={{color:email===u.e?C.p1:C.p2}}>{u.e}</span>
+                <span style={{color:username===u.e?C.p1:C.p2}}>{u.e}</span>
                 <span style={{color:C.p3}}>/</span>
                 <span style={{color:C.amber}}>{u.p}</span>
                 <span style={{color:C.p3,marginLeft:"auto",fontSize:"7px",letterSpacing:1}}>{u.role}</span>
@@ -259,15 +259,15 @@ function LoginPage({ onLogin }) {
           <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:18}}>
             <div style={{display:"flex",flexDirection:"column",gap:4}}>
               <label style={{fontSize:"8px",letterSpacing:2,color:C.p3,textTransform:"uppercase"}}>
-                Operator Email
+                Username
               </label>
-              <input type="email" value={email}
-                onChange={e=>setEmail(e.target.value)}
+              <input type="text" value={username}
+                onChange={e=>setUsername(e.target.value)}
                 onKeyDown={e=>e.key==="Enter"&&handleAuth()}
                 disabled={isScanning||isSuccess}
                 style={{
                   background:C.bg0,border:`1px solid ${C.line2}`,
-                  borderBottom:`1px solid ${email?C.accent:C.line2}`,
+                  borderBottom:`1px solid ${username?C.accent:C.line2}`,
                   color:C.p1,fontFamily:mono,fontSize:11,
                   padding:"10px 12px",outline:"none",width:"100%",boxSizing:"border-box",
                   transition:"border-color 0.2s",
@@ -318,15 +318,15 @@ function LoginPage({ onLogin }) {
 
           {/* Button */}
           <button onClick={handleAuth}
-            disabled={isScanning||isSuccess||!email||!password}
+            disabled={isScanning||isSuccess||!username||!password}
             style={{
               width:"100%",padding:"12px",fontFamily:mono,fontSize:11,fontWeight:700,
               letterSpacing:2,textTransform:"uppercase",
-              cursor:isScanning||isSuccess||!email||!password?"not-allowed":"pointer",
+              cursor:isScanning||isSuccess||!username||!password?"not-allowed":"pointer",
               border:`1px solid ${isSuccess?C.green:isError?C.red:C.accent}`,
               color:isSuccess?C.green:isError?C.red:C.accent,
               background:isSuccess?C.greenDim:isError?C.redDim:C.accentDim,
-              transition:"all 0.2s", opacity:!email||!password?0.4:1,
+              transition:"all 0.2s", opacity:!username||!password?0.4:1,
             }}>
             {isScanning?"VERIFYING…":isSuccess?"✓ AUTHORISED":isError?"ACCESS DENIED":"AUTHENTICATE →"}
           </button>
@@ -3354,10 +3354,10 @@ function genKey() {
   return "ocg_" + Array.from({length:24}, ()=>chars[Math.floor(Math.random()*chars.length)]).join("");
 }
 const SEED_USERS = [
-  { id:1, name:"Governor Admin",   email:"admin@openclaw.io",    role:"admin",    is_active:true,  api_key:"ocg_xK92mNpR44aB1cDeFgHiJk", created_at:"2026-01-15T09:00:00Z" },
-  { id:2, name:"Ops Operator",     email:"operator@openclaw.io", role:"operator", is_active:true,  api_key:"ocg_pL33wQmT77bC2dEfGhIjKl", created_at:"2026-01-20T11:30:00Z" },
-  { id:3, name:"Audit Viewer",     email:"auditor@openclaw.io",  role:"auditor",  is_active:true,  api_key:"ocg_rM55vRnU88dD3eGhIjKlMn", created_at:"2026-01-22T14:00:00Z" },
-  { id:4, name:"Revoked Operator", email:"revoked@openclaw.io",  role:"operator", is_active:false, api_key:null,                          created_at:"2026-01-10T08:00:00Z" },
+  { id:1, name:"Governor Admin",   username:"admin",    role:"admin",    is_active:true,  api_key:"ocg_xK92mNpR44aB1cDeFgHiJk", created_at:"2026-01-15T09:00:00Z" },
+  { id:2, name:"Ops Operator",     username:"operator", role:"operator", is_active:true,  api_key:"ocg_pL33wQmT77bC2dEfGhIjKl", created_at:"2026-01-20T11:30:00Z" },
+  { id:3, name:"Audit Viewer",     username:"auditor",  role:"auditor",  is_active:true,  api_key:"ocg_rM55vRnU88dD3eGhIjKlMn", created_at:"2026-01-22T14:00:00Z" },
+  { id:4, name:"Revoked Operator", username:"revoked",  role:"operator", is_active:false, api_key:null,                          created_at:"2026-01-10T08:00:00Z" },
 ];
 
 function AdminUserManagementTab() {
@@ -3367,7 +3367,7 @@ function AdminUserManagementTab() {
   const [createErr, setCE]    = useState("");
   const [pending, setPending] = useState(null);
   const [rotated, setRotated] = useState(null);
-  const [form, setForm]       = useState({email:"",name:"",password:"",role:"operator"});
+  const [form, setForm]       = useState({username:"",name:"",password:"",role:"operator"});
 
   const updateUser = (id, patch) =>
     setUsers(prev => prev.map(u => u.id===id ? {...u,...patch} : u));
@@ -3382,13 +3382,13 @@ function AdminUserManagementTab() {
     setTimeout(()=>setRotated(r=>r===id?null:r), 1800);
   };
   const create = async () => {
-    if (!form.email||!form.name||!form.password){setCE("All fields required.");return;}
-    if (users.some(u=>u.email===form.email)){setCE("Email already exists.");return;}
+    if (!form.username||!form.name||!form.password){setCE("All fields required.");return;}
+    if (users.some(u=>u.username===form.username)){setCE("Username already exists.");return;}
     setCr(true); setCE("");
     await new Promise(r=>setTimeout(r,600));
-    setUsers(prev=>[...prev,{id:_nextId++,name:form.name,email:form.email,role:form.role,
+    setUsers(prev=>[...prev,{id:_nextId++,name:form.name,username:form.username,role:form.role,
       is_active:true,api_key:genKey(),created_at:new Date().toISOString()}]);
-    setForm({email:"",name:"",password:"",role:"operator"}); setSC(false); setCr(false);
+    setForm({username:"",name:"",password:"",role:"operator"}); setSC(false); setCr(false);
   };
 
   const ROLE_C = {admin:C.accent, operator:C.amber, auditor:C.p2};
@@ -3416,7 +3416,7 @@ function AdminUserManagementTab() {
           <div style={{fontFamily:mono,fontSize:9,color:C.accent,letterSpacing:2,marginBottom:14}}>NEW OPERATOR ACCOUNT</div>
           {createErr&&<div style={{padding:"6px 10px",marginBottom:10,background:C.redDim,border:`1px solid ${C.red}`,fontFamily:mono,fontSize:9,color:C.red}}>⚠ {createErr}</div>}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 120px",gap:10,marginBottom:14}}>
-            {[{label:"Name",key:"name",type:"text",ph:"Jane Smith"},{label:"Email",key:"email",type:"email",ph:"jane@org.io"},{label:"Password",key:"password",type:"password",ph:"••••••••"}].map(({label,key,type,ph})=>(
+            {[{label:"Name",key:"name",type:"text",ph:"Jane Smith"},{label:"Username",key:"username",type:"text",ph:"jane"},{label:"Password",key:"password",type:"password",ph:"••••••••"}].map(({label,key,type,ph})=>(
               <div key={key} style={{display:"flex",flexDirection:"column",gap:4}}>
                 <label style={{fontFamily:mono,fontSize:8,letterSpacing:2,color:C.p3,textTransform:"uppercase"}}>{label}</label>
                 <input type={type} value={form[key]} placeholder={ph} onChange={e=>setForm(f=>({...f,[key]:e.target.value}))}
@@ -3442,7 +3442,7 @@ function AdminUserManagementTab() {
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 200px 90px 80px 220px",gap:8,
         padding:"6px 12px",marginBottom:4,borderBottom:`1px solid ${C.line}`}}>
-        {["OPERATOR","EMAIL","ROLE","STATUS","ACTIONS"].map(h=>(
+        {["OPERATOR","USERNAME","ROLE","STATUS","ACTIONS"].map(h=>(
           <div key={h} style={{fontFamily:mono,fontSize:8,color:C.p3,letterSpacing:1.5,textTransform:"uppercase"}}>{h}</div>
         ))}
       </div>
@@ -3454,7 +3454,7 @@ function AdminUserManagementTab() {
             <div style={{fontFamily:mono,fontSize:11,fontWeight:600,color:C.p1}}>{u.name}</div>
             {u.api_key&&<div style={{fontFamily:mono,fontSize:7.5,marginTop:2,color:rotated===u.id?C.green:C.p3,transition:"color 0.3s"}}>key: {u.api_key.slice(0,22)}…</div>}
           </div>
-          <div style={{fontFamily:mono,fontSize:9,color:C.p2}}>{u.email}</div>
+          <div style={{fontFamily:mono,fontSize:9,color:C.p2}}>{u.username}</div>
           <div><span style={{fontFamily:mono,fontSize:8,letterSpacing:1.5,padding:"2px 8px",border:`1px solid ${ROLE_C[u.role]||C.p3}`,color:ROLE_C[u.role]||C.p3,textTransform:"uppercase"}}>{u.role}</span></div>
           <div><span style={{fontFamily:mono,fontSize:8,letterSpacing:1.5,padding:"2px 8px",border:`1px solid ${C.green}`,color:C.green}}>ACTIVE</span></div>
           <div style={{display:"flex",gap:4}}>
@@ -3479,7 +3479,7 @@ function AdminUserManagementTab() {
             <div key={u.id} style={{display:"grid",gridTemplateColumns:"1fr 200px 90px 80px 220px",
               gap:8,alignItems:"center",padding:"10px 12px",borderBottom:`1px solid ${C.line}`,opacity:0.4}}>
               <div style={{fontFamily:mono,fontSize:11,color:C.p2}}>{u.name}</div>
-              <div style={{fontFamily:mono,fontSize:9,color:C.p3}}>{u.email}</div>
+              <div style={{fontFamily:mono,fontSize:9,color:C.p3}}>{u.username}</div>
               <div><span style={{fontFamily:mono,fontSize:8,letterSpacing:1.5,padding:"2px 8px",border:`1px solid ${ROLE_C[u.role]||C.p3}`,color:ROLE_C[u.role]||C.p3,textTransform:"uppercase"}}>{u.role}</span></div>
               <div><span style={{fontFamily:mono,fontSize:8,letterSpacing:1.5,padding:"2px 8px",border:`1px solid ${C.red}`,color:C.red}}>REVOKED</span></div>
               <div><button onClick={()=>restore(u.id)} style={{fontFamily:mono,fontSize:8,padding:"3px 8px",cursor:"pointer",border:`1px solid ${C.amber}`,color:C.amber,background:C.amberDim}}>↩ RESTORE</button></div>
