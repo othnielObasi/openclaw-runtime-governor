@@ -19,7 +19,7 @@ The entire codebase was created specifically for this hackathon (Feb 4 – Mar 1
 | `openclaw-skills/moltbook-reporter/` | ✅ 100% original | Full Moltbook API client, post composer, autonomous loop, register helper |
 | `dashboard/` Next.js | ✅ 100% original | All components hand-written (SummaryPanel, RecentActions, ActionTester, PolicyEditor, AdminStatus, useActionStream SSE hook) |
 | `docs/` | ✅ 100% original | Architecture diagrams, deployment guides |
-| Test suite (34 tests) | ✅ 100% original | Written to match the actual implementation (24 governance + 10 SSE streaming) |
+| Test suite (52 tests) | ✅ 100% original | Written to match the actual implementation (24 governance + 18 policy management + 10 SSE streaming) |
 
 ---
 

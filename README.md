@@ -197,7 +197,7 @@ If the calling context includes `allowed_tools`, the requested tool must be in t
 ### Layer 4 — Policy Engine
 Matches against two policy sources:
 - **Base policies** — 10 YAML rules shipped with the service ([`base_policies.yml`](governor-service/app/policies/base_policies.yml))
-- **Dynamic policies** — created at runtime via API, stored in the database
+- **Dynamic policies** — created at runtime via API, stored in the database. Each policy has an `is_active` toggle — disable policies without deleting them. Regex patterns (`url_regex`, `args_regex`) are validated at creation and update time. Partial updates via PATCH.
 
 ### Layer 5 — Neuro Risk Estimator + Chain Analysis
 Heuristic risk scorer (0–100) based on tool type, sensitive keywords, and bulk-recipient detection. **Chain analysis** examines session history across a 60-minute window to detect 6 multi-step attack patterns:
@@ -338,8 +338,11 @@ python governor_agent.py --demo   # Single observation cycle
 | `GET` | `/actions` | Any | List action logs (filterable) |
 | `GET` | `/actions/stream` | Any | **Real-time SSE event stream** |
 | `GET` | `/actions/stream/status` | Any | Active stream subscribers |
-| `GET` | `/policies` | Any | List all policies |
-| `POST` | `/policies` | Operator+ | Create dynamic policy |
+| `GET` | `/policies` | Any | List all policies (`?active_only=true` to filter) |
+| `GET` | `/policies/{id}` | Any | Get single policy detail |
+| `POST` | `/policies` | Operator+ | Create dynamic policy (validates regex) |
+| `PATCH` | `/policies/{id}` | Operator+ | Partial update (description, severity, action, match, status) |
+| `PATCH` | `/policies/{id}/toggle` | Operator+ | Toggle policy active/inactive |
 | `DELETE` | `/policies/{id}` | Operator+ | Delete a policy |
 
 ### Admin
@@ -362,7 +365,7 @@ python governor_agent.py --demo   # Single observation cycle
 ## Testing
 
 ```bash
-# Backend — 34 tests (governance pipeline + SSE streaming)
+# Backend — 52 tests (24 governance + 18 policy management + 10 SSE streaming)
 cd governor-service && pytest tests/ -v
 
 # TypeScript/JS SDK — 6 tests

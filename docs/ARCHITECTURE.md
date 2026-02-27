@@ -77,7 +77,7 @@ governor-service/
 │   ├── api/
 │   │   ├── routes_actions.py ← POST /actions/evaluate, GET /actions
 │   │   ├── routes_stream.py  ← GET /actions/stream (SSE), GET /actions/stream/status
-│   │   ├── routes_policies.py← GET/POST/DELETE /policies
+│   │   ├── routes_policies.py← GET/POST/PATCH/DELETE /policies (+ toggle, regex validation)
 │   │   ├── routes_summary.py ← GET /summary/moltbook
 │   │   ├── routes_admin.py   ← GET /admin/status, POST /admin/kill|resume
 │   │   └── routes_surge.py   ← SURGE receipts, staking, fee gating
@@ -107,7 +107,7 @@ dashboard/
     ├── Governordashboard-demo.jsx ← Demo dashboard (self-contained)
     ├── ActionTester.tsx       ← POST /actions/evaluate UI
     ├── AdminStatus.tsx        ← Kill switch toggle
-    ├── PolicyEditor.tsx       ← Create/delete dynamic policies
+    ├── PolicyEditor.tsx       ← Full CRUD policy editor (create, inline edit, toggle, delete)
     ├── useActionStream.ts     ← React hook for SSE — auto-connect, reconnect, event buffer
     ├── RecentActions.tsx      ← GET /actions audit feed + live SSE merge (LIVE badge)
     ├── SummaryPanel.tsx       ← Stats overview (auto-refresh on SSE events)
@@ -136,7 +136,7 @@ openclaw-skills/
 | Decision | Rationale |
 |----------|-----------|
 | Layered evaluation (kill → firewall → scope → policy → neuro+chain) | Short-circuit on most critical checks first |
-| YAML + DB policies | Static policies version-controlled; dynamic policies editable at runtime |
+| YAML + DB policies | Static policies version-controlled; dynamic policies editable at runtime with active/inactive toggle |
 | `Policy.matches()` method | Encapsulates matching logic cleanly; easy to extend |
 | Neuro estimator raises risk, not decision | Risk scoring is advisory; only explicit policies change allow→block |
 | Chain analysis with 60-min session window | Detects multi-step attack patterns across related tool calls |
