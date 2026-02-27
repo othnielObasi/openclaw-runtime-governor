@@ -20,6 +20,9 @@ Today, when you deploy an AI agent in production:
 - **There is no real-time visibility.** You deploy an agent and hope for the best. If it starts behaving dangerously at 3 AM, nobody knows until morning.
 - **There is no multi-step attack detection.** An agent that reads a credential file, then sends an HTTP request a minute later, looks innocent at each step — but the *sequence* is a textbook exfiltration pattern.
 - **There is no standard governance API.** Every team builds ad-hoc safety checks buried inside agent code. Nothing is reusable, testable, or auditable.
+- **Agent traces are invisible.** You can see the final output, but you cannot reconstruct the agent's decision path — which LLM calls it made, which tools it invoked, how governance decisions fit into the execution timeline. When something goes wrong, post-mortem debugging is guesswork.
+- **Multi-agent environments are ungovernable.** When multiple agents share infrastructure, there is no cross-agent view of who is doing what, no way to correlate one agent's governance blocks with another's escalating risk patterns.
+- **Compliance is unprovable.** Regulators and auditors increasingly require evidence that AI systems were governed at runtime. Logs alone are insufficient — you need cryptographic attestation and traceable governance decision chains tied to specific agent actions.
 
 Existing solutions either require rewriting agent internals, rely on brittle prompt engineering ("please don't do bad things"), or operate only at the LLM layer — completely blind to what tools the agent actually calls at runtime.
 
@@ -79,6 +82,9 @@ The Governor doesn't try to make the AI "behave better." It operates at the **ex
 - **Real-time streaming.** Server-Sent Events push every governance decision to dashboards and monitoring tools within milliseconds. You don't poll for safety — you *watch* it happen.
 - **Chain analysis.** Session-aware pattern detection across a 60-minute window catches multi-step attacks (credential theft → exfiltration, read → write → execute, repeated scope probing) that single-call checks miss entirely.
 - **Zero-trust architecture.** The agent never touches tools directly. Every action is intercepted, evaluated, logged, and either allowed or blocked before execution.
+- **Agent trace observability.** Full agent lifecycle tracing: every LLM call, tool invocation, and retrieval step is captured as spans in an OpenTelemetry-inspired trace tree. Governance decisions are auto-injected as child spans, so you can see *exactly* where in the agent's reasoning chain each policy fired.
+- **Post-mortem reconstruction.** When an agent misbehaves, you don't guess — you pull the full trace, expand each span, see the governance pipeline results, and trace root cause from the agent's first thought to its last blocked action.
+- **Multi-agent visibility.** Filter traces by `agent_id` to compare governance patterns across agents. Spot which agents are hitting blocks, which are probing scope boundaries, and which are operating cleanly — all from one dashboard.
 - **On-chain attestation.** SURGE governance receipts (SHA-256) provide cryptographic proof of every governance decision for regulatory compliance.
 
 ---
@@ -89,9 +95,9 @@ The Governor doesn't try to make the AI "behave better." It operates at the **ex
 |-----------|------|---------|
 | [`governor-service/`](governor-service/) | FastAPI backend — 5-layer pipeline, auth, SSE streaming, SURGE, audit | 0.3.0 |
 | [`dashboard/`](dashboard/) | Next.js control panel — real-time monitoring, policy editor, admin | 0.2.0 |
-| [`openclaw-skills/governed-tools/`](openclaw-skills/governed-tools/) | Python SDK (`openclaw-governor-client` on PyPI) | 0.2.0 |
-| [`openclaw-skills/governed-tools/js-client/`](openclaw-skills/governed-tools/js-client/) | TypeScript/JS SDK (`@openclaw/governor-client` on npm) — dual CJS + ESM | 0.2.0 |
-| [`openclaw-skills/governed-tools/java-client/`](openclaw-skills/governed-tools/java-client/) | Java SDK (`dev.openclaw:governor-client` on Maven Central) — zero deps, Java 11+ | 0.2.0 |
+| [`openclaw-skills/governed-tools/`](openclaw-skills/governed-tools/) | Python SDK (`openclaw-governor-client` on PyPI) | 0.3.0 |
+| [`openclaw-skills/governed-tools/js-client/`](openclaw-skills/governed-tools/js-client/) | TypeScript/JS SDK (`@openclaw/governor-client` on npm) — dual CJS + ESM | 0.3.0 |
+| [`openclaw-skills/governed-tools/java-client/`](openclaw-skills/governed-tools/java-client/) | Java SDK (`dev.openclaw:governor-client` on Maven Central) — zero deps, Java 11+ | 0.3.0 |
 | [`openclaw-skills/moltbook-reporter/`](openclaw-skills/moltbook-reporter/) | Automated Moltbook status reporter | 0.3.0 |
 | [`governor_agent.py`](governor_agent.py) | Autonomous governance agent (observe → reason → act loop) | — |
 | [`docs/`](docs/) | Architecture docs, SDK comparison | — |
@@ -183,6 +189,75 @@ curl -N -H "X-API-Key: ocg_..." https://your-governor.fly.dev/actions/stream
 
 ---
 
+## Agent Trace Observability
+
+The Governor captures the full lifecycle of every agent task — not just tool calls, but the LLM reasoning, retrieval steps, and governance decisions that connect them.
+
+### The challenge solved
+
+Traditional logging records *what happened*. Traces record *why it happened*. When an agent runs a 15-step task and gets blocked on step 12, you need to see:
+- What the agent was trying to accomplish (the root span)
+- Which LLM calls led to the blocked tool invocation (parent chain)
+- Exactly where in the execution tree the governance pipeline fired
+- Which policies matched and why the risk score was what it was
+
+### How it works
+
+```
+Agent Framework                     Governor Service
+     │                                    │
+     │  SDK: ingestSpans([...])           │
+     ├──────POST /traces/ingest──────────►│  Stores spans as trace tree
+     │                                    │
+     │  SDK: evaluate("shell", args,      │
+     │       context={trace_id, span_id}) │
+     ├──────POST /actions/evaluate───────►│  Evaluates + auto-creates
+     │                                    │  governance span as child
+     │                                    │  of the calling span
+     │                                    │
+     │  SDK: getTrace(trace_id)           │
+     ├──────GET /traces/{id}─────────────►│  Returns full tree:
+     │                                    │  agent → llm → governance
+     │                                    │  with decision, risk, policies
+```
+
+### Span kinds
+
+| Kind | Color (dashboard) | What it represents |
+|------|-------------------|--------------------|
+| `agent` | Red | Root agent task / orchestration step |
+| `llm` | Violet | LLM inference call (GPT-4, Claude, etc.) |
+| `tool` | Amber | Tool invocation (shell, HTTP, file, etc.) |
+| `governance` | Red | Governor evaluation *(auto-created)* |
+| `retrieval` | Cyan | RAG / vector search / document fetch |
+| `chain` | Green | LangChain / multi-step chain execution |
+| `custom` | Gray | Anything else |
+
+### Zero-config governance correlation
+
+Just pass `trace_id` and `span_id` in the context when calling evaluate:
+
+```python
+# The Governor auto-creates a governance span as a child of span_id
+decision = evaluate_action("shell", {"command": "ls"}, context={
+    "trace_id": "task-abc-123",
+    "span_id": "llm-call-7",
+    "agent_id": "my-agent",
+})
+```
+
+The governance span contains the full 5-layer pipeline result (which layers fired, timing, matched policies, risk breakdown) — nested inside the agent's trace tree exactly where it belongs.
+
+### Dashboard
+
+The **Traces** tab (available to all roles) shows:
+- Trace list with span count, governance count, duration, and block status
+- Drill into any trace to see the full span tree with parent-child hierarchy
+- Click any span for detailed metadata, timing, and governance pipeline visualization
+- Filter by `agent_id` or `has_blocks` to focus on specific agents or problems
+
+---
+
 ## Governance Pipeline
 
 ### Layer 1 — Kill Switch
@@ -245,7 +320,7 @@ try {
 }
 ```
 
-### Java  ·  `dev.openclaw:governor-client:0.2.0`
+### Java  ·  `dev.openclaw:governor-client:0.3.0`
 
 ```java
 GovernorClient gov = new GovernorClient.Builder()
@@ -376,10 +451,10 @@ python governor_agent.py --demo   # Single observation cycle
 # Backend — 68 tests (24 governance + 18 policy + 16 traces + 10 SSE streaming)
 cd governor-service && pytest tests/ -v
 
-# TypeScript/JS SDK — 6 tests
+# TypeScript/JS SDK — 10 tests
 cd openclaw-skills/governed-tools/js-client && npm test
 
-# Java SDK — 6 tests
+# Java SDK — 11 tests
 cd openclaw-skills/governed-tools/java-client && mvn test
 ```
 
