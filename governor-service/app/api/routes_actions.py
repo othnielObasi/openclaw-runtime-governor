@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from ..auth.dependencies import require_any, require_operator
 from ..database import db_session
+from ..event_bus import ActionEvent, action_bus
 from ..models import ActionLog, User
 from ..policies.engine import evaluate_action
 from ..schemas import ActionInput, ActionDecision, ActionLogRead
@@ -30,8 +31,25 @@ def evaluate_action_route(
     decision = evaluate_action(action)
     log_action(action, decision)
 
-    # Generate SURGE governance receipt
+    # Broadcast to real-time SSE subscribers
     ctx = action.context or {}
+    action_bus.publish(
+        ActionEvent(
+            event_type="action_evaluated",
+            tool=action.tool,
+            decision=decision.decision,
+            risk_score=decision.risk_score,
+            explanation=decision.explanation,
+            policy_ids=decision.policy_ids,
+            agent_id=ctx.get("agent_id"),
+            session_id=ctx.get("session_id"),
+            user_id=ctx.get("user_id"),
+            channel=ctx.get("channel"),
+            chain_pattern=decision.chain_pattern,
+        )
+    )
+
+    # Generate SURGE governance receipt
     create_governance_receipt(
         tool=action.tool,
         decision=decision.decision,

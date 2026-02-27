@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "./ApiClient";
+import { useActionStream, StreamStatus } from "./useActionStream";
 
 interface Summary {
   total_actions: number;
@@ -28,6 +29,12 @@ export const SummaryPanel: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
+  // Real-time stream — use events to trigger summary refresh
+  const { events: streamEvents, status: streamStatus } = useActionStream({
+    maxItems: 5, // we only need a few to trigger refreshes
+  });
+  const prevEventCountRef = useRef(0);
+
   const load = useCallback(() => {
     api
       .get<Summary>("/summary/moltbook")
@@ -39,11 +46,24 @@ export const SummaryPanel: React.FC = () => {
       .catch(e => setError(e?.message || "Failed to load summary"));
   }, []);
 
+  // Initial load + periodic polling (slower when streaming)
   useEffect(() => {
     load();
-    const interval = setInterval(load, 30_000);
+    const interval = setInterval(
+      load,
+      streamStatus === "connected" ? 60_000 : 30_000
+    );
     return () => clearInterval(interval);
-  }, [load]);
+  }, [load, streamStatus]);
+
+  // Refresh summary when new stream events arrive (debounced to max once per 2s)
+  useEffect(() => {
+    if (streamEvents.length > prevEventCountRef.current) {
+      prevEventCountRef.current = streamEvents.length;
+      const timer = setTimeout(load, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [streamEvents.length, load]);
 
   const blockPct = summary && summary.total_actions > 0
     ? Math.round((summary.blocked / summary.total_actions) * 100)

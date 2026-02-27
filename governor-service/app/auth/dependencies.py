@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import Depends, HTTPException, Security, status
+from fastapi import Depends, HTTPException, Query, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer, APIKeyHeader
 from jose import JWTError
 from sqlalchemy import select
@@ -20,17 +20,21 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 def get_current_user(
     bearer: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
     api_key: str | None = Security(api_key_header),
+    token: str | None = Query(None, description="JWT via query param (for SSE/EventSource)"),
 ) -> User:
     """
-    Accepts either:
+    Accepts any of:
       - Authorization: Bearer <jwt>
       - X-API-Key: ocg_<key>
+      - ?token=<jwt>  (query param — needed for EventSource which can't set headers)
     Returns the matching User or raises 401.
     """
-    # ── Try JWT first ──────────────────────────────────────────
-    if bearer and bearer.credentials:
+    # ── Try JWT from Authorization header first ────────────────
+    jwt_token = (bearer.credentials if bearer and bearer.credentials else None) or token
+
+    if jwt_token:
         try:
-            payload = decode_token(bearer.credentials)
+            payload = decode_token(jwt_token)
             username: str = payload.get("sub", "")
         except JWTError:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,

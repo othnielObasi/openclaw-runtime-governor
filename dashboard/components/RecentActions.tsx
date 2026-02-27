@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { api } from "./ApiClient";
+import { useActionStream, StreamAction, StreamStatus } from "./useActionStream";
 
 interface ActionLog {
   id: number;
@@ -26,18 +27,50 @@ const RISK_COLOR = (score: number) => {
   return "text-emerald-400";
 };
 
+const STATUS_DOT: Record<StreamStatus, string> = {
+  connected:    "bg-emerald-500",
+  connecting:   "bg-amber-500 animate-pulse",
+  disconnected: "bg-slate-500",
+  error:        "bg-red-500",
+};
+
+const STATUS_LABEL: Record<StreamStatus, string> = {
+  connected:    "Live",
+  connecting:   "Connecting...",
+  disconnected: "Offline",
+  error:        "Error",
+};
+
+/** Convert a StreamAction (from SSE) into the same ActionLog shape */
+function streamToLog(s: StreamAction, idx: number): ActionLog {
+  return {
+    id: -(idx + 1), // negative IDs so they don't clash with DB rows
+    created_at: new Date(s.timestamp * 1000).toISOString(),
+    tool: s.tool,
+    decision: s.decision,
+    risk_score: s.risk_score,
+    explanation: s.explanation,
+    policy_ids: s.policy_ids ?? [],
+    agent_id: s.agent_id,
+  };
+}
+
 export const RecentActions: React.FC = () => {
-  const [items, setItems] = useState<ActionLog[]>([]);
+  const [dbItems, setDbItems] = useState<ActionLog[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const AUTO_REFRESH_SEC = 30;
 
+  // Real-time SSE stream
+  const { events: streamEvents, status: streamStatus, subscriberCount } =
+    useActionStream({ maxItems: 50 });
+
   const load = useCallback(() => {
     api
       .get<ActionLog[]>("/actions", { params: { limit: 20 } })
       .then(res => {
-        setItems(res.data);
+        setDbItems(res.data);
         setError(null);
         setLastRefresh(new Date());
       })
@@ -45,12 +78,31 @@ export const RecentActions: React.FC = () => {
       .finally(() => setLoading(false));
   }, []);
 
-  // Initial load + auto-refresh every 30 seconds
+  // Initial load + fallback polling (longer interval when streaming)
   useEffect(() => {
     load();
-    const interval = setInterval(load, AUTO_REFRESH_SEC * 1000);
+    const interval = setInterval(
+      load,
+      streamStatus === "connected" ? 60_000 : AUTO_REFRESH_SEC * 1000
+    );
     return () => clearInterval(interval);
-  }, [load]);
+  }, [load, streamStatus]);
+
+  // Merge: real-time events first, then DB items (deduplicated by tool+timestamp window)
+  const items = useMemo(() => {
+    const realtime = streamEvents.map(streamToLog);
+    // Combine: real-time items first (newest), then DB items
+    const merged = [...realtime, ...dbItems];
+    // Deduplicate: keep first occurrence (real-time preferred over DB poll)
+    const seen = new Set<string>();
+    return merged.filter((item) => {
+      // Use tool + decision + approx timestamp as dedup key
+      const key = `${item.tool}:${item.decision}:${item.created_at.slice(0, 19)}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).slice(0, 30);
+  }, [streamEvents, dbItems]);
 
   return (
     <div className="border border-slate-800 rounded-xl p-4 space-y-3">
@@ -71,9 +123,20 @@ export const RecentActions: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex items-center gap-1 text-[10px] text-slate-500">
-        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-        Auto-refreshes every {AUTO_REFRESH_SEC}s
+      {/* Real-time status indicator */}
+      <div className="flex items-center gap-2 text-[10px]">
+        <div className="flex items-center gap-1 text-slate-400">
+          <div className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[streamStatus]} ${streamStatus === "connected" ? "animate-pulse" : ""}`} />
+          {STATUS_LABEL[streamStatus]}
+        </div>
+        {streamStatus === "connected" && subscriberCount > 0 && (
+          <span className="text-slate-600">
+            {subscriberCount} viewer{subscriberCount !== 1 ? "s" : ""}
+          </span>
+        )}
+        {streamStatus !== "connected" && (
+          <span className="text-slate-600">Polling every {AUTO_REFRESH_SEC}s</span>
+        )}
       </div>
 
       {error && <p className="text-xs text-red-400">Error: {error}</p>}
@@ -83,10 +146,15 @@ export const RecentActions: React.FC = () => {
         {items.map(item => (
           <div
             key={item.id}
-            className="border border-slate-700 rounded p-2 bg-slate-900/60"
+            className={`border border-slate-700 rounded p-2 bg-slate-900/60 transition-all duration-300 ${item.id < 0 ? "ring-1 ring-emerald-500/20" : ""}`}
           >
             <div className="flex justify-between items-center">
-              <span className="font-mono font-semibold text-slate-200">{item.tool}</span>
+              <div className="flex items-center gap-1.5">
+                {item.id < 0 && (
+                  <span className="text-[8px] text-emerald-500 font-bold uppercase tracking-wider">LIVE</span>
+                )}
+                <span className="font-mono font-semibold text-slate-200">{item.tool}</span>
+              </div>
               <span className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${DECISION_STYLES[item.decision] || ""}`}>
                 {item.decision}
               </span>
