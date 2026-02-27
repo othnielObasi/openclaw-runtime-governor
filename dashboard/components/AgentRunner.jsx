@@ -323,27 +323,27 @@ export default function AgentRunner() {
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <div>
-          <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: C.p3, marginBottom: 4 }}>
+          <div style={{ fontSize: 15, letterSpacing: 2, textTransform: "uppercase", color: C.p3, marginBottom: 4 }}>
             DeFi Research Agent — Live Governance Demo
           </div>
-          <div style={{ fontSize: 9, color: C.p3 }}>
+          <div style={{ fontSize: 13, color: C.p3 }}>
             {TOTAL_TOOLS} tool calls · 5 phases · real API evaluations · trace ingestion
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {status === "running" && (
-            <div style={{ fontSize: 10, color: C.amber, marginRight: 8 }}>
+            <div style={{ fontSize: 14, color: C.amber, marginRight: 8 }}>
               {formatMs(elapsed)}
             </div>
           )}
           {status === "done" && (
-            <div style={{ fontSize: 10, color: C.green, marginRight: 8 }}>
+            <div style={{ fontSize: 14, color: C.green, marginRight: 8 }}>
               ✓ Complete in {formatMs(elapsed)}
             </div>
           )}
           {(status === "idle" || status === "done" || status === "error") && (
             <button onClick={run} style={{
-              fontFamily: mono, fontSize: 10, letterSpacing: 1.5, padding: "8px 20px",
+              fontFamily: mono, fontSize: 14, letterSpacing: 1.5, padding: "8px 20px",
               background: C.accentDim, border: `1px solid ${C.accent}`, color: C.accent,
               cursor: "pointer", textTransform: "uppercase",
             }}>
@@ -352,7 +352,7 @@ export default function AgentRunner() {
           )}
           {status === "running" && (
             <button onClick={abort} style={{
-              fontFamily: mono, fontSize: 10, letterSpacing: 1.5, padding: "8px 20px",
+              fontFamily: mono, fontSize: 14, letterSpacing: 1.5, padding: "8px 20px",
               background: C.redDim, border: `1px solid ${C.red}`, color: C.red,
               cursor: "pointer", textTransform: "uppercase",
             }}>■ ABORT</button>
@@ -362,7 +362,7 @@ export default function AgentRunner() {
 
       {error && (
         <div style={{ background: C.redDim, border: `1px solid ${C.red}`, color: C.red,
-          padding: "8px 12px", fontSize: 10, marginBottom: 16 }}>{error}</div>
+          padding: "8px 12px", fontSize: 14, marginBottom: 16 }}>{error}</div>
       )}
 
       {/* Stats bar */}
@@ -377,11 +377,11 @@ export default function AgentRunner() {
           { label: "FEES",    val: `${totalFees}`,               color: C.violet, sub: "$SURGE" },
         ].map(({ label, val, color, sub }) => (
           <div key={label} style={{ background: C.bg1, padding: "12px 14px" }}>
-            <div style={{ fontSize: 8, letterSpacing: 1.5, color: C.p3, textTransform: "uppercase", marginBottom: 4 }}>
+            <div style={{ fontSize: 12, letterSpacing: 1.5, color: C.p3, textTransform: "uppercase", marginBottom: 4 }}>
               {label}
             </div>
-            <div style={{ fontSize: 20, fontWeight: 600, color, lineHeight: 1 }}>{val}</div>
-            {sub && <div style={{ fontSize: 8, color: C.p3, marginTop: 3 }}>{sub}</div>}
+            <div style={{ fontSize: 24, fontWeight: 600, color, lineHeight: 1 }}>{val}</div>
+            {sub && <div style={{ fontSize: 12, color: C.p3, marginTop: 3 }}>{sub}</div>}
           </div>
         ))}
       </div>
@@ -389,7 +389,7 @@ export default function AgentRunner() {
       <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: 20 }}>
         {/* Left: Phase timeline */}
         <div>
-          <div style={{ fontSize: 9, letterSpacing: 2, color: C.p3, textTransform: "uppercase", marginBottom: 12 }}>
+          <div style={{ fontSize: 13, letterSpacing: 2, color: C.p3, textTransform: "uppercase", marginBottom: 12 }}>
             Phase Progression
           </div>
           {PHASES.map(p => {
@@ -407,11 +407,11 @@ export default function AgentRunner() {
                 transition: "all 0.3s ease",
               }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: C.p1 }}>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: C.p1 }}>
                     Phase {p.id}
                   </span>
                   <span style={{
-                    fontSize: 8, letterSpacing: 1,
+                    fontSize: 12, letterSpacing: 1,
                     padding: "1px 6px",
                     border: `1px solid ${p.color}`,
                     color: p.color,
@@ -420,8 +420,8 @@ export default function AgentRunner() {
                     {p.expect}
                   </span>
                 </div>
-                <div style={{ fontSize: 9, color: C.p2, marginBottom: 4 }}>{p.name}</div>
-                <div style={{ fontSize: 8, color: C.p3, lineHeight: 1.4 }}>{p.description}</div>
+                <div style={{ fontSize: 13, color: C.p2, marginBottom: 4 }}>{p.name}</div>
+                <div style={{ fontSize: 12, color: C.p3, lineHeight: 1.4 }}>{p.description}</div>
 
                 {/* Phase tool results */}
                 {phaseResults.length > 0 && (
@@ -430,7 +430,7 @@ export default function AgentRunner() {
                       const dc = r.decision === "allow" ? C.green : r.decision === "block" ? C.red : r.decision === "review" ? C.amber : C.p3;
                       return (
                         <span key={i} style={{
-                          fontSize: 7, padding: "2px 5px",
+                          fontSize: 11, padding: "2px 5px",
                           border: `1px solid ${dc}`, color: dc,
                           letterSpacing: 0.5, textTransform: "uppercase",
                         }}>
@@ -448,7 +448,7 @@ export default function AgentRunner() {
                       background: C.amber,
                       animation: "pulse 1s infinite",
                     }} />
-                    <span style={{ fontSize: 8, color: C.amber }}>Running…</span>
+                    <span style={{ fontSize: 12, color: C.amber }}>Running…</span>
                   </div>
                 )}
               </div>
@@ -458,11 +458,11 @@ export default function AgentRunner() {
 
         {/* Right: Live log */}
         <div style={{ display: "flex", flexDirection: "column" }}>
-          <div style={{ fontSize: 9, letterSpacing: 2, color: C.p3, textTransform: "uppercase", marginBottom: 12,
+          <div style={{ fontSize: 13, letterSpacing: 2, color: C.p3, textTransform: "uppercase", marginBottom: 12,
             display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span>Evaluation Log</span>
             {status === "running" && (
-              <span style={{ fontSize: 8, color: C.amber }}>
+              <span style={{ fontSize: 12, color: C.amber }}>
                 {currentTool}/{TOTAL_TOOLS} calls
               </span>
             )}
@@ -473,10 +473,10 @@ export default function AgentRunner() {
             background: C.bg0, border: `1px solid ${C.line}`, padding: 0,
           }}>
             {results.length === 0 && status === "idle" && (
-              <div style={{ padding: 40, textAlign: "center", color: C.p3, fontSize: 10 }}>
-                <div style={{ fontSize: 28, marginBottom: 12 }}>🤖</div>
+              <div style={{ padding: 40, textAlign: "center", color: C.p3, fontSize: 14 }}>
+                <div style={{ fontSize: 32, marginBottom: 12 }}>🤖</div>
                 <div style={{ marginBottom: 8 }}>Click <strong style={{ color: C.accent }}>RUN AGENT</strong> to start the DeFi Research Agent.</div>
-                <div style={{ fontSize: 9, lineHeight: 1.5 }}>
+                <div style={{ fontSize: 13, lineHeight: 1.5 }}>
                   The agent makes {TOTAL_TOOLS} real tool calls through the Governor's 5-layer pipeline.<br />
                   Watch decisions stream in real-time, then check Traces and SURGE tabs for persisted data.
                 </div>
@@ -500,11 +500,11 @@ export default function AgentRunner() {
                       display: "flex", alignItems: "center", gap: 8,
                     }}>
                       <span style={{
-                        fontSize: 8, letterSpacing: 1, padding: "2px 6px",
+                        fontSize: 12, letterSpacing: 1, padding: "2px 6px",
                         border: `1px solid ${phaseDef.color}`, color: phaseDef.color,
                         textTransform: "uppercase",
                       }}>Phase {r.phase}</span>
-                      <span style={{ fontSize: 9, color: C.p2 }}>{phaseDef.name}</span>
+                      <span style={{ fontSize: 13, color: C.p2 }}>{phaseDef.name}</span>
                     </div>
                   )}
 
@@ -515,20 +515,20 @@ export default function AgentRunner() {
                   }}>
                     {/* Main row */}
                     <div style={{ display: "grid", gridTemplateColumns: "24px 160px 70px 50px 80px 1fr", gap: 8, alignItems: "center" }}>
-                      <span style={{ fontSize: 14 }}>{icon}</span>
-                      <span style={{ fontSize: 10, color: C.p1, fontWeight: 600 }}>{r.tool}</span>
+                      <span style={{ fontSize: 17 }}>{icon}</span>
+                      <span style={{ fontSize: 14, color: C.p1, fontWeight: 600 }}>{r.tool}</span>
                       <span style={{
-                        fontSize: 8, letterSpacing: 1, padding: "2px 6px",
+                        fontSize: 12, letterSpacing: 1, padding: "2px 6px",
                         border: `1px solid ${dc}`, color: dc,
                         textTransform: "uppercase", textAlign: "center",
                       }}>{r.decision}</span>
-                      <span style={{ fontSize: 10, fontWeight: 600, color: riskColor(r.risk) }}>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: riskColor(r.risk) }}>
                         {r.risk}
                       </span>
-                      <span style={{ fontSize: 9, color: C.p3 }}>
+                      <span style={{ fontSize: 13, color: C.p3 }}>
                         {r.duration}ms{r.fee ? ` · ${r.fee} $S` : ""}
                       </span>
-                      <span style={{ fontSize: 9, color: C.p3, textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+                      <span style={{ fontSize: 13, color: C.p3, textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
                         {r.explanation.slice(0, 80)}
                       </span>
                     </div>
@@ -536,7 +536,7 @@ export default function AgentRunner() {
                     {/* Chain pattern alert */}
                     {r.chain_pattern && (
                       <div style={{ marginTop: 6, padding: "4px 8px", background: C.redDim, border: `1px solid ${C.red}`,
-                        fontSize: 9, color: C.red, display: "flex", alignItems: "center", gap: 6 }}>
+                        fontSize: 13, color: C.red, display: "flex", alignItems: "center", gap: 6 }}>
                         <span>🔗</span>
                         <span>Chain: <strong>{r.chain_pattern}</strong>{r.chain_description ? ` — ${r.chain_description}` : ""}</span>
                       </div>
@@ -549,7 +549,7 @@ export default function AgentRunner() {
                           const layerOk = step.outcome === "pass";
                           return (
                             <span key={j} style={{
-                              fontSize: 7, padding: "1px 5px", letterSpacing: 0.5,
+                              fontSize: 11, padding: "1px 5px", letterSpacing: 0.5,
                               border: `1px solid ${layerOk ? C.line2 : C.red}`,
                               color: layerOk ? C.p3 : C.red,
                               background: layerOk ? "transparent" : C.redDim,
@@ -571,10 +571,10 @@ export default function AgentRunner() {
                 padding: "16px 14px", background: C.bg2,
                 borderTop: `1px solid ${C.line}`,
               }}>
-                <div style={{ fontSize: 9, letterSpacing: 2, color: C.green, textTransform: "uppercase", marginBottom: 8 }}>
+                <div style={{ fontSize: 13, letterSpacing: 2, color: C.green, textTransform: "uppercase", marginBottom: 8 }}>
                   ✓ Session Complete
                 </div>
-                <div style={{ fontSize: 9, color: C.p2, lineHeight: 1.6 }}>
+                <div style={{ fontSize: 13, color: C.p2, lineHeight: 1.6 }}>
                   <strong>{results.length}</strong> evaluations in {formatMs(elapsed)} ·
                   <span style={{ color: C.green }}> {allowed} allowed</span> ·
                   <span style={{ color: C.amber }}> {reviewed} reviewed</span> ·
@@ -582,7 +582,7 @@ export default function AgentRunner() {
                   avg risk <span style={{ color: riskColor(parseFloat(avgRisk) || 0) }}>{avgRisk}</span> ·
                   {totalFees !== "0.0000" && <span style={{ color: C.violet }}> {totalFees} $SURGE fees</span>}
                 </div>
-                <div style={{ fontSize: 8, color: C.p3, marginTop: 6 }}>
+                <div style={{ fontSize: 12, color: C.p3, marginTop: 6 }}>
                   Trace <span style={{ color: C.violet }}>{traceId}</span> ingested — view in the <strong>Traces</strong> tab.
                   Receipts persisted — view in the <strong>SURGE</strong> tab.
                 </div>
@@ -595,10 +595,10 @@ export default function AgentRunner() {
       {/* How it works info */}
       {status === "idle" && results.length === 0 && (
         <div style={{ marginTop: 24, background: C.bg1, border: `1px solid ${C.line}`, padding: 20 }}>
-          <div style={{ fontSize: 9, letterSpacing: 2, color: C.p3, textTransform: "uppercase", marginBottom: 12 }}>
+          <div style={{ fontSize: 13, letterSpacing: 2, color: C.p3, textTransform: "uppercase", marginBottom: 12 }}>
             How It Works
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: 12, fontSize: 9, color: C.p2, lineHeight: 1.5 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: 12, fontSize: 13, color: C.p2, lineHeight: 1.5 }}>
             <div style={{ padding: 12, background: C.bg0, border: `1px solid ${C.line}` }}>
               <div style={{ color: C.green, fontWeight: 600, marginBottom: 6 }}>1. Kill Switch</div>
               Global halt — if active, all calls blocked instantly.

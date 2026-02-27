@@ -716,7 +716,7 @@ const decisionStyle = d => ({
 }[d]||{});
 
 const Tag = ({children, color=C.muted}) => (
-  <span style={{fontFamily:mono, fontSize:8, letterSpacing:1.5, padding:"2px 6px",
+  <span style={{fontFamily:mono, fontSize:12, letterSpacing:1.5, padding:"2px 6px",
     border:`1px solid ${C.line2}`, color, textTransform:"uppercase", whiteSpace:"nowrap"}}>
     {children}
   </span>
@@ -725,7 +725,7 @@ const Tag = ({children, color=C.muted}) => (
 const PanelHd = ({title, tag, tagColor}) => (
   <div style={{display:"flex", alignItems:"center", justifyContent:"space-between",
     marginBottom:12, paddingBottom:8, borderBottom:`1px solid ${C.line}`}}>
-    <span style={{fontFamily:mono, fontSize:9, letterSpacing:2,
+    <span style={{fontFamily:mono, fontSize:13, letterSpacing:2,
       textTransform:"uppercase", color:C.p3}}>{title}</span>
     {tag && <Tag color={tagColor}>{tag}</Tag>}
   </div>
@@ -742,7 +742,7 @@ const Btn = ({children, onClick, variant="default", disabled=false, style={}}) =
   };
   return (
     <button onClick={onClick} disabled={disabled} style={{
-      fontFamily:mono, fontSize:9, letterSpacing:1.5, padding:"5px 12px",
+      fontFamily:mono, fontSize:13, letterSpacing:1.5, padding:"5px 12px",
       cursor:disabled?"default":"pointer", textTransform:"uppercase",
       opacity:disabled?0.4:1, transition:"all 0.12s",
       ...(vs[variant]||vs.default), ...style,
@@ -752,7 +752,7 @@ const Btn = ({children, onClick, variant="default", disabled=false, style={}}) =
 
 const Fld = ({label, children}) => (
   <div style={{display:"flex", flexDirection:"column", gap:3}}>
-    <label style={{fontFamily:mono, fontSize:8, letterSpacing:1.5,
+    <label style={{fontFamily:mono, fontSize:12, letterSpacing:1.5,
       color:C.muted, textTransform:"uppercase"}}>{label}</label>
     {children}
   </div>
@@ -761,7 +761,7 @@ const Fld = ({label, children}) => (
 const TextInput = ({value, onChange, placeholder, style={}}) => (
   <input value={value} onChange={onChange} placeholder={placeholder} style={{
     background:C.bg0, border:`1px solid ${C.line2}`, color:C.text,
-    fontFamily:mono, fontSize:10, padding:"5px 8px", outline:"none", width:"100%", ...style,
+    fontFamily:mono, fontSize:14, padding:"5px 8px", outline:"none", width:"100%", ...style,
   }}/>
 );
 
@@ -792,15 +792,15 @@ function PipelineNode({ nodeKey, state }) {
     <div style={{display:"grid", gridTemplateColumns:"20px 1fr auto", alignItems:"center",
       gap:10, padding:"9px 12px", border:s.border, background:s.bg,
       opacity:state==="skipped"?0.55:1, transition:"border-color 0.2s, background 0.2s, opacity 0.2s"}}>
-      <span style={{fontFamily:mono, fontSize:9, color:C.muted, textAlign:"center"}}>
+      <span style={{fontFamily:mono, fontSize:13, color:C.muted, textAlign:"center"}}>
         {LAYERS_ORDER.indexOf(nodeKey)+1}
       </span>
       <div>
-        <div style={{fontFamily:mono, fontSize:11, fontWeight:700,
+        <div style={{fontFamily:mono, fontSize:15, fontWeight:700,
           color:state==="blocked"?C.red:C.p1}}>
           {L.icon} {L.label}
         </div>
-        <div style={{fontFamily:sans, fontSize:10, color:C.p2, marginTop:2, lineHeight:1.5}}>
+        <div style={{fontFamily:sans, fontSize:14, color:C.p2, marginTop:2, lineHeight:1.5}}>
           {{
             kill:     "Kill switch · velocity · rate limiting.",
             firewall: "Injection patterns · base64 decoded scan.",
@@ -810,7 +810,7 @@ function PipelineNode({ nodeKey, state }) {
           }[nodeKey]}
         </div>
       </div>
-      <span style={{fontFamily:mono, fontSize:8, letterSpacing:1.5,
+      <span style={{fontFamily:mono, fontSize:12, letterSpacing:1.5,
         padding:"2px 7px", border:`1px solid ${s.badgeColor}`,
         color:s.badgeColor, textTransform:"uppercase", whiteSpace:"nowrap",
         transition:"all 0.2s"}}>
@@ -827,7 +827,7 @@ function PipelineVisualizer({ pipeState }) {
         <div key={key}>
           <PipelineNode nodeKey={key} state={pipeState[key]||"standby"} />
           {i < LAYERS_ORDER.length-1 && (
-            <div style={{textAlign:"center", color:C.muted, fontSize:10, lineHeight:"16px", opacity:0.5}}>▾</div>
+            <div style={{textAlign:"center", color:C.muted, fontSize:14, lineHeight:"16px", opacity:0.5}}>▾</div>
           )}
         </div>
       ))}
@@ -840,7 +840,7 @@ function PipelineVisualizer({ pipeState }) {
 // ═══════════════════════════════════════════════════════════
 function TraceWaterfall({ trace }) {
   if (!trace?.length) return (
-    <div style={{fontFamily:mono, fontSize:9, color:C.muted,
+    <div style={{fontFamily:mono, fontSize:13, color:C.muted,
       padding:"20px 0", textAlign:"center", letterSpacing:1}}>
       Run an evaluation to see the pipeline waterfall.
     </div>
@@ -852,7 +852,7 @@ function TraceWaterfall({ trace }) {
     <div>
       <div style={{display:"grid", gridTemplateColumns:"20px 130px 1fr 58px 56px",
         gap:6, paddingBottom:6, borderBottom:`1px solid ${C.line2}`,
-        fontFamily:mono, fontSize:7.5, color:C.muted, letterSpacing:1.5, textTransform:"uppercase"}}>
+        fontFamily:mono, fontSize:11, color:C.muted, letterSpacing:1.5, textTransform:"uppercase"}}>
         <span>#</span><span>Layer</span><span>Span</span>
         <span style={{textAlign:"right"}}>State</span>
         <span style={{textAlign:"right"}}>+ms</span>
@@ -865,11 +865,11 @@ function TraceWaterfall({ trace }) {
           <div key={s.key} style={{display:"grid", gridTemplateColumns:"20px 130px 1fr 58px 56px",
             gap:6, padding:"6px 0", borderBottom:`1px solid ${C.line}`,
             alignItems:"center", animation:`fadeSlide 0.18s ${i*0.04}s both`}}>
-            <span style={{fontFamily:mono, fontSize:8, color:C.muted}}>{s.layer}</span>
+            <span style={{fontFamily:mono, fontSize:12, color:C.muted}}>{s.layer}</span>
             <div style={{display:"flex", alignItems:"center", gap:5}}>
               <div style={{width:5, height:5, borderRadius:"50%", flexShrink:0,
                 background:L.color, boxShadow:`0 0 4px ${L.color}`}}/>
-              <span style={{fontFamily:mono, fontSize:8.5,
+              <span style={{fontFamily:mono, fontSize:12,
                 color:s.outcome==="block"?C.red:C.body}}>{L.label}</span>
             </div>
             <div style={{position:"relative", height:12, background:C.line, overflow:"hidden"}}>
@@ -879,27 +879,27 @@ function TraceWaterfall({ trace }) {
               {s.matched.length>0 && (
                 <span style={{position:"absolute", left:4, top:0, bottom:0,
                   display:"flex", alignItems:"center", fontFamily:mono,
-                  fontSize:7, color:"rgba(0,0,0,0.7)", whiteSpace:"nowrap",
+                  fontSize:11, color:"rgba(0,0,0,0.7)", whiteSpace:"nowrap",
                   maxWidth:"88%", overflow:"hidden", zIndex:1}}>
                   {s.matched.slice(0,2).join(", ")}
                 </span>
               )}
             </div>
             <div style={{textAlign:"right"}}>
-              <span style={{fontFamily:mono, fontSize:7.5, letterSpacing:1,
+              <span style={{fontFamily:mono, fontSize:11, letterSpacing:1,
                 padding:"1px 4px", border:`1px solid ${sc}`, color:sc,
                 textTransform:"uppercase", background:`${sc}18`}}>
                 {s.outcome}
               </span>
             </div>
-            <span style={{fontFamily:mono, fontSize:8, color:C.muted, textAlign:"right"}}>
+            <span style={{fontFamily:mono, fontSize:12, color:C.muted, textAlign:"right"}}>
               {s.ms}ms
             </span>
           </div>
         );
       })}
       <div style={{display:"flex", flexWrap:"wrap", gap:12, marginTop:8, paddingTop:8,
-        borderTop:`1px solid ${C.line}`, fontFamily:mono, fontSize:8}}>
+        borderTop:`1px solid ${C.line}`, fontFamily:mono, fontSize:12}}>
         <span style={{color:C.muted}}>LAYERS: <span style={{color:C.text}}>{trace.length}/5</span></span>
         <span style={{color:C.muted}}>DECISION: <span style={decisionStyle(finalDecision)}>
           {finalDecision.toUpperCase()}</span></span>
@@ -918,7 +918,7 @@ function TraceWaterfall({ trace }) {
 // ═══════════════════════════════════════════════════════════
 function AutoLog({ events }) {
   if (!events.length) return (
-    <div style={{fontFamily:mono, fontSize:9, color:C.muted,
+    <div style={{fontFamily:mono, fontSize:13, color:C.muted,
       textAlign:"center", padding:"16px 0", letterSpacing:1}}>
       No autonomous decisions yet.
     </div>
@@ -931,10 +931,10 @@ function AutoLog({ events }) {
           <div key={i} style={{display:"flex", gap:8, alignItems:"flex-start",
             padding:"7px 0", borderBottom:`1px solid ${C.line}`,
             animation:"fadeSlide 0.2s both"}}>
-            <span style={{fontSize:15, flexShrink:0, lineHeight:"1.4"}}>{ico}</span>
+            <span style={{fontSize:18, flexShrink:0, lineHeight:"1.4"}}>{ico}</span>
             <div>
-              <div style={{fontFamily:sans, fontSize:13, color:C.p1, lineHeight:1.65}}>{e.msg}</div>
-              <div style={{fontFamily:mono, fontSize:9, color:C.p3, marginTop:3}}>{e.time}</div>
+              <div style={{fontFamily:sans, fontSize:16, color:C.p1, lineHeight:1.65}}>{e.msg}</div>
+              <div style={{fontFamily:mono, fontSize:13, color:C.p3, marginTop:3}}>{e.time}</div>
             </div>
           </div>
         );
@@ -951,7 +951,7 @@ function NarrativeBar({ message }) {
   return (
     <div style={{background:C.bg1, borderBottom:`1px solid ${C.line}`,
       borderLeft:`3px solid ${C.accent}`,
-      padding:"7px 20px", fontFamily:mono, fontSize:10,
+      padding:"7px 20px", fontFamily:mono, fontSize:14,
       color:C.p2, letterSpacing:0.3, lineHeight:1.5, animation:"fadeIn 0.3s both"}}>
       {message}
     </div>
@@ -968,7 +968,7 @@ function ActionLogTable({ log, total }) {
   if (!log.length) return (
     <div style={{background:C.bg1, padding:14}}>
       <PanelHd title="Recent Actions" tag="0 ENTRIES" tagColor={C.cyan}/>
-      <div style={{fontFamily:mono, fontSize:9, color:C.muted, textAlign:"center", padding:"20px 0"}}>
+      <div style={{fontFamily:mono, fontSize:13, color:C.muted, textAlign:"center", padding:"20px 0"}}>
         No actions yet — waiting for connected agents.
       </div>
     </div>
@@ -981,7 +981,7 @@ function ActionLogTable({ log, total }) {
         <thead>
           <tr>
             {["","Time","Agent","Tool","Trust","Decision","Risk","Stopped At"].map(h=>(
-              <th key={h} style={{fontFamily:mono, fontSize:9, color:C.p3,
+              <th key={h} style={{fontFamily:mono, fontSize:13, color:C.p3,
                 letterSpacing:1.5, textTransform:"uppercase", textAlign:"left",
                 padding:"6px 8px", borderBottom:`1px solid ${C.line2}`}}>{h}</th>
             ))}
@@ -1001,27 +1001,27 @@ function ActionLogTable({ log, total }) {
                   style={{borderBottom: open ? "none" : `1px solid ${C.line}`,
                     cursor:"pointer", background: open ? C.bg2 : "transparent",
                     transition:"background 0.1s"}}>
-                  <td style={{padding:"7px 8px", fontFamily:mono, fontSize:10,
+                  <td style={{padding:"7px 8px", fontFamily:mono, fontSize:14,
                     color:open?C.accent:C.p3, userSelect:"none", width:16}}>
                     {open ? "▾" : "▸"}
                   </td>
                   <td style={{fontFamily:mono, fontSize:9.5, color:C.p3, padding:"7px 8px"}}>{e.time}</td>
                   <td style={{fontFamily:mono, fontSize:10.5, color:C.p2, padding:"7px 8px"}}>{e.agent||"—"}</td>
-                  <td style={{fontFamily:mono, fontSize:11, fontWeight:600, color:C.p1, padding:"7px 8px"}}>{e.tool}</td>
+                  <td style={{fontFamily:mono, fontSize:15, fontWeight:600, color:C.p1, padding:"7px 8px"}}>{e.tool}</td>
                   <td style={{padding:"5px 6px"}}>
-                    <span style={{fontFamily:mono, fontSize:8.5, letterSpacing:1, padding:"2px 6px",
+                    <span style={{fontFamily:mono, fontSize:12, letterSpacing:1, padding:"2px 6px",
                       border:`1px solid ${tier?.color||C.p3}`, color:tier?.color||C.p3, textTransform:"uppercase"}}>
                       {e.trustTier||"internal"}
                     </span>
                   </td>
                   <td style={{padding:"5px 6px"}}>
-                    <span style={{fontFamily:mono, fontSize:8.5, letterSpacing:1,
+                    <span style={{fontFamily:mono, fontSize:12, letterSpacing:1,
                       padding:"3px 7px", border:"1px solid", textTransform:"uppercase", ...ds}}>
                       {e.decision}
                     </span>
                   </td>
-                  <td style={{fontFamily:mono, fontSize:11, fontWeight:600, color:riskColor(e.risk), padding:"7px 8px"}}>{e.risk}</td>
-                  <td style={{fontFamily:mono, fontSize:9, color:C.p3, padding:"7px 8px"}}>{e.layerHit||"full-pass"}</td>
+                  <td style={{fontFamily:mono, fontSize:15, fontWeight:600, color:riskColor(e.risk), padding:"7px 8px"}}>{e.risk}</td>
+                  <td style={{fontFamily:mono, fontSize:13, color:C.p3, padding:"7px 8px"}}>{e.layerHit||"full-pass"}</td>
                 </tr>
 
                 {/* Expanded detail row */}
@@ -1033,35 +1033,35 @@ function ActionLogTable({ log, total }) {
                         borderLeft:`2px solid ${ds.borderColor||C.line2}`}}>
 
                         {/* Explanation sentence */}
-                        <div style={{fontFamily:sans, fontSize:12, color:C.p1,
+                        <div style={{fontFamily:sans, fontSize:15, color:C.p1,
                           lineHeight:1.65, marginBottom:10}}>
                           {e.expl || "No explanation available."}
                         </div>
 
                         {/* Signal badges */}
                         <div style={{display:"flex", flexWrap:"wrap", gap:5, marginBottom:10}}>
-                          <span style={{fontFamily:mono, fontSize:9, padding:"3px 7px",
+                          <span style={{fontFamily:mono, fontSize:13, padding:"3px 7px",
                             border:`1px solid ${tier?.color||C.p3}`, color:tier?.color||C.p3}}>
                             TRUST: {(e.trustTier||"internal").toUpperCase()}
                           </span>
-                          <span style={{fontFamily:mono, fontSize:7.5, padding:"2px 6px",
+                          <span style={{fontFamily:mono, fontSize:11, padding:"2px 6px",
                             border:`1px solid ${riskColor(e.risk)}`, color:riskColor(e.risk)}}>
                             RISK: {e.risk}/100
                           </span>
                           {e.layerHit && (
-                            <span style={{fontFamily:mono, fontSize:7.5, padding:"2px 6px",
+                            <span style={{fontFamily:mono, fontSize:11, padding:"2px 6px",
                               border:`1px solid ${C.red}`, color:C.red}}>
                               STOPPED: {e.layerHit}
                             </span>
                           )}
                           {e.chainAlert?.triggered && (
-                            <span style={{fontFamily:mono, fontSize:7.5, padding:"2px 6px",
+                            <span style={{fontFamily:mono, fontSize:11, padding:"2px 6px",
                               border:`1px solid ${C.red}`, color:C.red, background:C.redDim}}>
                               ⛓ CHAIN: {e.chainAlert.pattern}
                             </span>
                           )}
                           {e.piiHits?.length>0 && (
-                            <span style={{fontFamily:mono, fontSize:7.5, padding:"2px 6px",
+                            <span style={{fontFamily:mono, fontSize:11, padding:"2px 6px",
                               border:`1px solid ${C.amber}`, color:C.amber, background:C.amberDim}}>
                               🏷 PII: {e.piiHits.map(p=>`${p.count} ${p.type}`).join(", ")}
                             </span>
@@ -1071,7 +1071,7 @@ function ActionLogTable({ log, total }) {
                         {/* Inline mini trace */}
                         {hasTrace && (
                           <div>
-                            <div style={{fontFamily:mono, fontSize:8.5, color:C.p3,
+                            <div style={{fontFamily:mono, fontSize:12, color:C.p3,
                               letterSpacing:1.5, textTransform:"uppercase", marginBottom:6}}>
                               PIPELINE TRACE
                             </div>
@@ -1085,19 +1085,19 @@ function ActionLogTable({ log, total }) {
                                     gridTemplateColumns:"18px 110px 1fr auto",
                                     gap:6, alignItems:"center",
                                     opacity: dim ? 0.55 : 1}}>
-                                    <span style={{fontFamily:mono, fontSize:9, color:C.p3,
+                                    <span style={{fontFamily:mono, fontSize:13, color:C.p3,
                                       textAlign:"center"}}>{s.layer}</span>
                                     <div style={{display:"flex", alignItems:"center", gap:4}}>
                                       <div style={{width:4, height:4, borderRadius:"50%", flexShrink:0,
                                         background:L.color}}/>
-                                      <span style={{fontFamily:mono, fontSize:10,
+                                      <span style={{fontFamily:mono, fontSize:14,
                                         color:s.outcome==="block"?C.red:C.p2}}>{L.label}</span>
                                     </div>
-                                    <span style={{fontFamily:mono, fontSize:9, color:C.p2,
+                                    <span style={{fontFamily:mono, fontSize:13, color:C.p2,
                                       overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
                                       {s.detail}
                                     </span>
-                                    <span style={{fontFamily:mono, fontSize:8.5, padding:"2px 6px",
+                                    <span style={{fontFamily:mono, fontSize:12, padding:"2px 6px",
                                       border:`1px solid ${sc}`, color:sc,
                                       textTransform:"uppercase", whiteSpace:"nowrap",
                                       background:`${sc}14`}}>
@@ -1159,9 +1159,9 @@ function DashboardTab({ gs }) {
                 boxShadow:`0 0 10px ${threatColor}`,
                 flexShrink:0}}/>
               <div>
-                <div style={{fontFamily:mono, fontSize:13, fontWeight:700,
+                <div style={{fontFamily:mono, fontSize:16, fontWeight:700,
                   color:threatColor, letterSpacing:1.5}}>{threatLabel}</div>
-                <div style={{fontFamily:mono, fontSize:9, color:C.p3,
+                <div style={{fontFamily:mono, fontSize:13, color:C.p3,
                   marginTop:3, letterSpacing:0.5}}>{threatDesc}</div>
               </div>
             </div>
@@ -1179,9 +1179,9 @@ function DashboardTab({ gs }) {
                 <div key={label} style={{background:C.bg3, padding:"10px 22px",
                   textAlign:"center", minWidth:88,
                   borderBottom:`2px solid ${chipBorder}`}}>
-                  <div style={{fontFamily:mono, fontSize:22, fontWeight:700,
+                  <div style={{fontFamily:mono, fontSize:26, fontWeight:700,
                     color:chipNum, lineHeight:1}}>{val}</div>
-                  <div style={{fontFamily:mono, fontSize:9, color:C.p3,
+                  <div style={{fontFamily:mono, fontSize:13, color:C.p3,
                     letterSpacing:1.5, marginTop:3}}>{label}</div>
                 </div>
                 );
@@ -1201,11 +1201,11 @@ function DashboardTab({ gs }) {
             { label:"Active Policies", val:gs.total>0?total:"—", color:C.p1, sub:"all layers" },
           ].map(({label,val,color,sub}) => (
             <div key={label} style={{background:C.bg0, padding:"13px 18px"}}>
-              <div style={{fontFamily:mono, fontSize:8.5, letterSpacing:1.5, color:C.p3,
+              <div style={{fontFamily:mono, fontSize:12, letterSpacing:1.5, color:C.p3,
                 textTransform:"uppercase", marginBottom:5}}>{label}</div>
-              <div style={{fontFamily:mono, fontSize:24, fontWeight:600,
+              <div style={{fontFamily:mono, fontSize:28, fontWeight:600,
                 lineHeight:1, color}}>{val}</div>
-              <div style={{fontFamily:mono, fontSize:8.5, color:C.p3, marginTop:4}}>{sub}</div>
+              <div style={{fontFamily:mono, fontSize:12, color:C.p3, marginTop:4}}>{sub}</div>
             </div>
           ))}
         </div>
@@ -1224,16 +1224,16 @@ function DashboardTab({ gs }) {
             ))}
           </div>
           <div style={{display:"flex", justifyContent:"space-between",
-            fontFamily:mono, fontSize:7, color:C.muted}}>
+            fontFamily:mono, fontSize:11, color:C.muted}}>
             {["0","25","50","75","100"].map(l=><span key={l}>{l}</span>)}
           </div>
           <div style={{marginTop:14}}>
-            <div style={{fontFamily:mono, fontSize:8, color:C.muted, letterSpacing:1.5,
+            <div style={{fontFamily:mono, fontSize:12, color:C.muted, letterSpacing:1.5,
               textTransform:"uppercase", marginBottom:6}}>DECISION BREAKDOWN</div>
             {[[C.green,"Allow",allowed],[C.amber,"Review",review],[C.red,"Block",blocked]].map(([color,label,val])=>(
               <div key={label} style={{marginBottom:5}}>
                 <div style={{display:"flex", justifyContent:"space-between",
-                  fontFamily:mono, fontSize:8, color:C.body, marginBottom:2}}>
+                  fontFamily:mono, fontSize:12, color:C.body, marginBottom:2}}>
                   <span>{label}</span><span style={{color}}>{val}</span>
                 </div>
                 <div style={{height:3, background:C.line, overflow:"hidden"}}>
@@ -1339,13 +1339,13 @@ function ActionTesterTab({ killSwitch, extraPolicies, sessionMemory, onResult })
                 background:st==="scanning"?C.amberDim:st==="blocked"?C.redDim:"transparent",
                 border:`1px solid ${col}`,
                 opacity:dim?0.4:1, transition:"all 0.2s"}}>
-                <span style={{fontFamily:mono, fontSize:9, color:C.p3, width:14, textAlign:"center"}}>{i+1}</span>
+                <span style={{fontFamily:mono, fontSize:13, color:C.p3, width:14, textAlign:"center"}}>{i+1}</span>
                 <div style={{flex:1}}>
-                  <div style={{fontFamily:mono, fontSize:10, color:st==="blocked"?C.red:C.p1}}>
+                  <div style={{fontFamily:mono, fontSize:14, color:st==="blocked"?C.red:C.p1}}>
                     {L.icon} {L.label}
                   </div>
                 </div>
-                <span style={{fontFamily:mono, fontSize:8, letterSpacing:1,
+                <span style={{fontFamily:mono, fontSize:12, letterSpacing:1,
                   color:col, textTransform:"uppercase"}}>{st}</span>
               </div>
             );
@@ -1355,7 +1355,7 @@ function ActionTesterTab({ killSwitch, extraPolicies, sessionMemory, onResult })
         <div style={{display:"flex", flexWrap:"wrap", gap:4}}>
           {TESTER_PRESETS.map(p=>(
             <button key={p.label} onClick={()=>load(p)} style={{
-              fontFamily:mono, fontSize:8.5, padding:"4px 8px",
+              fontFamily:mono, fontSize:12, padding:"4px 8px",
               border:`1px solid ${C.line2}`, color:C.p2,
               background:"transparent", cursor:"pointer"}}>
               {p.label}
@@ -1371,7 +1371,7 @@ function ActionTesterTab({ killSwitch, extraPolicies, sessionMemory, onResult })
           <Fld label="Tool">
             <select value={tool} onChange={e=>setTool(e.target.value)} style={{
               background:C.bg0, border:`1px solid ${C.line2}`, color:C.text,
-              fontFamily:mono, fontSize:10, padding:"5px 8px", outline:"none"}}>
+              fontFamily:mono, fontSize:14, padding:"5px 8px", outline:"none"}}>
               {["http_request","shell","messaging_send","file_write","file_read",
                 "surge_token_launch","surge_liquidity_op"].map(t=>(
                 <option key={t} value={t}>{t}</option>
@@ -1395,7 +1395,7 @@ function ActionTesterTab({ killSwitch, extraPolicies, sessionMemory, onResult })
         </div>
 
         <Btn onClick={runEval} variant="cyan" disabled={busy}
-          style={{width:"100%", justifyContent:"center", marginTop:8, fontSize:11}}>
+          style={{width:"100%", justifyContent:"center", marginTop:8, fontSize:15}}>
           {busy ? "EVALUATING…" : "▶ EVALUATE"}
         </Btn>
 
@@ -1405,7 +1405,7 @@ function ActionTesterTab({ killSwitch, extraPolicies, sessionMemory, onResult })
             {result.identityAlert && (
               <div style={{padding:"8px 12px",marginBottom:10,
                 background:C.redDim,border:`1px solid ${C.red}`,
-                fontFamily:mono,fontSize:9,color:C.red,letterSpacing:0.5}}>
+                fontFamily:mono,fontSize:13,color:C.red,letterSpacing:0.5}}>
                 ⚠ IDENTITY ALERT: {result.identityAlert.reason}
               </div>
             )}
@@ -1413,7 +1413,7 @@ function ActionTesterTab({ killSwitch, extraPolicies, sessionMemory, onResult })
             {result.confidenceGap && (
               <div style={{padding:"8px 12px",marginBottom:10,
                 background:C.amberDim,border:`1px solid ${C.amber}`,
-                fontFamily:mono,fontSize:9,color:C.amber,letterSpacing:0.5}}>
+                fontFamily:mono,fontSize:13,color:C.amber,letterSpacing:0.5}}>
                 ⚡ CONFIDENCE GAP: Neuro score elevated ({result.risk}/100) but no policy matched.
                 Escalated to human review — unknown threat pattern.
               </div>
@@ -1424,14 +1424,14 @@ function ActionTesterTab({ killSwitch, extraPolicies, sessionMemory, onResult })
               ...decisionStyle(result.decision),
               border:"1px solid", display:"flex",
               alignItems:"center", justifyContent:"space-between"}}>
-              <span style={{fontFamily:mono, fontSize:14, fontWeight:700,
+              <span style={{fontFamily:mono, fontSize:17, fontWeight:700,
                 letterSpacing:2, textTransform:"uppercase"}}>
                 {result.decision.toUpperCase()}
               </span>
-              <span style={{fontFamily:mono, fontSize:20, fontWeight:700,
+              <span style={{fontFamily:mono, fontSize:24, fontWeight:700,
                 color:riskColor(result.risk)}}>{result.risk}/100</span>
             </div>
-            <div style={{fontFamily:sans, fontSize:11, color:C.p2,
+            <div style={{fontFamily:sans, fontSize:15, color:C.p2,
               lineHeight:1.6, marginBottom:12}}>
               {result.expl}
             </div>
@@ -1442,18 +1442,18 @@ function ActionTesterTab({ killSwitch, extraPolicies, sessionMemory, onResult })
               <div style={{marginTop:12,padding:12,background:C.bg2,
                 border:`1px solid ${outputResult.decision==="block"?C.red:outputResult.decision==="review"?C.amber:C.green}`,
                 borderLeft:`3px solid ${outputResult.decision==="block"?C.red:outputResult.decision==="review"?C.amber:C.green}`}}>
-                <div style={{fontFamily:mono,fontSize:9,letterSpacing:2,textTransform:"uppercase",
+                <div style={{fontFamily:mono,fontSize:13,letterSpacing:2,textTransform:"uppercase",
                   color:outputResult.decision==="block"?C.red:outputResult.decision==="review"?C.amber:C.green,
                   marginBottom:8}}>
                   ✅ LAYER 6: OUTPUT VALIDATOR — {outputResult.decision.toUpperCase()} (risk: {outputResult.risk}/100)
                 </div>
-                <div style={{fontFamily:sans,fontSize:10,color:C.p2,lineHeight:1.6,marginBottom:8}}>
+                <div style={{fontFamily:sans,fontSize:14,color:C.p2,lineHeight:1.6,marginBottom:8}}>
                   {outputResult.expl}
                 </div>
                 {outputResult.flags.length>0&&(
                   <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
                     {outputResult.flags.map(f=>(
-                      <span key={f.id} style={{fontFamily:mono,fontSize:7.5,
+                      <span key={f.id} style={{fontFamily:mono,fontSize:11,
                         padding:"2px 7px",border:`1px solid ${C.red}`,color:C.red}}>
                         {f.id} sev:{f.sev}
                       </span>
@@ -1595,15 +1595,15 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
             justifyContent:"space-between", marginBottom:14,
             paddingBottom:10, borderBottom:`1px solid ${C.line}`}}>
             <div>
-              <div style={{fontFamily:mono, fontSize:11, fontWeight:700,
+              <div style={{fontFamily:mono, fontSize:15, fontWeight:700,
                 color:C.p1, letterSpacing:1}}>Policy Manifest</div>
-              <div style={{fontFamily:mono, fontSize:9, color:C.p3, marginTop:2}}>
+              <div style={{fontFamily:mono, fontSize:13, color:C.p3, marginTop:2}}>
                 {all.filter(p=>p.status==="active"||!p.status).length} active ·{" "}
                 {all.filter(p=>p.status==="draft").length} draft ·{" "}
                 {all.filter(p=>p.status==="archived").length} archived
               </div>
             </div>
-            <span style={{fontFamily:mono, fontSize:9, padding:"3px 10px",
+            <span style={{fontFamily:mono, fontSize:13, padding:"3px 10px",
               border:`1px solid ${C.accent}`, color:C.accent}}>
               {all.length} TOTAL
             </span>
@@ -1613,7 +1613,7 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
           <div style={{display:"grid", gridTemplateColumns:"1fr 44px 70px 80px 90px",
             gap:6, padding:"4px 8px", marginBottom:4}}>
             {["POLICY","SEV","ACTION","STATUS","CONTROLS"].map(h => (
-              <div key={h} style={{fontFamily:mono, fontSize:8.5, color:C.p3,
+              <div key={h} style={{fontFamily:mono, fontSize:12, color:C.p3,
                 letterSpacing:1.5, textTransform:"uppercase"}}>{h}</div>
             ))}
           </div>
@@ -1632,12 +1632,12 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
                 borderBottom:`1px solid ${C.line}`,
                 background:C.bg2,
                 borderLeft:`2px solid ${C.accent}`}}>
-                <div style={{fontFamily:mono, fontSize:9, color:C.accent,
+                <div style={{fontFamily:mono, fontSize:13, color:C.accent,
                   letterSpacing:2, marginBottom:10}}>
                   EDITING: {p.id} · v{(p.version||1)+1} on save
                 </div>
                 {editErr && (
-                  <div style={{fontFamily:sans, fontSize:9, color:C.red,
+                  <div style={{fontFamily:sans, fontSize:13, color:C.red,
                     padding:"4px 8px", background:C.redDim,
                     border:`1px solid ${C.red}`, marginBottom:8}}>
                     ⚠ {editErr}
@@ -1658,7 +1658,7 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
                     <select value={editForm.action}
                       onChange={e=>setEditForm(f=>({...f,action:e.target.value}))}
                       style={{background:C.bg0, border:`1px solid ${C.line2}`,
-                        color:C.p1, fontFamily:mono, fontSize:10,
+                        color:C.p1, fontFamily:mono, fontSize:14,
                         padding:"6px 8px", width:"100%", outline:"none"}}>
                       <option value="review">review</option>
                       <option value="block">block</option>
@@ -1680,20 +1680,20 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
                 </div>
                 <div style={{display:"flex", gap:6}}>
                   <button onClick={()=>saveEdit(p)} style={{
-                    fontFamily:mono, fontSize:9, fontWeight:700,
+                    fontFamily:mono, fontSize:13, fontWeight:700,
                     padding:"5px 16px", cursor:"pointer", letterSpacing:1,
                     border:`1px solid ${C.green}`, color:C.green,
                     background:C.greenDim}}>
                     ✓ SAVE v{(p.version||1)+1}
                   </button>
                   <button onClick={cancelEdit} style={{
-                    fontFamily:mono, fontSize:9, padding:"5px 12px",
+                    fontFamily:mono, fontSize:13, padding:"5px 12px",
                     cursor:"pointer", letterSpacing:1,
                     border:`1px solid ${C.line2}`, color:C.p3,
                     background:"transparent"}}>
                     CANCEL
                   </button>
-                  <div style={{fontFamily:sans, fontSize:9, color:C.p3,
+                  <div style={{fontFamily:sans, fontSize:13, color:C.p3,
                     alignSelf:"center", marginLeft:4}}>
                     Snapshot saved before applying. Status preserved.
                   </div>
@@ -1713,21 +1713,21 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
 
                 {/* Policy name + description */}
                 <div>
-                  <div style={{fontFamily:mono, fontSize:11, fontWeight:600,
+                  <div style={{fontFamily:mono, fontSize:15, fontWeight:600,
                     color:C.p1, marginBottom:2}}>{p.id}</div>
                   {p.description && (
-                    <div style={{fontFamily:sans, fontSize:10, color:C.p3,
+                    <div style={{fontFamily:sans, fontSize:14, color:C.p3,
                       lineHeight:1.4}}>{p.description}</div>
                   )}
                   {!isRuntime && (
-                    <span style={{fontFamily:mono, fontSize:8, color:C.p3,
+                    <span style={{fontFamily:mono, fontSize:12, color:C.p3,
                       padding:"1px 5px", border:`1px solid ${C.line2}`,
                       marginTop:3, display:"inline-block"}}>YAML · SYSTEM</span>
                   )}
                 </div>
 
                 {/* Severity */}
-                <div style={{fontFamily:mono, fontSize:13, fontWeight:700,
+                <div style={{fontFamily:mono, fontSize:16, fontWeight:700,
                   textAlign:"center",
                   color:p.sev>=80?C.red:p.sev>=50?C.amber:C.green}}>
                   {p.sev}
@@ -1735,7 +1735,7 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
 
                 {/* Action badge */}
                 <div style={{textAlign:"center"}}>
-                  <span style={{fontFamily:mono, fontSize:9, letterSpacing:1,
+                  <span style={{fontFamily:mono, fontSize:13, letterSpacing:1,
                     padding:"3px 8px",
                     border:`1px solid ${actionColor}`,
                     color:actionColor,
@@ -1747,7 +1747,7 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
 
                 {/* Status + version */}
                 <div>
-                  <span style={{fontFamily:mono, fontSize:9, letterSpacing:1,
+                  <span style={{fontFamily:mono, fontSize:13, letterSpacing:1,
                     padding:"3px 8px",
                     border:`1px solid ${statusColor}`,
                     color:statusColor,
@@ -1755,7 +1755,7 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
                     display:"inline-block"}}>
                     {p.status||"active"}
                   </span>
-                  <div style={{fontFamily:mono, fontSize:8, color:C.p3, marginTop:3}}>
+                  <div style={{fontFamily:mono, fontSize:12, color:C.p3, marginTop:3}}>
                     v{p.version||1}
                   </div>
                 </div>
@@ -1764,7 +1764,7 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
                 <div style={{display:"flex", flexDirection:"column", gap:3}}>
                   {isRuntime && (
                     <button onClick={()=>startEdit(p)} style={{
-                      fontFamily:mono, fontSize:8.5, padding:"3px 0",
+                      fontFamily:mono, fontSize:12, padding:"3px 0",
                       border:`1px solid ${C.line2}`, color:C.p2,
                       background:"transparent", cursor:"pointer",
                       textAlign:"center", letterSpacing:0.5,
@@ -1776,7 +1776,7 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
                   )}
                   {isRuntime && p.status==="draft" && (
                     <button onClick={()=>setStatus(p.id,"active")} style={{
-                      fontFamily:mono, fontSize:8.5, padding:"3px 0",
+                      fontFamily:mono, fontSize:12, padding:"3px 0",
                       border:`1px solid ${C.green}`, color:C.green,
                       background:C.greenDim, cursor:"pointer",
                       textAlign:"center", letterSpacing:0.5}}>
@@ -1785,7 +1785,7 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
                   )}
                   {isRuntime && p.status==="active" && (
                     <button onClick={()=>setStatus(p.id,"archived")} style={{
-                      fontFamily:mono, fontSize:8.5, padding:"3px 0",
+                      fontFamily:mono, fontSize:12, padding:"3px 0",
                       border:`1px solid ${C.p3}`, color:C.p3,
                       background:"transparent", cursor:"pointer",
                       textAlign:"center", letterSpacing:0.5}}>
@@ -1794,7 +1794,7 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
                   )}
                   {isRuntime && p.status==="archived" && (
                     <button onClick={()=>setStatus(p.id,"active")} style={{
-                      fontFamily:mono, fontSize:8.5, padding:"3px 0",
+                      fontFamily:mono, fontSize:12, padding:"3px 0",
                       border:`1px solid ${C.amber}`, color:C.amber,
                       background:C.amberDim, cursor:"pointer",
                       textAlign:"center", letterSpacing:0.5}}>
@@ -1803,7 +1803,7 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
                   )}
                   {isRuntime && (
                     <button onClick={()=>del(p.id)} style={{
-                      fontFamily:mono, fontSize:8.5, padding:"3px 0",
+                      fontFamily:mono, fontSize:12, padding:"3px 0",
                       border:`1px solid ${pendingDel===p.id?C.red:C.line2}`,
                       color:pendingDel===p.id?C.red:C.p3,
                       background:pendingDel===p.id?C.redDim:"transparent",
@@ -1824,15 +1824,15 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
 
           <div style={{marginBottom:14, paddingBottom:10,
             borderBottom:`1px solid ${C.line}`}}>
-            <div style={{fontFamily:mono, fontSize:11, fontWeight:700,
+            <div style={{fontFamily:mono, fontSize:15, fontWeight:700,
               color:C.p1, letterSpacing:1}}>Create Runtime Policy</div>
-            <div style={{fontFamily:mono, fontSize:9, color:C.p3, marginTop:2}}>
+            <div style={{fontFamily:mono, fontSize:13, color:C.p3, marginTop:2}}>
               Policies start as DRAFT — activate when ready
             </div>
           </div>
 
           {err && (
-            <div style={{fontFamily:sans, fontSize:10, color:C.red,
+            <div style={{fontFamily:sans, fontSize:14, color:C.red,
               padding:"8px 12px", border:`1px solid ${C.red}`,
               background:C.redDim, marginBottom:12, lineHeight:1.5}}>
               ⚠ {err}
@@ -1841,7 +1841,7 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
 
           <div style={{display:"flex", flexDirection:"column", gap:12}}>
             <div style={{padding:12, background:C.bg0, border:`1px solid ${C.line2}`}}>
-              <div style={{fontFamily:mono, fontSize:8.5, color:C.p3,
+              <div style={{fontFamily:mono, fontSize:12, color:C.p3,
                 letterSpacing:2, textTransform:"uppercase", marginBottom:10}}>① IDENTITY</div>
               <div style={{display:"flex", flexDirection:"column", gap:8}}>
                 <Fld label="Policy ID *">
@@ -1858,7 +1858,7 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
             </div>
 
             <div style={{padding:12, background:C.bg0, border:`1px solid ${C.line2}`}}>
-              <div style={{fontFamily:mono, fontSize:8.5, color:C.p3,
+              <div style={{fontFamily:mono, fontSize:12, color:C.p3,
                 letterSpacing:2, textTransform:"uppercase", marginBottom:10}}>② ENFORCEMENT</div>
               <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8}}>
                 <Fld label="Severity 0–100 *">
@@ -1870,7 +1870,7 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
                   <select value={form.action}
                     onChange={e=>setForm(f=>({...f,action:e.target.value}))}
                     style={{background:C.bg1, border:`1px solid ${C.line2}`,
-                      color:C.p1, fontFamily:mono, fontSize:10,
+                      color:C.p1, fontFamily:mono, fontSize:14,
                       padding:"6px 8px", width:"100%", outline:"none"}}>
                     <option value="review">review — flag for human</option>
                     <option value="block">block — halt execution</option>
@@ -1881,7 +1881,7 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
             </div>
 
             <div style={{padding:12, background:C.bg0, border:`1px solid ${C.line2}`}}>
-              <div style={{fontFamily:mono, fontSize:8.5, color:C.p3,
+              <div style={{fontFamily:mono, fontSize:12, color:C.p3,
                 letterSpacing:2, textTransform:"uppercase", marginBottom:10}}>③ MATCH CONDITIONS</div>
               <div style={{display:"flex", flexDirection:"column", gap:8}}>
                 <Fld label="Tool name (exact match)">
@@ -1899,7 +1899,7 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
 
             <button onClick={create} style={{
               padding:"12px", cursor:"pointer",
-              fontFamily:mono, fontSize:11, fontWeight:700,
+              fontFamily:mono, fontSize:15, fontWeight:700,
               letterSpacing:1.5, textTransform:"uppercase",
               border:`1px solid ${C.amber}`,
               color:C.amber, background:C.amberDim,
@@ -1911,7 +1911,7 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
           {/* ── POLICY LIFECYCLE EXPLAINER ── */}
           <div style={{marginTop:16, padding:14, background:C.bg0,
             border:`1px solid ${C.line2}`}}>
-            <div style={{fontFamily:mono, fontSize:8.5, color:C.p3,
+            <div style={{fontFamily:mono, fontSize:12, color:C.p3,
               letterSpacing:2, textTransform:"uppercase", marginBottom:10}}>
               POLICY LIFECYCLE
             </div>
@@ -1924,19 +1924,19 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
               ].map(({state,color,icon,text}) => (
                 <div key={state} style={{display:"grid", gridTemplateColumns:"70px 1fr",
                   gap:8, alignItems:"start"}}>
-                  <span style={{fontFamily:mono, fontSize:8.5, fontWeight:700,
+                  <span style={{fontFamily:mono, fontSize:12, fontWeight:700,
                     padding:"3px 6px", border:`1px solid ${color}`,
                     color, textAlign:"center", letterSpacing:1}}>
                     {icon} {state}
                   </span>
-                  <span style={{fontFamily:sans, fontSize:10, color:C.p2, lineHeight:1.5}}>
+                  <span style={{fontFamily:sans, fontSize:14, color:C.p2, lineHeight:1.5}}>
                     {text}
                   </span>
                 </div>
               ))}
             </div>
             <div style={{marginTop:12, paddingTop:10, borderTop:`1px solid ${C.line}`,
-              fontFamily:mono, fontSize:8.5, color:C.p3, lineHeight:1.7}}>
+              fontFamily:mono, fontSize:12, color:C.p3, lineHeight:1.7}}>
               Version counter increments on each activation.
               Every change is snapshot-saved before it applies.
             </div>
@@ -1949,20 +1949,20 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
         <div style={{display:"flex", alignItems:"center",
           justifyContent:"space-between", marginBottom:12}}>
           <div>
-            <div style={{fontFamily:mono, fontSize:11, fontWeight:700,
+            <div style={{fontFamily:mono, fontSize:15, fontWeight:700,
               color:C.p1, letterSpacing:1}}>Rollback History</div>
-            <div style={{fontFamily:mono, fontSize:9, color:C.p3, marginTop:2}}>
+            <div style={{fontFamily:mono, fontSize:13, color:C.p3, marginTop:2}}>
               Every policy change is snapshotted automatically — restore any prior state in one click
             </div>
           </div>
-          <span style={{fontFamily:mono, fontSize:9, padding:"3px 10px",
+          <span style={{fontFamily:mono, fontSize:13, padding:"3px 10px",
             border:`1px solid ${C.green}`, color:C.green}}>
             {policySnapshots.length} SNAPSHOT{policySnapshots.length!==1?"S":""}
           </span>
         </div>
 
         {policySnapshots.length === 0 ? (
-          <div style={{fontFamily:sans, fontSize:11, color:C.p3,
+          <div style={{fontFamily:sans, fontSize:15, color:C.p3,
             padding:"20px", textAlign:"center",
             border:`1px dashed ${C.line2}`, background:C.bg1}}>
             No snapshots yet. Make any policy change — create, activate, archive, or delete —
@@ -1974,7 +1974,7 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
               gridTemplateColumns:"1fr 80px 80px 100px 160px",
               gap:8, padding:"4px 12px", marginBottom:4}}>
               {["CHANGE","POLICIES","ACTIVE","TIME","ACTION"].map(h => (
-                <div key={h} style={{fontFamily:mono, fontSize:8.5,
+                <div key={h} style={{fontFamily:mono, fontSize:12,
                   color:C.p3, letterSpacing:1.5, textTransform:"uppercase"}}>{h}</div>
               ))}
             </div>
@@ -1989,33 +1989,33 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
                   background:i===0?C.bg2:C.bg1,
                   border:`1px solid ${i===0?C.accent:C.line}`}}>
                   <div>
-                    <div style={{fontFamily:mono, fontSize:10, fontWeight:600,
+                    <div style={{fontFamily:mono, fontSize:14, fontWeight:600,
                       color:i===0?C.p1:C.p2}}>{snap.label}</div>
                     {i===0 && (
-                      <div style={{fontFamily:mono, fontSize:8.5,
+                      <div style={{fontFamily:mono, fontSize:12,
                         color:C.accent, marginTop:2}}>← CURRENT STATE</div>
                     )}
                   </div>
-                  <div style={{fontFamily:mono, fontSize:13, fontWeight:700,
+                  <div style={{fontFamily:mono, fontSize:16, fontWeight:700,
                     color:C.p1, textAlign:"center"}}>
                     {snap.policies.length}
                   </div>
-                  <div style={{fontFamily:mono, fontSize:13, fontWeight:700,
+                  <div style={{fontFamily:mono, fontSize:16, fontWeight:700,
                     color:C.green, textAlign:"center"}}>
                     {snap.policies.filter(p=>p.status==="active").length}
                   </div>
-                  <div style={{fontFamily:mono, fontSize:9, color:C.p3}}>
+                  <div style={{fontFamily:mono, fontSize:13, color:C.p3}}>
                     {snap.time}
                   </div>
                   {i===0 ? (
-                    <span style={{fontFamily:mono, fontSize:9,
+                    <span style={{fontFamily:mono, fontSize:13,
                       color:C.p3, padding:"5px 12px",
                       border:`1px solid ${C.line2}`, textAlign:"center"}}>
                       CURRENT
                     </span>
                   ) : (
                     <button onClick={()=>onRestore(snap)} style={{
-                      fontFamily:mono, fontSize:9, fontWeight:700,
+                      fontFamily:mono, fontSize:13, fontWeight:700,
                       padding:"6px 12px", cursor:"pointer",
                       border:`1px solid ${C.amber}`, color:C.amber,
                       background:C.amberDim, letterSpacing:1,
@@ -2058,25 +2058,25 @@ function MoltbookPanel({ gs }) {
     <div style={{padding:14}}>
       <PanelHd title="Moltbook Reporter" tag={looping?"LOOPING":"IDLE"} tagColor={looping?C.cyan:C.muted}/>
       <div style={{display:"flex", gap:6, marginBottom:10}}>
-        <Btn onClick={gen} style={{fontSize:8, padding:"3px 9px"}}>▶ GENERATE</Btn>
-        <Btn onClick={toggle} variant={looping?"green":"default"} style={{fontSize:8, padding:"3px 9px"}}>
+        <Btn onClick={gen} style={{fontSize:12, padding:"3px 9px"}}>▶ GENERATE</Btn>
+        <Btn onClick={toggle} variant={looping?"green":"default"} style={{fontSize:12, padding:"3px 9px"}}>
           {looping?"⏹ STOP LOOP":"⟳ START LOOP"}
         </Btn>
       </div>
       {post && (
         <div style={{border:`1px solid ${C.line2}`, background:C.bg0, padding:10, position:"relative"}}>
-          <div style={{position:"absolute", top:8, right:8, fontFamily:mono, fontSize:7,
+          <div style={{position:"absolute", top:8, right:8, fontFamily:mono, fontSize:11,
             letterSpacing:1, padding:"2px 5px", border:"1px solid rgba(0,212,255,0.35)", color:C.cyan}}>
             {post.type}
           </div>
-          <div style={{fontFamily:mono, fontSize:7.5, color:C.muted, letterSpacing:1.5,
+          <div style={{fontFamily:mono, fontSize:11, color:C.muted, letterSpacing:1.5,
             marginBottom:6, paddingBottom:5, borderBottom:`1px solid ${C.line}`}}>
             MOLTBOOK · m/lablab
           </div>
-          <div style={{fontFamily:mono, fontSize:9, color:C.cyan, marginBottom:6, lineHeight:1.4}}>
+          <div style={{fontFamily:mono, fontSize:13, color:C.cyan, marginBottom:6, lineHeight:1.4}}>
             {post.title}
           </div>
-          <div style={{fontFamily:sans, fontSize:10, color:C.text, lineHeight:1.6, whiteSpace:"pre-wrap"}}>
+          <div style={{fontFamily:sans, fontSize:14, color:C.text, lineHeight:1.6, whiteSpace:"pre-wrap"}}>
             {post.body}
           </div>
         </div>
@@ -2098,11 +2098,11 @@ function SidebarPolicies({ extraPolicies }) {
       {activePolicies.map(p=>(
         <div key={p.id} style={{display:"grid", gridTemplateColumns:"1fr 32px 50px",
           gap:5, padding:"5px 0", borderBottom:`1px solid ${C.line}`, alignItems:"center"}}>
-          <div style={{fontFamily:mono, fontSize:8.5, color:C.text,
+          <div style={{fontFamily:mono, fontSize:12, color:C.text,
             overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{p.id}</div>
-          <div style={{fontFamily:mono, fontSize:8, textAlign:"right",
+          <div style={{fontFamily:mono, fontSize:12, textAlign:"right",
             color:p.sev>=80?C.red:p.sev>=50?C.amber:C.muted}}>{p.sev}</div>
-          <div style={{fontFamily:mono, fontSize:7.5, letterSpacing:1, padding:"1px 4px",
+          <div style={{fontFamily:mono, fontSize:11, letterSpacing:1, padding:"1px 4px",
             border:`1px solid ${ac(p.action)}`, color:ac(p.action),
             textTransform:"uppercase", textAlign:"center"}}>{p.action}</div>
         </div>
@@ -2128,19 +2128,19 @@ function LiveFeedPanel({ log, total }) {
         background:C.bg2, border:`1px solid ${C.line}`}}>
         <div style={{display:"grid", gridTemplateColumns:"auto 1fr auto",
           gap:"3px 8px", marginBottom:4}}>
-          <span style={{fontFamily:mono, fontSize:8, letterSpacing:1,
+          <span style={{fontFamily:mono, fontSize:12, letterSpacing:1,
             padding:"2px 5px", border:"1px solid",
             textTransform:"uppercase", ...ds}}>
             {e.decision}
           </span>
-          <span style={{fontFamily:mono, fontSize:10, color:C.p1, fontWeight:600}}>{e.tool}</span>
-          <span style={{fontFamily:mono, fontSize:10, color:riskColor(e.risk), fontWeight:600}}>{e.risk}</span>
+          <span style={{fontFamily:mono, fontSize:14, color:C.p1, fontWeight:600}}>{e.tool}</span>
+          <span style={{fontFamily:mono, fontSize:14, color:riskColor(e.risk), fontWeight:600}}>{e.risk}</span>
         </div>
-        <div style={{fontFamily:sans, fontSize:10, color:C.p2,
+        <div style={{fontFamily:sans, fontSize:14, color:C.p2,
           lineHeight:1.5, marginBottom:4}}>
           {e.autoMsg || e.expl}
         </div>
-        <div style={{fontFamily:mono, fontSize:8, color:C.p3,
+        <div style={{fontFamily:mono, fontSize:12, color:C.p3,
           display:"flex", gap:8, flexWrap:"wrap"}}>
           <span>{e.time}</span>
           {e.layerHit && <span>· {e.layerHit}</span>}
@@ -2157,15 +2157,15 @@ function LiveFeedPanel({ log, total }) {
       <div style={{display:"flex", alignItems:"center",
         justifyContent:"space-between", marginBottom:12,
         paddingBottom:8, borderBottom:`1px solid ${C.line}`}}>
-        <span style={{fontFamily:mono, fontSize:9, letterSpacing:2,
+        <span style={{fontFamily:mono, fontSize:13, letterSpacing:2,
           textTransform:"uppercase", color:C.p3}}>Live Feed</span>
         <div style={{display:"flex", alignItems:"center", gap:8}}>
-          <span style={{fontFamily:mono, fontSize:8, letterSpacing:1.5,
+          <span style={{fontFamily:mono, fontSize:12, letterSpacing:1.5,
             padding:"2px 6px", border:`1px solid ${C.line2}`,
             color:C.accent, textTransform:"uppercase"}}>{total}</span>
           {hasMore && (
             <button onClick={()=>setExpanded(e=>!e)} style={{
-              fontFamily:mono, fontSize:8, letterSpacing:1,
+              fontFamily:mono, fontSize:12, letterSpacing:1,
               padding:"2px 8px", cursor:"pointer",
               border:`1px solid ${expanded?C.accent:C.line2}`,
               color:expanded?C.accent:C.p3,
@@ -2179,7 +2179,7 @@ function LiveFeedPanel({ log, total }) {
       </div>
 
       {log.length===0 ? (
-        <div style={{fontFamily:mono, fontSize:9, color:C.p3,
+        <div style={{fontFamily:mono, fontSize:13, color:C.p3,
           textAlign:"center", padding:"16px 0"}}>No events yet.</div>
       ) : (
         <>
@@ -2187,7 +2187,7 @@ function LiveFeedPanel({ log, total }) {
           {hasMore && !expanded && (
             <button onClick={()=>setExpanded(true)} style={{
               width:"100%", padding:"7px", marginTop:2,
-              fontFamily:mono, fontSize:8, letterSpacing:1.5,
+              fontFamily:mono, fontSize:12, letterSpacing:1.5,
               cursor:"pointer", textTransform:"uppercase",
               border:`1px solid ${C.line2}`, color:C.p3,
               background:C.bg2, transition:"all 0.15s"}}>
@@ -2197,7 +2197,7 @@ function LiveFeedPanel({ log, total }) {
           {expanded && (
             <button onClick={()=>setExpanded(false)} style={{
               width:"100%", padding:"7px", marginTop:2,
-              fontFamily:mono, fontSize:8, letterSpacing:1.5,
+              fontFamily:mono, fontSize:12, letterSpacing:1.5,
               cursor:"pointer", textTransform:"uppercase",
               border:`1px solid ${C.accent}`, color:C.accent,
               background:C.bg2, transition:"all 0.15s"}}>
@@ -2264,19 +2264,19 @@ function AuditTrailTab({ auditLog, policySnapshots }) {
         <div style={{display:"flex", alignItems:"center",
           justifyContent:"space-between", marginBottom:10}}>
           <div>
-            <div style={{fontFamily:mono, fontSize:11, fontWeight:600,
+            <div style={{fontFamily:mono, fontSize:15, fontWeight:600,
               color:C.p1, letterSpacing:1.5}}>AUDIT TRAIL</div>
-            <div style={{fontFamily:mono, fontSize:8.5, color:C.p3, marginTop:2}}>
+            <div style={{fontFamily:mono, fontSize:12, color:C.p3, marginTop:2}}>
               Immutable governance event log · {auditLog.length} events recorded
             </div>
           </div>
           <div style={{display:"flex", gap:8, alignItems:"center"}}>
-            <span style={{fontFamily:mono, fontSize:8, color:C.green,
+            <span style={{fontFamily:mono, fontSize:12, color:C.green,
               padding:"3px 8px", border:`1px solid ${C.green}`,
               background:C.greenDim}}>
               ✓ APPEND-ONLY
             </span>
-            <span style={{fontFamily:mono, fontSize:8, color:C.p3,
+            <span style={{fontFamily:mono, fontSize:12, color:C.p3,
               padding:"3px 8px", border:`1px solid ${C.line2}`}}>
               {policySnapshots.length} SNAPSHOTS
             </span>
@@ -2287,7 +2287,7 @@ function AuditTrailTab({ auditLog, policySnapshots }) {
         <div style={{display:"flex", gap:6, alignItems:"center", flexWrap:"wrap"}}>
           {FILTERS.map(f => (
             <button key={f} onClick={()=>setFilter(f)} style={{
-              fontFamily:mono, fontSize:8, padding:"3px 10px",
+              fontFamily:mono, fontSize:12, padding:"3px 10px",
               cursor:"pointer", letterSpacing:1,
               border:`1px solid ${filter===f?typeColor(f):C.line2}`,
               color:filter===f?typeColor(f):C.p3,
@@ -2302,7 +2302,7 @@ function AuditTrailTab({ auditLog, policySnapshots }) {
             placeholder="search tool, agent, policy..."
             style={{marginLeft:"auto", background:C.bg2,
               border:`1px solid ${C.line2}`, color:C.p1,
-              fontFamily:mono, fontSize:9, padding:"4px 10px",
+              fontFamily:mono, fontSize:13, padding:"4px 10px",
               outline:"none", width:220}}
           />
         </div>
@@ -2313,7 +2313,7 @@ function AuditTrailTab({ auditLog, policySnapshots }) {
         padding:"5px 16px", flexShrink:0,
         display:"grid", gridTemplateColumns:"120px 110px 1fr 80px 90px"}}>
         {["TIMESTAMP","TYPE","EVENT","RISK","AGENT/SOURCE"].map(h=>(
-          <span key={h} style={{fontFamily:mono, fontSize:7.5,
+          <span key={h} style={{fontFamily:mono, fontSize:11,
             color:C.p3, letterSpacing:1.5}}>{h}</span>
         ))}
       </div>
@@ -2322,12 +2322,12 @@ function AuditTrailTab({ auditLog, policySnapshots }) {
       <div style={{flex:1, overflow:"auto"}}>
         {auditLog.length === 0 ? (
           <div style={{padding:"40px 16px", textAlign:"center",
-            fontFamily:mono, fontSize:10, color:C.p3}}>
+            fontFamily:mono, fontSize:14, color:C.p3}}>
             No events yet. Run an evaluation or modify a policy.
           </div>
         ) : filtered.length === 0 ? (
           <div style={{padding:"40px 16px", textAlign:"center",
-            fontFamily:mono, fontSize:10, color:C.p3}}>
+            fontFamily:mono, fontSize:14, color:C.p3}}>
             No events match current filter.
           </div>
         ) : filtered.map((e, i) => (
@@ -2339,16 +2339,16 @@ function AuditTrailTab({ auditLog, policySnapshots }) {
             alignItems:"start"}}>
 
             {/* Timestamp */}
-            <div style={{fontFamily:mono, fontSize:8, color:C.p3, paddingTop:1}}>
+            <div style={{fontFamily:mono, fontSize:12, color:C.p3, paddingTop:1}}>
               {e.time}<br/>
-              <span style={{fontSize:7, color:C.p3, opacity:0.6}}>
+              <span style={{fontSize:11, color:C.p3, opacity:0.6}}>
                 {e.ts?.slice(0,10)}
               </span>
             </div>
 
             {/* Type badge */}
             <div>
-              <span style={{fontFamily:mono, fontSize:7.5, padding:"2px 6px",
+              <span style={{fontFamily:mono, fontSize:11, padding:"2px 6px",
                 border:`1px solid ${typeColor(e.type)}`,
                 color:typeColor(e.type), textTransform:"uppercase",
                 letterSpacing:0.5, whiteSpace:"nowrap"}}>
@@ -2358,12 +2358,12 @@ function AuditTrailTab({ auditLog, policySnapshots }) {
 
             {/* Event detail */}
             <div>
-              <div style={{fontFamily:sans, fontSize:11, color:C.p1,
+              <div style={{fontFamily:sans, fontSize:15, color:C.p1,
                 lineHeight:1.5, marginBottom:3}}>{e.label}</div>
               {e.type==="DECISION" && (
                 <div style={{display:"flex", gap:5, flexWrap:"wrap"}}>
                   {e.decision && (
-                    <span style={{fontFamily:mono, fontSize:7.5,
+                    <span style={{fontFamily:mono, fontSize:11,
                       padding:"1px 5px",
                       border:`1px solid ${decColor(e.decision)}`,
                       color:decColor(e.decision), textTransform:"uppercase"}}>
@@ -2371,21 +2371,21 @@ function AuditTrailTab({ auditLog, policySnapshots }) {
                     </span>
                   )}
                   {e.policy && (
-                    <span style={{fontFamily:mono, fontSize:7.5,
+                    <span style={{fontFamily:mono, fontSize:11,
                       padding:"1px 5px",
                       border:`1px solid ${C.line2}`, color:C.p2}}>
                       {e.policy}
                     </span>
                   )}
                   {e.chainAlert && (
-                    <span style={{fontFamily:mono, fontSize:7.5,
+                    <span style={{fontFamily:mono, fontSize:11,
                       padding:"1px 5px",
                       border:`1px solid ${C.red}`, color:C.red}}>
                       ⛓ {e.chainAlert}
                     </span>
                   )}
                   {e.pii && (
-                    <span style={{fontFamily:mono, fontSize:7.5,
+                    <span style={{fontFamily:mono, fontSize:11,
                       padding:"1px 5px",
                       border:`1px solid ${C.amber}`, color:C.amber}}>
                       🏷 PII
@@ -2394,20 +2394,20 @@ function AuditTrailTab({ auditLog, policySnapshots }) {
                 </div>
               )}
               {e.type==="POLICY_CHANGE" && e.snapshotId && (
-                <div style={{fontFamily:mono, fontSize:7.5, color:C.p3, marginTop:2}}>
+                <div style={{fontFamily:mono, fontSize:11, color:C.p3, marginTop:2}}>
                   snapshot: {e.snapshotId} · {e.before}→{e.after} policies
                 </div>
               )}
             </div>
 
             {/* Risk */}
-            <div style={{fontFamily:mono, fontSize:11, fontWeight:600,
+            <div style={{fontFamily:mono, fontSize:15, fontWeight:600,
               color:e.risk!=null ? riskColor(e.risk) : C.p3}}>
               {e.risk != null ? e.risk : "—"}
             </div>
 
             {/* Agent/source */}
-            <div style={{fontFamily:mono, fontSize:8, color:C.p2,
+            <div style={{fontFamily:mono, fontSize:12, color:C.p2,
               wordBreak:"break-all"}}>
               {e.agent || e.source || "governor"}
             </div>
@@ -2419,10 +2419,10 @@ function AuditTrailTab({ auditLog, policySnapshots }) {
       <div style={{background:C.bg1, borderTop:`1px solid ${C.line}`,
         padding:"6px 16px", flexShrink:0,
         display:"flex", justifyContent:"space-between", alignItems:"center"}}>
-        <span style={{fontFamily:mono, fontSize:8, color:C.p3}}>
+        <span style={{fontFamily:mono, fontSize:12, color:C.p3}}>
           Showing {filtered.length} of {auditLog.length} events
         </span>
-        <span style={{fontFamily:mono, fontSize:8, color:C.green}}>
+        <span style={{fontFamily:mono, fontSize:12, color:C.green}}>
           🔒 IMMUTABLE · APPEND-ONLY · NON-EDITABLE
         </span>
       </div>
@@ -2446,10 +2446,10 @@ function TopologyTab({ gs, killSwitch, degraded }) {
       padding:"14px 20px", textAlign:"center", minWidth:130,
       transition:"all 0.3s", position:"relative",
     }}>
-      <div style={{fontSize:20, marginBottom:4}}>{icon}</div>
-      <div style={{fontFamily:mono, fontSize:11, fontWeight:700,
+      <div style={{fontSize:24, marginBottom:4}}>{icon}</div>
+      <div style={{fontFamily:mono, fontSize:15, fontWeight:700,
         color, letterSpacing:1.5, textTransform:"uppercase"}}>{label}</div>
-      {sub && <div style={{fontFamily:mono, fontSize:8, color:C.p3,
+      {sub && <div style={{fontFamily:mono, fontSize:12, color:C.p3,
         marginTop:3, letterSpacing:0.5}}>{sub}</div>}
     </div>
   );
@@ -2457,7 +2457,7 @@ function TopologyTab({ gs, killSwitch, degraded }) {
   const Arrow = ({ label, color=C.line2, blocked=false }) => (
     <div style={{display:"flex", flexDirection:"column", alignItems:"center",
       justifyContent:"center", gap:3, minWidth:90}}>
-      <div style={{fontFamily:mono, fontSize:7.5, color, letterSpacing:1,
+      <div style={{fontFamily:mono, fontSize:11, color, letterSpacing:1,
         textTransform:"uppercase", textAlign:"center"}}>{label}</div>
       <div style={{display:"flex", alignItems:"center", gap:0}}>
         <div style={{width:60, height:2, background:blocked?C.red:color}}/>
@@ -2465,7 +2465,7 @@ function TopologyTab({ gs, killSwitch, degraded }) {
           borderTop:"5px solid transparent", borderBottom:"5px solid transparent",
           borderLeft:`7px solid ${blocked?C.red:color}`}}/>
       </div>
-      {blocked && <div style={{fontFamily:mono, fontSize:7, color:C.red,
+      {blocked && <div style={{fontFamily:mono, fontSize:11, color:C.red,
         letterSpacing:1}}>BLOCKED</div>}
     </div>
   );
@@ -2473,7 +2473,7 @@ function TopologyTab({ gs, killSwitch, degraded }) {
   const CrossedPath = () => (
     <div style={{display:"flex", flexDirection:"column", alignItems:"center",
       gap:2, opacity:0.5}}>
-      <div style={{fontFamily:mono, fontSize:7, color:C.red, letterSpacing:1}}>
+      <div style={{fontFamily:mono, fontSize:11, color:C.red, letterSpacing:1}}>
         NO DIRECT PATH
       </div>
       <div style={{position:"relative", width:80, height:20}}>
@@ -2490,11 +2490,11 @@ function TopologyTab({ gs, killSwitch, degraded }) {
 
       {/* Header */}
       <div style={{marginBottom:24}}>
-        <div style={{fontFamily:mono, fontSize:13, fontWeight:700,
+        <div style={{fontFamily:mono, fontSize:16, fontWeight:700,
           color:C.p1, letterSpacing:2, textTransform:"uppercase", marginBottom:4}}>
           EXECUTION TOPOLOGY
         </div>
-        <div style={{fontFamily:mono, fontSize:9, color:C.p3, letterSpacing:1}}>
+        <div style={{fontFamily:mono, fontSize:13, color:C.p3, letterSpacing:1}}>
           Stage D · Req 5 — Execution Mediation · Every side-effecting operation flows through the control plane
         </div>
       </div>
@@ -2511,9 +2511,9 @@ function TopologyTab({ gs, killSwitch, degraded }) {
         ].map(({label,val,color})=>(
           <div key={label} style={{background:C.bg1, padding:"8px 14px",
             border:`1px solid ${C.line2}`, minWidth:120}}>
-            <div style={{fontFamily:mono, fontSize:7.5, color:C.p3,
+            <div style={{fontFamily:mono, fontSize:11, color:C.p3,
               letterSpacing:1.5, textTransform:"uppercase", marginBottom:3}}>{label}</div>
-            <div style={{fontFamily:mono, fontSize:14, fontWeight:700, color}}>{val}</div>
+            <div style={{fontFamily:mono, fontSize:17, fontWeight:700, color}}>{val}</div>
           </div>
         ))}
       </div>
@@ -2522,7 +2522,7 @@ function TopologyTab({ gs, killSwitch, degraded }) {
       <div style={{background:C.bg1, border:`1px solid ${C.line2}`,
         padding:32, marginBottom:20}}>
 
-        <div style={{fontFamily:mono, fontSize:8, color:C.p3, letterSpacing:2,
+        <div style={{fontFamily:mono, fontSize:12, color:C.p3, letterSpacing:2,
           textTransform:"uppercase", marginBottom:24, textAlign:"center"}}>
           ENFORCED EXECUTION FLOW — NO BYPASS EXISTS
         </div>
@@ -2535,12 +2535,12 @@ function TopologyTab({ gs, killSwitch, degraded }) {
           <div style={{display:"flex", flexDirection:"column", gap:8}}>
             {["claude-ops-agent","langchain-pipeline","gpt-researcher-01","crewai-monitor-v1"].map(a=>(
               <div key={a} style={{background:C.bg2, border:`1px solid ${C.line2}`,
-                padding:"6px 12px", fontFamily:mono, fontSize:8.5, color:C.p2,
+                padding:"6px 12px", fontFamily:mono, fontSize:12, color:C.p2,
                 whiteSpace:"nowrap"}}>
                 {a}
               </div>
             ))}
-            <div style={{fontFamily:mono, fontSize:7, color:C.p3,
+            <div style={{fontFamily:mono, fontSize:11, color:C.p3,
               textAlign:"center", letterSpacing:1, marginTop:2}}>AGENTS (PROPOSE)</div>
           </div>
 
@@ -2564,7 +2564,7 @@ function TopologyTab({ gs, killSwitch, degraded }) {
               ))}
             </div>
             {(killSwitch || degraded) && (
-              <div style={{fontFamily:mono, fontSize:8, color:C.red,
+              <div style={{fontFamily:mono, fontSize:12, color:C.red,
                 padding:"3px 10px", border:`1px solid ${C.red}`,
                 background:C.redDim, letterSpacing:1}}>
                 {degraded ? "⚠ DEGRADED" : "⚡ HALTED"}
@@ -2590,37 +2590,37 @@ function TopologyTab({ gs, killSwitch, degraded }) {
                 border:`1px solid ${risk==="HIGH"?C.red:risk==="MED"?C.amber:C.line2}`,
                 padding:"6px 12px", display:"flex", alignItems:"center",
                 justifyContent:"space-between", gap:10}}>
-                <span style={{fontFamily:mono, fontSize:8.5, color:C.p2}}>{t}</span>
-                <span style={{fontFamily:mono, fontSize:7, color:
+                <span style={{fontFamily:mono, fontSize:12, color:C.p2}}>{t}</span>
+                <span style={{fontFamily:mono, fontSize:11, color:
                   risk==="HIGH"?C.red:risk==="MED"?C.amber:C.green,
                   padding:"1px 4px", border:"1px solid currentColor"}}>{risk}</span>
               </div>
             ))}
-            <div style={{fontFamily:mono, fontSize:7, color:C.p3,
+            <div style={{fontFamily:mono, fontSize:11, color:C.p3,
               textAlign:"center", letterSpacing:1, marginTop:2}}>TOOLS (EXECUTE)</div>
           </div>
         </div>
 
         {/* Blocked direct path */}
         <div style={{borderTop:`1px dashed ${C.line2}`, paddingTop:24, marginTop:8}}>
-          <div style={{fontFamily:mono, fontSize:8, color:C.red, letterSpacing:2,
+          <div style={{fontFamily:mono, fontSize:12, color:C.red, letterSpacing:2,
             textTransform:"uppercase", marginBottom:16, textAlign:"center"}}>
             ⛔ PROHIBITED PATHS — NO DIRECT AGENT → TOOL EXECUTION
           </div>
           <div style={{display:"flex", alignItems:"center",
             justifyContent:"center", gap:12, flexWrap:"wrap"}}>
             <div style={{background:C.bg2, border:`1px solid ${C.line2}`,
-              padding:"6px 12px", fontFamily:mono, fontSize:8.5, color:C.p2}}>
+              padding:"6px 12px", fontFamily:mono, fontSize:12, color:C.p2}}>
               any-agent
             </div>
             <CrossedPath/>
             <div style={{background:C.bg2, border:`1px solid ${C.red}`,
-              padding:"6px 12px", fontFamily:mono, fontSize:8.5, color:C.red}}>
+              padding:"6px 12px", fontFamily:mono, fontSize:12, color:C.red}}>
               shell / http / file_write
             </div>
           </div>
           <div style={{textAlign:"center", marginTop:12,
-            fontFamily:mono, fontSize:8, color:C.p3, letterSpacing:0.5}}>
+            fontFamily:mono, fontSize:12, color:C.p3, letterSpacing:0.5}}>
             All execution-capable paths require a binding governance artefact from evaluate()
           </div>
         </div>
@@ -2628,7 +2628,7 @@ function TopologyTab({ gs, killSwitch, degraded }) {
 
       {/* Traceability table */}
       <div style={{background:C.bg1, border:`1px solid ${C.line2}`, padding:20}}>
-        <div style={{fontFamily:mono, fontSize:9, color:C.p2, letterSpacing:1.5,
+        <div style={{fontFamily:mono, fontSize:13, color:C.p2, letterSpacing:1.5,
           textTransform:"uppercase", marginBottom:14}}>
           TRACEABILITY MATRIX — CURRENT STATUS
         </div>
@@ -2660,7 +2660,7 @@ function TopologyTab({ gs, killSwitch, degraded }) {
             ))
           ))}
         </div>
-        <div style={{marginTop:10, fontFamily:mono, fontSize:7.5, color:C.p3}}>
+        <div style={{marginTop:10, fontFamily:mono, fontSize:11, color:C.p3}}>
           ✓ = fully implemented · △ = partially implemented (drift dashboard deferred to v2)
         </div>
       </div>
@@ -2733,10 +2733,10 @@ function ApiKeysTab() {
     <div style={{padding:20, maxWidth:720}}>
       {/* Header */}
       <div style={{marginBottom:24, paddingBottom:14, borderBottom:`1px solid ${C.line2}`}}>
-        <div style={{fontFamily:mono,fontSize:13,fontWeight:700,color:C.p1,letterSpacing:1}}>
+        <div style={{fontFamily:mono,fontSize:16,fontWeight:700,color:C.p1,letterSpacing:1}}>
           API Keys
         </div>
-        <div style={{fontFamily:mono,fontSize:9,color:C.p3,marginTop:4,letterSpacing:0.5,lineHeight:1.6}}>
+        <div style={{fontFamily:mono,fontSize:13,color:C.p3,marginTop:4,letterSpacing:0.5,lineHeight:1.6}}>
           Use your API key to authenticate requests from your agents.
           Include it as the <span style={{color:C.p2}}>X-API-Key</span> header in every request to the Governor API.
         </div>
@@ -2744,11 +2744,11 @@ function ApiKeysTab() {
 
       {err && (
         <div style={{padding:"8px 12px",marginBottom:16,background:C.redDim,
-          border:`1px solid ${C.red}`,fontFamily:mono,fontSize:9,color:C.red}}>⚠ {err}</div>
+          border:`1px solid ${C.red}`,fontFamily:mono,fontSize:13,color:C.red}}>⚠ {err}</div>
       )}
 
       {loading ? (
-        <div style={{fontFamily:mono,fontSize:9,color:C.p3,textAlign:"center",padding:"28px 0"}}>
+        <div style={{fontFamily:mono,fontSize:13,color:C.p3,textAlign:"center",padding:"28px 0"}}>
           Loading…
         </div>
       ) : (
@@ -2757,14 +2757,14 @@ function ApiKeysTab() {
           <div style={{background:C.bg1, border:`1px solid ${C.line}`, padding:20, marginBottom:20}}>
             <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16}}>
               <div>
-                <div style={{fontFamily:mono,fontSize:8,letterSpacing:2,color:C.p3,textTransform:"uppercase",marginBottom:4}}>
+                <div style={{fontFamily:mono,fontSize:12,letterSpacing:2,color:C.p3,textTransform:"uppercase",marginBottom:4}}>
                   YOUR API KEY
                 </div>
-                <div style={{fontFamily:mono,fontSize:9,color:C.p2}}>
+                <div style={{fontFamily:mono,fontSize:13,color:C.p2}}>
                   Owner: <span style={{color:C.p1, fontWeight:600}}>{username}</span>
                 </div>
               </div>
-              <div style={{fontFamily:mono,fontSize:8,letterSpacing:1,
+              <div style={{fontFamily:mono,fontSize:12,letterSpacing:1,
                 padding:"3px 10px",border:`1px solid ${C.green}`,color:C.green}}>
                 ACTIVE
               </div>
@@ -2773,7 +2773,7 @@ function ApiKeysTab() {
             {/* Key display */}
             <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:16}}>
               <div style={{flex:1,background:C.bg0,border:`1px solid ${C.line2}`,
-                padding:"10px 14px",fontFamily:mono,fontSize:11,color:C.p1,
+                padding:"10px 14px",fontFamily:mono,fontSize:15,color:C.p1,
                 letterSpacing:0.5,wordBreak:"break-all",cursor:"pointer",
                 transition:"border-color 0.15s",
                 borderColor:copied?C.green:C.line2}}
@@ -2781,7 +2781,7 @@ function ApiKeysTab() {
                 {showFull ? apiKey : masked}
               </div>
               <button onClick={copyKey} style={{
-                fontFamily:mono,fontSize:9,letterSpacing:1,padding:"10px 16px",
+                fontFamily:mono,fontSize:13,letterSpacing:1,padding:"10px 16px",
                 border:`1px solid ${copied?C.green:C.line2}`,
                 color:copied?C.green:C.p2,
                 background:copied?C.greenDim:"transparent",
@@ -2793,7 +2793,7 @@ function ApiKeysTab() {
             {/* Reveal toggle */}
             <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:16}}>
               <button onClick={()=>setShowFull(s=>!s)} style={{
-                fontFamily:mono,fontSize:8,letterSpacing:1,padding:"4px 10px",
+                fontFamily:mono,fontSize:12,letterSpacing:1,padding:"4px 10px",
                 border:`1px solid ${C.line2}`,color:C.p3,
                 background:"transparent",cursor:"pointer"}}>
                 {showFull?"◉ HIDE KEY":"○ REVEAL KEY"}
@@ -2801,7 +2801,7 @@ function ApiKeysTab() {
             </div>
 
             {/* Warning */}
-            <div style={{fontFamily:mono,fontSize:8,color:C.amber,letterSpacing:0.5,lineHeight:1.6,
+            <div style={{fontFamily:mono,fontSize:12,color:C.amber,letterSpacing:0.5,lineHeight:1.6,
               padding:"8px 12px",background:C.amberDim,border:`1px solid ${C.amber}22`}}>
               ⚠ Keep your API key secret. Do not share it or commit it to version control.
               Anyone with this key can make governed requests on your behalf.
@@ -2810,16 +2810,16 @@ function ApiKeysTab() {
 
           {/* Rotate section */}
           <div style={{background:C.bg1, border:`1px solid ${C.line}`, padding:20, marginBottom:20}}>
-            <div style={{fontFamily:mono,fontSize:8,letterSpacing:2,color:C.p3,
+            <div style={{fontFamily:mono,fontSize:12,letterSpacing:2,color:C.p3,
               textTransform:"uppercase",marginBottom:8}}>
               REGENERATE KEY
             </div>
-            <div style={{fontFamily:mono,fontSize:9,color:C.p2,marginBottom:14,lineHeight:1.6}}>
+            <div style={{fontFamily:mono,fontSize:13,color:C.p2,marginBottom:14,lineHeight:1.6}}>
               Generating a new key immediately invalidates the previous one.
               All agents and integrations using the old key will need to be updated.
             </div>
             <button onClick={rotateKey} disabled={rotating} style={{
-              fontFamily:mono,fontSize:9,letterSpacing:1,padding:"8px 18px",
+              fontFamily:mono,fontSize:13,letterSpacing:1,padding:"8px 18px",
               border:`1px solid ${confirmRotate?C.red:C.amber}`,
               color:confirmRotate?C.red:C.amber,
               background:confirmRotate?C.redDim:C.amberDim,
@@ -2831,13 +2831,13 @@ function ApiKeysTab() {
 
           {/* Usage Example */}
           <div style={{background:C.bg1, border:`1px solid ${C.line}`, padding:20}}>
-            <div style={{fontFamily:mono,fontSize:8,letterSpacing:2,color:C.p3,
+            <div style={{fontFamily:mono,fontSize:12,letterSpacing:2,color:C.p3,
               textTransform:"uppercase",marginBottom:12}}>
               QUICK START
             </div>
-            <div style={{fontFamily:mono,fontSize:9,color:C.p3,marginBottom:8}}>Python (openclaw-governor-client)</div>
+            <div style={{fontFamily:mono,fontSize:13,color:C.p3,marginBottom:8}}>Python (openclaw-governor-client)</div>
             <pre style={{background:C.bg0,border:`1px solid ${C.line2}`,padding:14,
-              fontFamily:mono,fontSize:10,color:C.p1,overflow:"auto",marginBottom:14,lineHeight:1.6}}>
+              fontFamily:mono,fontSize:14,color:C.p1,overflow:"auto",marginBottom:14,lineHeight:1.6}}>
 {`pip install openclaw-governor-client
 
 from governor_client import GovernorClient
@@ -2846,9 +2846,9 @@ client = GovernorClient(
     api_key="${apiKey ? apiKey.slice(0,8)+"…" : "ocg_your_key_here"}"
 )`}
             </pre>
-            <div style={{fontFamily:mono,fontSize:9,color:C.p3,marginBottom:8}}>cURL</div>
+            <div style={{fontFamily:mono,fontSize:13,color:C.p3,marginBottom:8}}>cURL</div>
             <pre style={{background:C.bg0,border:`1px solid ${C.line2}`,padding:14,
-              fontFamily:mono,fontSize:10,color:C.p1,overflow:"auto",lineHeight:1.6}}>
+              fontFamily:mono,fontSize:14,color:C.p1,overflow:"auto",lineHeight:1.6}}>
 {`curl ${API_BASE || "https://openclaw-governor.fly.dev"}/evaluate \\
   -H "X-API-Key: ${apiKey ? apiKey.slice(0,8)+"…" : "ocg_your_key_here"}" \\
   -H "Content-Type: application/json" \\
@@ -2939,15 +2939,15 @@ function AdminUserManagementTab() {
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",
         marginBottom:18,paddingBottom:14,borderBottom:`1px solid ${C.line2}`}}>
         <div>
-          <div style={{fontFamily:mono,fontSize:13,fontWeight:700,color:C.p1,letterSpacing:1}}>
+          <div style={{fontFamily:mono,fontSize:16,fontWeight:700,color:C.p1,letterSpacing:1}}>
             User Management
           </div>
-          <div style={{fontFamily:mono,fontSize:9,color:C.p3,marginTop:3,letterSpacing:1}}>
+          <div style={{fontFamily:mono,fontSize:13,color:C.p3,marginTop:3,letterSpacing:1}}>
             {active.length} active · {inactive.length} revoked · superadmin access only
           </div>
         </div>
         <button onClick={()=>setSC(s=>!s)} style={{
-          fontFamily:mono,fontSize:9,letterSpacing:1,padding:"6px 14px",
+          fontFamily:mono,fontSize:13,letterSpacing:1,padding:"6px 14px",
           border:`1px solid ${C.accent}`,color:C.accent,background:C.accentDim,cursor:"pointer"}}>
           {showCreate?"✕ CANCEL":"+ ADD OPERATOR"}
         </button>
@@ -2957,12 +2957,12 @@ function AdminUserManagementTab() {
       {showCreate && (
         <div style={{padding:16,marginBottom:20,background:C.bg2,
           border:`1px solid ${C.accent}`,borderTop:`2px solid ${C.accent}`}}>
-          <div style={{fontFamily:mono,fontSize:9,color:C.accent,letterSpacing:2,marginBottom:14}}>
+          <div style={{fontFamily:mono,fontSize:13,color:C.accent,letterSpacing:2,marginBottom:14}}>
             NEW OPERATOR ACCOUNT
           </div>
           {createErr && (
             <div style={{padding:"6px 10px",marginBottom:10,background:C.redDim,
-              border:`1px solid ${C.red}`,fontFamily:mono,fontSize:9,color:C.red}}>
+              border:`1px solid ${C.red}`,fontFamily:mono,fontSize:13,color:C.red}}>
               ⚠ {createErr}
             </div>
           )}
@@ -2973,20 +2973,20 @@ function AdminUserManagementTab() {
               {label:"Password",  key:"password", type:"password", ph:"••••••••"},
             ].map(({label,key,type,ph})=>(
               <div key={key} style={{display:"flex",flexDirection:"column",gap:4}}>
-                <label style={{fontFamily:mono,fontSize:8,letterSpacing:2,color:C.p3,textTransform:"uppercase"}}>
+                <label style={{fontFamily:mono,fontSize:12,letterSpacing:2,color:C.p3,textTransform:"uppercase"}}>
                   {label}
                 </label>
                 <input type={type} value={form[key]} placeholder={ph}
                   onChange={e=>setForm(f=>({...f,[key]:e.target.value}))}
                   style={{background:C.bg0,border:`1px solid ${C.line2}`,color:C.p1,
-                    fontFamily:mono,fontSize:10,padding:"7px 10px",outline:"none",width:"100%",boxSizing:"border-box"}}/>
+                    fontFamily:mono,fontSize:14,padding:"7px 10px",outline:"none",width:"100%",boxSizing:"border-box"}}/>
               </div>
             ))}
             <div style={{display:"flex",flexDirection:"column",gap:4}}>
-              <label style={{fontFamily:mono,fontSize:8,letterSpacing:2,color:C.p3,textTransform:"uppercase"}}>Role</label>
+              <label style={{fontFamily:mono,fontSize:12,letterSpacing:2,color:C.p3,textTransform:"uppercase"}}>Role</label>
               <select value={form.role} onChange={e=>setForm(f=>({...f,role:e.target.value}))}
                 style={{background:C.bg0,border:`1px solid ${C.line2}`,color:C.p1,
-                  fontFamily:mono,fontSize:10,padding:"7px 8px",outline:"none"}}>
+                  fontFamily:mono,fontSize:14,padding:"7px 8px",outline:"none"}}>
                 <option value="operator">operator</option>
                 <option value="auditor">auditor</option>
                 <option value="admin">admin</option>
@@ -2995,7 +2995,7 @@ function AdminUserManagementTab() {
             </div>
           </div>
           <button onClick={create} disabled={creating} style={{
-            fontFamily:mono,fontSize:9,letterSpacing:1,padding:"7px 18px",
+            fontFamily:mono,fontSize:13,letterSpacing:1,padding:"7px 18px",
             border:`1px solid ${C.green}`,color:C.green,background:C.greenDim,
             cursor:creating?"not-allowed":"pointer",opacity:creating?0.5:1}}>
             {creating?"CREATING…":"✓ CREATE ACCOUNT"}
@@ -3005,11 +3005,11 @@ function AdminUserManagementTab() {
 
       {err && (
         <div style={{padding:"8px 12px",marginBottom:12,background:C.redDim,
-          border:`1px solid ${C.red}`,fontFamily:mono,fontSize:9,color:C.red}}>{err}</div>
+          border:`1px solid ${C.red}`,fontFamily:mono,fontSize:13,color:C.red}}>{err}</div>
       )}
 
       {loading ? (
-        <div style={{fontFamily:mono,fontSize:9,color:C.p3,textAlign:"center",padding:"28px 0"}}>
+        <div style={{fontFamily:mono,fontSize:13,color:C.p3,textAlign:"center",padding:"28px 0"}}>
           Loading users…
         </div>
       ) : (
@@ -3018,7 +3018,7 @@ function AdminUserManagementTab() {
           <div style={{display:"grid",gridTemplateColumns:"1fr 140px 90px 80px 110px 170px",
             gap:8,padding:"6px 12px",marginBottom:4,borderBottom:`1px solid ${C.line}`}}>
             {["OPERATOR","USERNAME","ROLE","STATUS","LAST LOGIN","ACTIONS"].map(h=>(
-              <div key={h} style={{fontFamily:mono,fontSize:8,color:C.p3,letterSpacing:1.5,textTransform:"uppercase"}}>{h}</div>
+              <div key={h} style={{fontFamily:mono,fontSize:12,color:C.p3,letterSpacing:1.5,textTransform:"uppercase"}}>{h}</div>
             ))}
           </div>
 
@@ -3026,35 +3026,35 @@ function AdminUserManagementTab() {
             <div key={u.id} style={{display:"grid",gridTemplateColumns:"1fr 140px 90px 80px 110px 170px",
               gap:8,alignItems:"center",padding:"10px 12px",borderBottom:`1px solid ${C.line}`}}>
               <div>
-                <div style={{fontFamily:mono,fontSize:11,fontWeight:600,color:C.p1}}>{u.name}</div>
+                <div style={{fontFamily:mono,fontSize:15,fontWeight:600,color:C.p1}}>{u.name}</div>
                 {u.api_key && (
-                  <div style={{fontFamily:mono,fontSize:7.5,color:C.p3,marginTop:2}}>
+                  <div style={{fontFamily:mono,fontSize:11,color:C.p3,marginTop:2}}>
                     key: {u.api_key.slice(0,22)}…
                   </div>
                 )}
               </div>
-              <div style={{fontFamily:mono,fontSize:9,color:C.p2}}>{u.username}</div>
+              <div style={{fontFamily:mono,fontSize:13,color:C.p2}}>{u.username}</div>
               <div>
-                <span style={{fontFamily:mono,fontSize:8,letterSpacing:1.5,
+                <span style={{fontFamily:mono,fontSize:12,letterSpacing:1.5,
                   padding:"2px 8px",border:`1px solid ${ROLE_C[u.role]||C.p3}`,
                   color:ROLE_C[u.role]||C.p3,textTransform:"uppercase"}}>
                   {u.role}
                 </span>
               </div>
               <div>
-                <span style={{fontFamily:mono,fontSize:8,letterSpacing:1.5,
+                <span style={{fontFamily:mono,fontSize:12,letterSpacing:1.5,
                   padding:"2px 8px",border:`1px solid ${C.green}`,color:C.green}}>ACTIVE</span>
               </div>
-              <div style={{fontFamily:mono,fontSize:8,color:C.p3}}>
+              <div style={{fontFamily:mono,fontSize:12,color:C.p3}}>
                 {u.last_login_at ? new Date(u.last_login_at).toLocaleString() : "—"}
                 {u.login_count > 0 && <span style={{color:C.p3,marginLeft:4}}>({u.login_count})</span>}
               </div>
               <div style={{display:"flex",gap:4}}>
                 <button onClick={()=>rotateKey(u.id)} style={{
-                  fontFamily:mono,fontSize:8,padding:"3px 8px",cursor:"pointer",
+                  fontFamily:mono,fontSize:12,padding:"3px 8px",cursor:"pointer",
                   border:`1px solid ${C.line2}`,color:C.p3,background:"transparent"}}>↻ KEY</button>
                 <button onClick={()=>revoke(u.id)} style={{
-                  fontFamily:mono,fontSize:8,padding:"3px 8px",cursor:"pointer",
+                  fontFamily:mono,fontSize:12,padding:"3px 8px",cursor:"pointer",
                   border:`1px solid ${pending===u.id?C.red:C.line2}`,
                   color:pending===u.id?C.red:C.p3,
                   background:pending===u.id?C.redDim:"transparent",transition:"all 0.15s"}}>
@@ -3066,26 +3066,26 @@ function AdminUserManagementTab() {
 
           {inactive.length>0&&(
             <>
-              <div style={{fontFamily:mono,fontSize:8,color:C.p3,letterSpacing:2,
+              <div style={{fontFamily:mono,fontSize:12,color:C.p3,letterSpacing:2,
                 textTransform:"uppercase",padding:"12px 12px 4px"}}>REVOKED ACCOUNTS</div>
               {inactive.map(u=>(
                 <div key={u.id} style={{display:"grid",gridTemplateColumns:"1fr 140px 90px 80px 110px 170px",
                   gap:8,alignItems:"center",padding:"10px 12px",borderBottom:`1px solid ${C.line}`,opacity:0.4}}>
-                  <div style={{fontFamily:mono,fontSize:11,color:C.p2}}>{u.name}</div>
-                  <div style={{fontFamily:mono,fontSize:9,color:C.p3}}>{u.username}</div>
+                  <div style={{fontFamily:mono,fontSize:15,color:C.p2}}>{u.name}</div>
+                  <div style={{fontFamily:mono,fontSize:13,color:C.p3}}>{u.username}</div>
                   <div>
-                    <span style={{fontFamily:mono,fontSize:8,letterSpacing:1.5,
+                    <span style={{fontFamily:mono,fontSize:12,letterSpacing:1.5,
                       padding:"2px 8px",border:`1px solid ${ROLE_C[u.role]||C.p3}`,
                       color:ROLE_C[u.role]||C.p3,textTransform:"uppercase"}}>{u.role}</span>
                   </div>
                   <div>
-                    <span style={{fontFamily:mono,fontSize:8,letterSpacing:1.5,
+                    <span style={{fontFamily:mono,fontSize:12,letterSpacing:1.5,
                       padding:"2px 8px",border:`1px solid ${C.red}`,color:C.red}}>REVOKED</span>
                   </div>
-                  <div style={{fontFamily:mono,fontSize:8,color:C.p3}}>—</div>
+                  <div style={{fontFamily:mono,fontSize:12,color:C.p3}}>—</div>
                   <div>
                     <button onClick={()=>restore(u.id)} style={{
-                      fontFamily:mono,fontSize:8,padding:"3px 8px",cursor:"pointer",
+                      fontFamily:mono,fontSize:12,padding:"3px 8px",cursor:"pointer",
                       border:`1px solid ${C.amber}`,color:C.amber,background:C.amberDim}}>↩ RESTORE</button>
                   </div>
                 </div>
@@ -3094,7 +3094,7 @@ function AdminUserManagementTab() {
           )}
 
           {users.length===0&&(
-            <div style={{fontFamily:mono,fontSize:9,color:C.p3,textAlign:"center",padding:"24px 0"}}>
+            <div style={{fontFamily:mono,fontSize:13,color:C.p3,textAlign:"center",padding:"24px 0"}}>
               No users yet. Create the first operator above.
             </div>
           )}
@@ -3104,7 +3104,7 @@ function AdminUserManagementTab() {
       {/* Login history toggle */}
       <div style={{marginTop:22,borderTop:`1px solid ${C.line2}`,paddingTop:16}}>
         <button onClick={toggleHistory} style={{
-          fontFamily:mono,fontSize:9,letterSpacing:1,padding:"6px 14px",
+          fontFamily:mono,fontSize:13,letterSpacing:1,padding:"6px 14px",
           border:`1px solid ${C.accent}`,color:C.accent,background:C.accentDim,cursor:"pointer"}}>
           {showHistory?"✕ HIDE LOGIN HISTORY":"◷ LOGIN HISTORY"}
         </button>
@@ -3112,34 +3112,34 @@ function AdminUserManagementTab() {
 
       {showHistory && (
         <div style={{marginTop:12}}>
-          <div style={{fontFamily:mono,fontSize:9,color:C.accent,letterSpacing:2,marginBottom:10,textTransform:"uppercase"}}>
+          <div style={{fontFamily:mono,fontSize:13,color:C.accent,letterSpacing:2,marginBottom:10,textTransform:"uppercase"}}>
             Recent Login History
           </div>
           {histLoading ? (
-            <div style={{fontFamily:mono,fontSize:9,color:C.p3,padding:"12px 0"}}>Loading…</div>
+            <div style={{fontFamily:mono,fontSize:13,color:C.p3,padding:"12px 0"}}>Loading…</div>
           ) : loginHistory.length===0 ? (
-            <div style={{fontFamily:mono,fontSize:9,color:C.p3,padding:"12px 0"}}>No login history yet.</div>
+            <div style={{fontFamily:mono,fontSize:13,color:C.p3,padding:"12px 0"}}>No login history yet.</div>
           ) : (
             <>
               <div style={{display:"grid",gridTemplateColumns:"140px 100px 120px 1fr 90px",
                 gap:8,padding:"6px 12px",marginBottom:4,borderBottom:`1px solid ${C.line}`}}>
                 {["TIMESTAMP","USERNAME","IP ADDRESS","USER AGENT","METHOD"].map(h=>(
-                  <div key={h} style={{fontFamily:mono,fontSize:8,color:C.p3,letterSpacing:1.5,textTransform:"uppercase"}}>{h}</div>
+                  <div key={h} style={{fontFamily:mono,fontSize:12,color:C.p3,letterSpacing:1.5,textTransform:"uppercase"}}>{h}</div>
                 ))}
               </div>
               {loginHistory.map(h=>(
                 <div key={h.id} style={{display:"grid",gridTemplateColumns:"140px 100px 120px 1fr 90px",
                   gap:8,alignItems:"center",padding:"8px 12px",borderBottom:`1px solid ${C.line}`}}>
-                  <div style={{fontFamily:mono,fontSize:9,color:C.p2}}>
+                  <div style={{fontFamily:mono,fontSize:13,color:C.p2}}>
                     {new Date(h.created_at).toLocaleString()}
                   </div>
-                  <div style={{fontFamily:mono,fontSize:9,color:C.p1,fontWeight:600}}>{h.username}</div>
-                  <div style={{fontFamily:mono,fontSize:9,color:C.p3}}>{h.ip_address||"—"}</div>
-                  <div style={{fontFamily:mono,fontSize:8,color:C.p3,overflow:"hidden",
+                  <div style={{fontFamily:mono,fontSize:13,color:C.p1,fontWeight:600}}>{h.username}</div>
+                  <div style={{fontFamily:mono,fontSize:13,color:C.p3}}>{h.ip_address||"—"}</div>
+                  <div style={{fontFamily:mono,fontSize:12,color:C.p3,overflow:"hidden",
                     textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                     {h.user_agent||"—"}
                   </div>
-                  <div><span style={{fontFamily:mono,fontSize:8,letterSpacing:1,
+                  <div><span style={{fontFamily:mono,fontSize:12,letterSpacing:1,
                     padding:"2px 6px",border:`1px solid ${C.line2}`,color:C.p3}}>{h.method}</span></div>
                 </div>
               ))}
@@ -3193,7 +3193,7 @@ function SurgeTab({ receipts: localReceipts, stakedPolicies: localStaked, setSta
   const [topUpId, setTopUpId]     = useState("");
   const [topUpAmt, setTopUpAmt]   = useState("100");
 
-  const canEdit = userRole==="admin" || userRole==="operator";
+  const canEdit = userRole==="superadmin" || userRole==="admin" || userRole==="operator";
 
   const load = async () => {
     if (!API_BASE) { setLoading(false); return; }
@@ -3266,7 +3266,7 @@ function SurgeTab({ receipts: localReceipts, stakedPolicies: localStaked, setSta
   return (
     <div style={{padding:20}}>
       {err && <div style={{background:"rgba(239,68,68,0.15)", border:`1px solid ${C.red}`, color:C.red,
-        padding:"8px 12px", fontFamily:mono, fontSize:10, marginBottom:16}}>{err}</div>}
+        padding:"8px 12px", fontFamily:mono, fontSize:14, marginBottom:16}}>{err}</div>}
 
       {/* Stats — 6 tiles */}
       <div style={{display:"grid", gridTemplateColumns:"repeat(6, 1fr)", gap:1, background:C.line, marginBottom:20}}>
@@ -3280,10 +3280,10 @@ function SurgeTab({ receipts: localReceipts, stakedPolicies: localStaked, setSta
             color:surgeStatus?.fee_gating_enabled ? C.green : C.p3 },
         ].map(({label,val,color,sub}) => (
           <div key={label} style={{background:C.bg1, padding:"14px 18px"}}>
-            <div style={{fontFamily:mono, fontSize:9, letterSpacing:1.5, color:C.p3,
+            <div style={{fontFamily:mono, fontSize:13, letterSpacing:1.5, color:C.p3,
               textTransform:"uppercase", marginBottom:5}}>{label}</div>
-            <div style={{fontFamily:mono, fontSize:24, fontWeight:600, color, lineHeight:1}}>{val}</div>
-            {sub && <div style={{fontFamily:mono, fontSize:9, color:C.p3, marginTop:4}}>{sub}</div>}
+            <div style={{fontFamily:mono, fontSize:28, fontWeight:600, color, lineHeight:1}}>{val}</div>
+            {sub && <div style={{fontFamily:mono, fontSize:13, color:C.p3, marginTop:4}}>{sub}</div>}
           </div>
         ))}
       </div>
@@ -3295,9 +3295,9 @@ function SurgeTab({ receipts: localReceipts, stakedPolicies: localStaked, setSta
           <div style={{display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:8, marginTop:8}}>
             {Object.entries(feeTiers).map(([tier,fee]) => (
               <div key={tier} style={{padding:"8px 10px", background:C.bg0, border:`1px solid ${C.line}`, textAlign:"center"}}>
-                <div style={{fontFamily:mono, fontSize:9, color:C.p3, textTransform:"uppercase", letterSpacing:1}}>{tier}</div>
-                <div style={{fontFamily:mono, fontSize:16, fontWeight:600, color:surgeColor, marginTop:4}}>{fee}</div>
-                <div style={{fontFamily:mono, fontSize:8, color:C.p3}}>$SURGE</div>
+                <div style={{fontFamily:mono, fontSize:13, color:C.p3, textTransform:"uppercase", letterSpacing:1}}>{tier}</div>
+                <div style={{fontFamily:mono, fontSize:19, fontWeight:600, color:surgeColor, marginTop:4}}>{fee}</div>
+                <div style={{fontFamily:mono, fontSize:12, color:C.p3}}>$SURGE</div>
               </div>
             ))}
           </div>
@@ -3308,7 +3308,7 @@ function SurgeTab({ receipts: localReceipts, stakedPolicies: localStaked, setSta
       <div style={{background:C.bg1, padding:16, marginBottom:20, border:`1px solid ${C.line}`}}>
         <PanelHd title="Virtual $SURGE Wallets" tag={`${wallets.length}`} tagColor="#06b6d4"/>
         {wallets.length === 0 ? (
-          <div style={{fontFamily:mono, fontSize:10, color:C.p3, textAlign:"center", padding:"20px 0"}}>
+          <div style={{fontFamily:mono, fontSize:14, color:C.p3, textAlign:"center", padding:"20px 0"}}>
             No wallets yet. Wallets are auto-provisioned on first evaluation, or create one manually.
           </div>
         ) : (
@@ -3318,12 +3318,12 @@ function SurgeTab({ receipts: localReceipts, stakedPolicies: localStaked, setSta
               const balColor = bal <= 0 ? C.red : bal < 10 ? C.amber : C.green;
               return (
                 <div key={w.wallet_id} style={{display:"grid", gridTemplateColumns:"160px 100px 100px 100px 1fr",
-                  gap:8, alignItems:"center", padding:"6px 0", borderBottom:`1px solid ${C.line}`, fontFamily:mono, fontSize:10}}>
+                  gap:8, alignItems:"center", padding:"6px 0", borderBottom:`1px solid ${C.line}`, fontFamily:mono, fontSize:14}}>
                   <span style={{color:surgeColor, fontWeight:600}}>{w.wallet_id}</span>
                   <span style={{color:balColor, fontWeight:600}}>{parseFloat(w.balance).toFixed(4)} $SURGE</span>
                   <span style={{color:C.p3}}>deposited: {parseFloat(w.total_deposited).toFixed(2)}</span>
                   <span style={{color:C.p3}}>fees: {parseFloat(w.total_fees_paid).toFixed(4)}</span>
-                  <span style={{color:C.p3, fontSize:9}}>{w.label || "—"}</span>
+                  <span style={{color:C.p3, fontSize:13}}>{w.label || "—"}</span>
                 </div>
               );
             })}
@@ -3335,7 +3335,7 @@ function SurgeTab({ receipts: localReceipts, stakedPolicies: localStaked, setSta
             <Fld label="Wallet ID">
               <select value={topUpId} onChange={e=>setTopUpId(e.target.value)}
                 style={{width:"100%", background:C.bg0, color:C.p1, border:`1px solid ${C.line}`,
-                  padding:"4px 8px", fontFamily:mono, fontSize:10}}>
+                  padding:"4px 8px", fontFamily:mono, fontSize:14}}>
                 <option value="">Select wallet…</option>
                 {wallets.map(w => <option key={w.wallet_id} value={w.wallet_id}>{w.wallet_id}</option>)}
               </select>
@@ -3343,7 +3343,7 @@ function SurgeTab({ receipts: localReceipts, stakedPolicies: localStaked, setSta
             <Fld label="$SURGE">
               <TextInput value={topUpAmt} onChange={e=>setTopUpAmt(e.target.value)} placeholder="100"/>
             </Fld>
-            <Btn onClick={doTopUp} variant="violet" style={{fontSize:9, padding:"6px 14px"}}>TOP UP</Btn>
+            <Btn onClick={doTopUp} variant="violet" style={{fontSize:13, padding:"6px 14px"}}>TOP UP</Btn>
           </div>
         )}
       </div>
@@ -3368,18 +3368,18 @@ function SurgeTab({ receipts: localReceipts, stakedPolicies: localStaked, setSta
             <Fld label="Wallet">
               <TextInput value={spWallet} onChange={e=>setSpWallet(e.target.value)} placeholder="0x…"/>
             </Fld>
-            <Btn onClick={doStake} variant="violet" style={{fontSize:9, padding:"6px 14px"}}>STAKE</Btn>
+            <Btn onClick={doStake} variant="violet" style={{fontSize:13, padding:"6px 14px"}}>STAKE</Btn>
           </div>
           {staked.length > 0 && (
             <div style={{marginTop:12}}>
               {staked.map((p,i) => (
                 <div key={p.policy_id||i} style={{display:"grid", gridTemplateColumns:"150px 80px 1fr auto",
                   gap:8, alignItems:"center", padding:"6px 0", borderBottom:`1px solid ${C.line}`}}>
-                  <span style={{fontFamily:mono, fontSize:10, color:surgeColor, fontWeight:600}}>{p.policy_id}</span>
-                  <span style={{fontFamily:mono, fontSize:10, color:C.p1}}>{p.staked_surge} $SURGE</span>
-                  <span style={{fontFamily:mono, fontSize:9, color:C.p3}}>{p.staker_wallet}</span>
+                  <span style={{fontFamily:mono, fontSize:14, color:surgeColor, fontWeight:600}}>{p.policy_id}</span>
+                  <span style={{fontFamily:mono, fontSize:14, color:C.p1}}>{p.staked_surge} $SURGE</span>
+                  <span style={{fontFamily:mono, fontSize:13, color:C.p3}}>{p.staker_wallet}</span>
                   <Btn onClick={()=>doUnstake(p.policy_id)} variant="red"
-                    style={{fontSize:8, padding:"3px 8px"}}>UNSTAKE</Btn>
+                    style={{fontSize:12, padding:"3px 8px"}}>UNSTAKE</Btn>
                 </div>
               ))}
             </div>
@@ -3391,14 +3391,14 @@ function SurgeTab({ receipts: localReceipts, stakedPolicies: localStaked, setSta
       <div style={{background:C.bg1, padding:16, border:`1px solid ${C.line}`}}>
         <div style={{display:"flex", justifyContent:"space-between", alignItems:"center"}}>
           <PanelHd title="Governance Receipts (DB-Persisted)" tag={`${receipts.length}`} tagColor={surgeColor}/>
-          <Btn onClick={load} variant="ghost" style={{fontSize:8, padding:"3px 8px"}}>↻ REFRESH</Btn>
+          <Btn onClick={load} variant="ghost" style={{fontSize:12, padding:"3px 8px"}}>↻ REFRESH</Btn>
         </div>
         {loading ? (
-          <div style={{fontFamily:mono, fontSize:10, color:C.p3, textAlign:"center", padding:"20px 0"}}>
+          <div style={{fontFamily:mono, fontSize:14, color:C.p3, textAlign:"center", padding:"20px 0"}}>
             Loading…
           </div>
         ) : receipts.length === 0 ? (
-          <div style={{fontFamily:mono, fontSize:10, color:C.p3, textAlign:"center", padding:"20px 0"}}>
+          <div style={{fontFamily:mono, fontSize:14, color:C.p3, textAlign:"center", padding:"20px 0"}}>
             No receipts yet. Every action evaluation generates a signed governance receipt.
           </div>
         ) : (
@@ -3408,16 +3408,16 @@ function SurgeTab({ receipts: localReceipts, stakedPolicies: localStaked, setSta
               return (
                 <div key={r.receipt_id} style={{padding:"8px 0", borderBottom:`1px solid ${C.line}`}}>
                   <div style={{display:"grid", gridTemplateColumns:"180px 120px 80px 60px 80px 1fr",
-                    gap:8, alignItems:"center", fontFamily:mono, fontSize:10}}>
+                    gap:8, alignItems:"center", fontFamily:mono, fontSize:14}}>
                     <span style={{color:surgeColor, fontWeight:600}}>{r.receipt_id}</span>
                     <span style={{color:C.p1}}>{r.tool}</span>
                     <span style={{padding:"2px 6px", border:`1px solid ${dc}`, color:dc,
-                      fontSize:8, letterSpacing:1, textTransform:"uppercase", textAlign:"center"}}>{r.decision}</span>
+                      fontSize:12, letterSpacing:1, textTransform:"uppercase", textAlign:"center"}}>{r.decision}</span>
                     <span style={{color:riskColor(r.risk_score), fontWeight:600}}>{r.risk_score}</span>
-                    <span style={{color:C.p3, fontSize:9}}>{r.governance_fee_surge || "—"} $SURGE</span>
-                    <span style={{color:C.p3, fontSize:8}}>{r.agent_id || "—"}</span>
+                    <span style={{color:C.p3, fontSize:13}}>{r.governance_fee_surge || "—"} $SURGE</span>
+                    <span style={{color:C.p3, fontSize:12}}>{r.agent_id || "—"}</span>
                   </div>
-                  <div style={{fontFamily:mono, fontSize:8, color:C.p3, marginTop:3,
+                  <div style={{fontFamily:mono, fontSize:12, color:C.p3, marginTop:3,
                     wordBreak:"break-all"}}>SHA-256: {r.digest?.slice(0,48) || "—"}…</div>
                 </div>
               );
@@ -3669,7 +3669,7 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
 
   return (
     <div style={{background:C.bg0, color:C.p1, fontFamily:sans,
-      minHeight:"100vh", display:"flex", fontSize:13}}>
+      minHeight:"100vh", display:"flex", fontSize:16}}>
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;700&family=DM+Sans:wght@300;400;500;700&display=swap');
@@ -3695,13 +3695,13 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
           minHeight:52}} onClick={()=>setSC(s=>!s)}>
           <div style={{width:28, height:28, border:`1.5px solid ${C.accent}`, flexShrink:0,
             display:"flex", alignItems:"center", justifyContent:"center",
-            fontFamily:mono, fontSize:8, color:C.accent, letterSpacing:0.5, position:"relative"}}>
+            fontFamily:mono, fontSize:12, color:C.accent, letterSpacing:0.5, position:"relative"}}>
             OCG
             <div style={{position:"absolute", inset:3, border:`1px solid ${C.accentDim}`}}/>
           </div>
           {!sidebarCollapsed && <div>
-            <div style={{fontFamily:mono, fontSize:11, fontWeight:700, color:C.p1, letterSpacing:1.5}}>GOVERNOR</div>
-            <div style={{fontFamily:mono, fontSize:7.5, color:C.muted, letterSpacing:1}}>v0.3.0 · SURGE</div>
+            <div style={{fontFamily:mono, fontSize:15, fontWeight:700, color:C.p1, letterSpacing:1.5}}>GOVERNOR</div>
+            <div style={{fontFamily:mono, fontSize:11, color:C.muted, letterSpacing:1}}>v0.3.0 · SURGE</div>
           </div>}
         </div>
 
@@ -3719,11 +3719,11 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
                   background:active?C.accentDim:"transparent",
                   borderLeft:active?`3px solid ${C.accent}`:"3px solid transparent",
                   color:active?C.accent:C.p3,
-                  fontFamily:mono, fontSize:10, fontWeight:active?700:400,
+                  fontFamily:mono, fontSize:14, fontWeight:active?700:400,
                   letterSpacing:1, textTransform:"uppercase",
                   transition:"all 0.12s",
                 }}>
-                <span style={{fontSize:13, width:18, textAlign:"center", flexShrink:0}}>{t.icon}</span>
+                <span style={{fontSize:16, width:18, textAlign:"center", flexShrink:0}}>{t.icon}</span>
                 {!sidebarCollapsed && <span>{t.label}</span>}
               </button>
             );
@@ -3735,27 +3735,27 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
           <div style={{borderTop:`1px solid ${C.line}`, padding:12, flexShrink:0}}>
             {/* Kill switch */}
             <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8}}>
-              <div style={{fontFamily:mono, fontSize:8, color:C.muted, letterSpacing:1, textTransform:"uppercase"}}>
+              <div style={{fontFamily:mono, fontSize:12, color:C.muted, letterSpacing:1, textTransform:"uppercase"}}>
                 KILL SWITCH
               </div>
-              <div style={{fontFamily:mono, fontSize:10, fontWeight:700, color:killSwitch?C.red:C.green}}>
+              <div style={{fontFamily:mono, fontSize:14, fontWeight:700, color:killSwitch?C.red:C.green}}>
                 {killSwitch?"ON":"OFF"}
               </div>
             </div>
             {(userRole==="admin"||userRole==="operator") && (
               <div style={{display:"flex", gap:3, marginBottom:10}}>
                 <Btn onClick={()=>handleKS(true)} variant="red" disabled={killSwitch}
-                  style={{fontSize:7.5, padding:"3px 8px", flex:1}}>HALT</Btn>
+                  style={{fontSize:11, padding:"3px 8px", flex:1}}>HALT</Btn>
                 <Btn onClick={handleKSResume} disabled={!killSwitch}
-                  style={{fontSize:7.5, padding:"3px 8px", flex:1}}>RESUME</Btn>
+                  style={{fontSize:11, padding:"3px 8px", flex:1}}>RESUME</Btn>
               </div>
             )}
 
             {/* Auto KS */}
             <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8}}>
-              <div style={{fontFamily:mono, fontSize:8, color:C.muted, letterSpacing:1}}>AUTO-KS</div>
+              <div style={{fontFamily:mono, fontSize:12, color:C.muted, letterSpacing:1}}>AUTO-KS</div>
               <button onClick={()=>setAutoKs(v=>!v)} style={{
-                fontFamily:mono, fontSize:7.5, letterSpacing:1, padding:"2px 8px",
+                fontFamily:mono, fontSize:11, letterSpacing:1, padding:"2px 8px",
                 border:`1px solid ${autoKsEnabled?C.amber:C.line2}`,
                 color:autoKsEnabled?C.amber:C.p3,
                 background:autoKsEnabled?"rgba(245,158,11,0.08)":"transparent",
@@ -3767,9 +3767,9 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
             {/* Degraded */}
             {userRole==="admin" && (
               <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10}}>
-                <div style={{fontFamily:mono, fontSize:8, color:C.muted, letterSpacing:1}}>DEGRADED</div>
+                <div style={{fontFamily:mono, fontSize:12, color:C.muted, letterSpacing:1}}>DEGRADED</div>
                 <button onClick={()=>handleDegraded(!degraded)} style={{
-                  fontFamily:mono, fontSize:7.5, letterSpacing:1, padding:"2px 8px",
+                  fontFamily:mono, fontSize:11, letterSpacing:1, padding:"2px 8px",
                   border:`1px solid ${degraded?C.red:C.line2}`,
                   color:degraded?C.red:C.p3,
                   background:degraded?C.redDim:"transparent",
@@ -3782,7 +3782,7 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
             {/* Avg risk bar */}
             <div style={{marginBottom:8}}>
               <div style={{display:"flex", justifyContent:"space-between",
-                fontFamily:mono, fontSize:8, color:C.muted, marginBottom:3}}>
+                fontFamily:mono, fontSize:12, color:C.muted, marginBottom:3}}>
                 <span>AVG RISK</span>
                 <span style={{color:riskColor(avgRisk)}}>{Math.round(avgRisk)}/100</span>
               </div>
@@ -3802,15 +3802,15 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
           {!sidebarCollapsed && (
             <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:6}}>
               <div>
-                <div style={{fontFamily:mono, fontSize:9, color:C.p2}}>{userName}</div>
-                <span style={{fontFamily:mono, fontSize:8, letterSpacing:1.5,
+                <div style={{fontFamily:mono, fontSize:13, color:C.p2}}>{userName}</div>
+                <span style={{fontFamily:mono, fontSize:12, letterSpacing:1.5,
                   padding:"2px 6px", border:`1px solid ${
                     userRole==="admin"?C.accent:userRole==="operator"?C.amber:C.p3}`,
                   color:userRole==="admin"?C.accent:userRole==="operator"?C.amber:C.p3,
                   textTransform:"uppercase"}}>{userRole}</span>
               </div>
               <button onClick={onLogout} style={{
-                fontFamily:mono, fontSize:8, letterSpacing:1, padding:"3px 8px",
+                fontFamily:mono, fontSize:12, letterSpacing:1, padding:"3px 8px",
                 border:`1px solid ${C.line2}`, color:C.p3,
                 background:"transparent", cursor:"pointer"}}>
                 →
@@ -3819,7 +3819,7 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
           )}
           {sidebarCollapsed && (
             <button onClick={onLogout} title="Logout" style={{
-              width:"100%", fontFamily:mono, fontSize:10, color:C.p3,
+              width:"100%", fontFamily:mono, fontSize:14, color:C.p3,
               background:"transparent", border:"none", cursor:"pointer"}}>→</button>
           )}
         </div>
@@ -3833,7 +3833,7 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
           padding:"0 20px", height:44, background:C.bg1,
           borderBottom:`1px solid ${C.line}`, flexShrink:0, zIndex:50}}>
           <div style={{display:"flex", alignItems:"center", gap:10}}>
-            <div style={{display:"flex", alignItems:"center", gap:5, fontFamily:mono, fontSize:9,
+            <div style={{display:"flex", alignItems:"center", gap:5, fontFamily:mono, fontSize:13,
               color:C.muted, padding:"3px 8px", border:`1px solid ${C.line2}`, letterSpacing:1}}>
               <div style={{width:5, height:5, borderRadius:"50%",
                 background:killSwitch?C.red:degraded?C.red:C.green,
@@ -3841,11 +3841,11 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
                 animation:"blink 2.2s infinite"}}/>
               {killSwitch?"KILL ACTIVE":degraded?"DEGRADED":"OPERATIONAL"}
             </div>
-            <div style={{fontFamily:mono, fontSize:9, color:C.muted, letterSpacing:0.5}}>{clock}</div>
+            <div style={{fontFamily:mono, fontSize:13, color:C.muted, letterSpacing:0.5}}>{clock}</div>
           </div>
           <div style={{display:"flex", alignItems:"center", gap:10}}>
-            <span style={{fontFamily:mono, fontSize:8, color:C.muted}}>⏱ {fmtUptime(uptime)}</span>
-            <span style={{fontFamily:mono, fontSize:8, color:C.p3, letterSpacing:1}}>
+            <span style={{fontFamily:mono, fontSize:12, color:C.muted}}>⏱ {fmtUptime(uptime)}</span>
+            <span style={{fontFamily:mono, fontSize:12, color:C.p3, letterSpacing:1}}>
               SOVEREIGN AI LAB · SURGE × OPENCLAW
             </span>
           </div>
