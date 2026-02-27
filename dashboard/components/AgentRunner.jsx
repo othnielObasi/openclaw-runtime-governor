@@ -1,12 +1,15 @@
 "use client";
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 
 // ═══════════════════════════════════════════════════════════
-// AGENT RUNNER — Live DeFi Research Agent (browser-based)
+// AGENT RUNNER — Live DeFi Research Agent + SDK Showcase
 // ═══════════════════════════════════════════════════════════
 // Runs the same 5-phase DeFi agent as demo_agent.py but entirely
 // from the browser. Each tool call hits the real Governor /evaluate
 // endpoint; results appear in Traces, SURGE, and Audit tabs.
+//
+// Also demonstrates how developers integrate OpenClaw's Python SDK
+// and TypeScript SDK into their own agents — real code, not mock.
 // ═══════════════════════════════════════════════════════════
 
 // --- Design tokens (mirror GovernorDashboard) ---
@@ -100,6 +103,208 @@ const PHASES = [
 const TOTAL_TOOLS = PHASES.reduce((s, p) => s + p.tools.length, 0);
 
 // ═══════════════════════════════════════════════════════════
+// SDK CODE GENERATORS — produce equivalent SDK snippets
+// ═══════════════════════════════════════════════════════════
+function pythonSnippet(tool, args, context) {
+  const argsStr = JSON.stringify(args, null, 2).replace(/"/g, '"').replace(/\n/g, '\n  ');
+  const ctxStr = context ? `\n  context=${JSON.stringify(context, null, 2).replace(/"/g, '"').replace(/\n/g, '\n  ')},` : '';
+  return `from openclaw_governor import evaluate_action, governed_call
+
+# Evaluate before executing
+decision = evaluate_action(
+  tool="${tool}",
+  args=${argsStr},${ctxStr}
+)
+
+if decision["decision"] == "allow":
+    result = governed_call("${tool}", ${argsStr})
+    print(f"✅ Allowed — risk: {decision['risk_score']}")
+elif decision["decision"] == "review":
+    print(f"⚠️ Needs review — {decision['explanation']}")
+else:
+    print(f"🚫 Blocked — {decision['explanation']}")`;
+}
+
+function tsSnippet(tool, args, context) {
+  const argsStr = JSON.stringify(args, null, 2);
+  const ctxStr = context ? `,\n  context: ${JSON.stringify(context, null, 2)}` : '';
+  return `import { GovernorClient } from "@openclaw/governor-client";
+
+const gov = new GovernorClient({
+  baseUrl: "https://openclaw-governor.fly.dev",
+  apiKey:  process.env.GOVERNOR_API_KEY,
+});
+
+const decision = await gov.evaluate("${tool}", ${argsStr}${ctxStr});
+
+switch (decision.decision) {
+  case "allow":
+    console.log("✅ Allowed — risk:", decision.risk_score);
+    break;
+  case "review":
+    console.log("⚠️ Needs review:", decision.explanation);
+    break;
+  case "block":
+    console.log("🚫 Blocked:", decision.explanation);
+    break;
+}`;
+}
+
+function traceSnippet() {
+  return `# Python — ingest agent trace spans
+from openclaw_governor import ingest_spans
+
+spans = [
+    {
+        "trace_id":  "trace-defi-abc123",
+        "span_id":   "span-001",
+        "kind":      "agent",
+        "name":      "DeFi Research Agent",
+        "status":    "ok",
+        "start_time": "2026-02-27T12:00:00Z",
+        "end_time":   "2026-02-27T12:01:30Z",
+        "agent_id":   "defi-research-agent-01",
+        "session_id": "session-xyz",
+        "attributes": {
+            "agent.type":  "defi-research",
+            "agent.source": "python-sdk",
+        },
+    }
+]
+
+result = ingest_spans(spans)
+print(f"Ingested {result['accepted']} spans")`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// SDK WALKTHROUGH STEPS
+// ═══════════════════════════════════════════════════════════
+const WALKTHROUGH = [
+  {
+    step: 1,
+    title: "Install the SDK",
+    desc: "Add the OpenClaw Governor client to your project.",
+    python: `pip install openclaw-governor-client`,
+    ts: `npm install @openclaw/governor-client`,
+  },
+  {
+    step: 2,
+    title: "Configure Credentials",
+    desc: "Set your Governor URL and API key.",
+    python: `import os
+os.environ["GOVERNOR_URL"]     = "https://openclaw-governor.fly.dev"
+os.environ["GOVERNOR_API_KEY"] = "ocg_your_key_here"`,
+    ts: `import { GovernorClient } from "@openclaw/governor-client";
+
+const gov = new GovernorClient({
+  baseUrl: "https://openclaw-governor.fly.dev",
+  apiKey:  "ocg_your_key_here",
+});`,
+  },
+  {
+    step: 3,
+    title: "Evaluate Before Executing",
+    desc: "Every tool call goes through the Governor. If blocked, the tool never runs.",
+    python: `from openclaw_governor import evaluate_action
+
+decision = evaluate_action(
+    tool="shell",
+    args={"command": "ls -la"},
+    context={"agent_id": "my-agent", "session_id": "sess-001"}
+)
+
+print(decision["decision"])   # "allow" | "block" | "review"
+print(decision["risk_score"]) # 0-100
+print(decision["explanation"])`,
+    ts: `const decision = await gov.evaluate("shell", {
+  command: "ls -la",
+}, {
+  agent_id: "my-agent",
+  session_id: "sess-001",
+});
+
+console.log(decision.decision);   // "allow" | "block" | "review"
+console.log(decision.risk_score); // 0-100`,
+  },
+  {
+    step: 4,
+    title: "Use governed_call() for Auto-Gating",
+    desc: "One-liner: evaluates + executes only if allowed. Raises on block.",
+    python: `from openclaw_governor import governed_call
+
+# Automatically gates execution behind the Governor
+result = governed_call(
+    "fetch_price",
+    {"token": "ETH", "exchange": "uniswap-v3"}
+)`,
+    ts: `// TypeScript equivalent — evaluate + branch
+const result = await gov.evaluate("fetch_price", {
+  token: "ETH",
+  exchange: "uniswap-v3",
+});
+
+if (result.decision !== "allow") {
+  throw new Error(\`Blocked: \${result.explanation}\`);
+}
+// proceed with execution...`,
+  },
+  {
+    step: 5,
+    title: "Ingest Trace Spans",
+    desc: "Send agent execution traces for observability — viewable in the Traces tab.",
+    python: `from openclaw_governor import ingest_spans
+
+ingest_spans([{
+    "trace_id": "trace-001",
+    "span_id": "span-root",
+    "kind": "agent",
+    "name": "My Agent Session",
+    "status": "ok",
+    "start_time": "2026-02-27T12:00:00Z",
+    "end_time":   "2026-02-27T12:05:00Z",
+    "agent_id": "my-agent",
+}])`,
+    ts: `await gov.ingestSpans([{
+  trace_id: "trace-001",
+  span_id: "span-root",
+  kind: "agent",
+  name: "My Agent Session",
+  status: "ok",
+  start_time: "2026-02-27T12:00:00Z",
+  end_time:   "2026-02-27T12:05:00Z",
+  agent_id: "my-agent",
+}]);`,
+  },
+  {
+    step: 6,
+    title: "Query & Manage Policies",
+    desc: "List, create, and manage governance policies via the API.",
+    python: `import httpx
+
+# List all policies
+resp = httpx.get(
+    "https://openclaw-governor.fly.dev/policies/",
+    headers={"Authorization": "Bearer <token>"}
+)
+policies = resp.json()
+
+# Each policy has: id, name, tool, action, risk, condition
+for p in policies:
+    print(f"{p['name']}: {p['tool']} → {p['action']}")`,
+    ts: `// Fetch policies via REST
+const resp = await fetch(
+  "https://openclaw-governor.fly.dev/policies/",
+  { headers: { Authorization: "Bearer <token>" } }
+);
+const policies = await resp.json();
+
+policies.forEach(p =>
+  console.log(\`\${p.name}: \${p.tool} → \${p.action}\`)
+);`,
+  },
+];
+
+// ═══════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════
 export default function AgentRunner() {
@@ -122,6 +327,22 @@ export default function AgentRunner() {
   const [sessionId] = useState(() => `demo-${hexId(6)}`);
   const agentId     = "defi-research-agent-01";
   const spanCounter = useRef(0);
+
+  // SDK showcase state
+  const [sdkLang, setSdkLang]     = useState("python"); // "python" | "ts"
+  const [showWalkthrough, setShowWalkthrough] = useState(false);
+  const [walkthroughStep, setWalkthroughStep] = useState(0);
+
+  // Current SDK snippet (updates as tools are evaluated)
+  const currentSnippet = useMemo(() => {
+    if (results.length === 0) return null;
+    const last = results[results.length - 1];
+    const toolDef = PHASES.flatMap(p => p.tools).find(t => t.tool === last.tool);
+    if (!toolDef) return null;
+    return sdkLang === "python"
+      ? pythonSnippet(last.tool, toolDef.args, { agent_id: agentId, session_id: sessionId })
+      : tsSnippet(last.tool, toolDef.args, { agent_id: agentId, session_id: sessionId });
+  }, [results, sdkLang, sessionId]);
 
   // Timer
   useEffect(() => {
@@ -316,43 +537,65 @@ export default function AgentRunner() {
   };
 
   // ═══════════════════════════════════════════════════════════
+  // CODE BLOCK HELPER
+  // ═══════════════════════════════════════════════════════════
+  const CodeBlock = ({ code, lang }) => (
+    <div style={{ position: "relative" }}>
+      <div style={{ position: "absolute", top: 6, right: 8, fontSize: 9, letterSpacing: 1,
+        color: C.p3, textTransform: "uppercase" }}>{lang}</div>
+      <pre style={{
+        background: C.bg0, border: `1px solid ${C.line}`, padding: "10px 12px",
+        margin: 0, overflow: "auto", maxHeight: 280,
+        fontFamily: mono, fontSize: 10.5, lineHeight: 1.5, color: C.p2,
+        whiteSpace: "pre-wrap", wordBreak: "break-all",
+      }}>{code}</pre>
+    </div>
+  );
+
+  // ═══════════════════════════════════════════════════════════
   // RENDER
   // ═══════════════════════════════════════════════════════════
   return (
     <div style={{ padding: 20, fontFamily: mono, color: C.p1 }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+      {/* ── Header ─────────────────────────────────────── */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
         <div>
-          <div style={{ fontSize:14, letterSpacing: 2, textTransform: "uppercase", color: C.p3, marginBottom: 4 }}>
-            DeFi Research Agent — Live Governance Demo
+          <div style={{ fontSize: 13, letterSpacing: 2, textTransform: "uppercase", color: C.p3, marginBottom: 4 }}>
+            DeFi Research Agent — Live Governance + SDK Demo
           </div>
-          <div style={{ fontSize:12, color: C.p3 }}>
-            {TOTAL_TOOLS} tool calls · 5 phases · real API evaluations · trace ingestion
+          <div style={{ fontSize: 11, color: C.p3 }}>
+            {TOTAL_TOOLS} real API calls · 5 phases · shows equivalent Python &amp; TypeScript SDK code
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {/* SDK language toggle */}
+          <div style={{ display: "flex", border: `1px solid ${C.line2}`, marginRight: 8 }}>
+            {["python", "ts"].map(lang => (
+              <button key={lang} onClick={() => setSdkLang(lang)} style={{
+                fontFamily: mono, fontSize: 10, letterSpacing: 1, padding: "4px 10px",
+                background: sdkLang === lang ? C.violetDim : "transparent",
+                border: "none", borderRight: lang === "python" ? `1px solid ${C.line2}` : "none",
+                color: sdkLang === lang ? C.violet : C.p3, cursor: "pointer",
+                textTransform: "uppercase",
+              }}>{lang === "ts" ? "TypeScript" : "Python"}</button>
+            ))}
+          </div>
           {status === "running" && (
-            <div style={{ fontSize:13, color: C.amber, marginRight: 8 }}>
-              {formatMs(elapsed)}
-            </div>
+            <div style={{ fontSize: 12, color: C.amber, marginRight: 8 }}>{formatMs(elapsed)}</div>
           )}
           {status === "done" && (
-            <div style={{ fontSize:13, color: C.green, marginRight: 8 }}>
-              ✓ Complete in {formatMs(elapsed)}
-            </div>
+            <div style={{ fontSize: 12, color: C.green, marginRight: 8 }}>✓ Complete in {formatMs(elapsed)}</div>
           )}
           {(status === "idle" || status === "done" || status === "error") && (
             <button onClick={run} style={{
-              fontFamily: mono, fontSize:13, letterSpacing: 1.5, padding: "8px 20px",
+              fontFamily: mono, fontSize: 12, letterSpacing: 1.5, padding: "7px 18px",
               background: C.accentDim, border: `1px solid ${C.accent}`, color: C.accent,
               cursor: "pointer", textTransform: "uppercase",
-            }}>
-              {status === "done" ? "▶ RUN AGAIN" : "▶ RUN AGENT"}
-            </button>
+            }}>{status === "done" ? "▶ RUN AGAIN" : "▶ RUN AGENT"}</button>
           )}
           {status === "running" && (
             <button onClick={abort} style={{
-              fontFamily: mono, fontSize:13, letterSpacing: 1.5, padding: "8px 20px",
+              fontFamily: mono, fontSize: 12, letterSpacing: 1.5, padding: "7px 18px",
               background: C.redDim, border: `1px solid ${C.red}`, color: C.red,
               cursor: "pointer", textTransform: "uppercase",
             }}>■ ABORT</button>
@@ -362,34 +605,75 @@ export default function AgentRunner() {
 
       {error && (
         <div style={{ background: C.redDim, border: `1px solid ${C.red}`, color: C.red,
-          padding: "8px 12px", fontSize:13, marginBottom: 16 }}>{error}</div>
+          padding: "8px 12px", fontSize: 12, marginBottom: 16 }}>{error}</div>
       )}
 
-      {/* Stats bar */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 1, background: C.line, marginBottom: 20 }}>
-        {[
-          { label: "TOTAL",   val: results.length,               color: C.p1 },
-          { label: "ALLOW",   val: allowed,                      color: C.green },
-          { label: "REVIEW",  val: reviewed,                     color: C.amber },
-          { label: "BLOCK",   val: blocked,                      color: C.red },
-          { label: "ERROR",   val: errors,                       color: errors > 0 ? C.red : C.p3 },
-          { label: "AVG RISK",val: avgRisk,                      color: C.p2 },
-          { label: "FEES",    val: `${totalFees}`,               color: C.violet, sub: "$SURGE" },
-        ].map(({ label, val, color, sub }) => (
-          <div key={label} style={{ background: C.bg1, padding: "12px 14px" }}>
-            <div style={{ fontSize:11, letterSpacing: 1.5, color: C.p3, textTransform: "uppercase", marginBottom: 4 }}>
-              {label}
+      {/* ── Quickstart Install Banner ──────────────────── */}
+      {status === "idle" && results.length === 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
+          <div style={{ background: C.bg1, border: `1px solid ${C.line}`, padding: "14px 16px" }}>
+            <div style={{ fontSize: 10, letterSpacing: 2, color: C.green, textTransform: "uppercase", marginBottom: 8 }}>
+              ⚡ Python — Quick Start
             </div>
-            <div style={{ fontSize:24, fontWeight: 600, color, lineHeight: 1 }}>{val}</div>
-            {sub && <div style={{ fontSize:11, color: C.p3, marginTop: 3 }}>{sub}</div>}
+            <CodeBlock lang="bash" code={`pip install openclaw-governor-client
+
+export GOVERNOR_URL="https://openclaw-governor.fly.dev"
+export GOVERNOR_API_KEY="ocg_your_key_here"`} />
+            <div style={{ marginTop: 8 }}>
+              <CodeBlock lang="python" code={`from openclaw_governor import evaluate_action
+
+decision = evaluate_action(
+    tool="shell",
+    args={"command": "ls -la"},
+    context={"agent_id": "my-agent"}
+)
+print(decision["decision"])  # allow | block | review`} />
+            </div>
+          </div>
+          <div style={{ background: C.bg1, border: `1px solid ${C.line}`, padding: "14px 16px" }}>
+            <div style={{ fontSize: 10, letterSpacing: 2, color: C.green, textTransform: "uppercase", marginBottom: 8 }}>
+              ⚡ TypeScript — Quick Start
+            </div>
+            <CodeBlock lang="bash" code={`npm install @openclaw/governor-client`} />
+            <div style={{ marginTop: 8 }}>
+              <CodeBlock lang="typescript" code={`import { GovernorClient } from "@openclaw/governor-client";
+
+const gov = new GovernorClient({
+  baseUrl: "https://openclaw-governor.fly.dev",
+  apiKey:  process.env.GOVERNOR_API_KEY,
+});
+
+const d = await gov.evaluate("shell", { command: "ls -la" });
+console.log(d.decision); // allow | block | review`} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Stats bar ──────────────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 1, background: C.line, marginBottom: 16 }}>
+        {[
+          { label: "TOTAL",   val: results.length,   color: C.p1 },
+          { label: "ALLOW",   val: allowed,           color: C.green },
+          { label: "REVIEW",  val: reviewed,          color: C.amber },
+          { label: "BLOCK",   val: blocked,           color: C.red },
+          { label: "ERROR",   val: errors,            color: errors > 0 ? C.red : C.p3 },
+          { label: "AVG RISK",val: avgRisk,           color: C.p2 },
+          { label: "FEES",    val: `${totalFees}`,    color: C.violet, sub: "$SURGE" },
+        ].map(({ label, val, color, sub }) => (
+          <div key={label} style={{ background: C.bg1, padding: "10px 12px" }}>
+            <div style={{ fontSize: 10, letterSpacing: 1.5, color: C.p3, textTransform: "uppercase", marginBottom: 3 }}>{label}</div>
+            <div style={{ fontSize: 22, fontWeight: 600, color, lineHeight: 1 }}>{val}</div>
+            {sub && <div style={{ fontSize: 10, color: C.p3, marginTop: 2 }}>{sub}</div>}
           </div>
         ))}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: 20 }}>
-        {/* Left: Phase timeline */}
+      {/* ── Main 3-column layout: phases | log | SDK code ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "230px 1fr 300px", gap: 14 }}>
+        {/* ── LEFT: Phase timeline ──────────────────────── */}
         <div>
-          <div style={{ fontSize:12, letterSpacing: 2, color: C.p3, textTransform: "uppercase", marginBottom: 12 }}>
+          <div style={{ fontSize: 11, letterSpacing: 2, color: C.p3, textTransform: "uppercase", marginBottom: 10 }}>
             Phase Progression
           </div>
           {PHASES.map(p => {
@@ -397,58 +681,38 @@ export default function AgentRunner() {
             const isActive = ps === "running";
             const isDone   = ps === "done";
             const phaseResults = results.filter(r => r.phase === p.id);
-
             return (
               <div key={p.id} style={{
-                padding: "12px 14px", marginBottom: 2,
+                padding: "10px 12px", marginBottom: 2,
                 background: isActive ? C.bg2 : C.bg1,
                 borderLeft: `3px solid ${isDone ? p.color : isActive ? C.amber : C.line}`,
-                opacity: ps === "pending" ? 0.4 : 1,
-                transition: "all 0.3s ease",
+                opacity: ps === "pending" ? 0.4 : 1, transition: "all 0.3s ease",
               }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                  <span style={{ fontSize:13, fontWeight: 600, color: C.p1 }}>
-                    Phase {p.id}
-                  </span>
-                  <span style={{
-                    fontSize:11, letterSpacing: 1,
-                    padding: "1px 6px",
-                    border: `1px solid ${p.color}`,
-                    color: p.color,
-                    textTransform: "uppercase",
-                  }}>
-                    {p.expect}
-                  </span>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: C.p1 }}>Phase {p.id}</span>
+                  <span style={{ fontSize: 10, letterSpacing: 1, padding: "1px 5px",
+                    border: `1px solid ${p.color}`, color: p.color, textTransform: "uppercase" }}>{p.expect}</span>
                 </div>
-                <div style={{ fontSize:12, color: C.p2, marginBottom: 4 }}>{p.name}</div>
-                <div style={{ fontSize:11, color: C.p3, lineHeight: 1.4 }}>{p.description}</div>
-
-                {/* Phase tool results */}
+                <div style={{ fontSize: 11, color: C.p2, marginBottom: 3 }}>{p.name}</div>
+                <div style={{ fontSize: 10, color: C.p3, lineHeight: 1.4 }}>{p.description}</div>
                 {phaseResults.length > 0 && (
-                  <div style={{ marginTop: 8, display: "flex", gap: 4, flexWrap: "wrap" }}>
+                  <div style={{ marginTop: 6, display: "flex", gap: 3, flexWrap: "wrap" }}>
                     {phaseResults.map((r, i) => {
                       const dc = r.decision === "allow" ? C.green : r.decision === "block" ? C.red : r.decision === "review" ? C.amber : C.p3;
                       return (
-                        <span key={i} style={{
-                          fontSize:10, padding: "2px 5px",
-                          border: `1px solid ${dc}`, color: dc,
-                          letterSpacing: 0.5, textTransform: "uppercase",
-                        }}>
+                        <span key={i} style={{ fontSize: 9, padding: "1px 4px",
+                          border: `1px solid ${dc}`, color: dc, letterSpacing: 0.5, textTransform: "uppercase" }}>
                           {r.decision}
                         </span>
                       );
                     })}
                   </div>
                 )}
-
                 {isActive && (
-                  <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{
-                      display: "inline-block", width: 6, height: 6, borderRadius: "50%",
-                      background: C.amber,
-                      animation: "pulse 1s infinite",
-                    }} />
-                    <span style={{ fontSize:11, color: C.amber }}>Running…</span>
+                  <div style={{ marginTop: 5, display: "flex", alignItems: "center", gap: 5 }}>
+                    <span style={{ display: "inline-block", width: 5, height: 5, borderRadius: "50%",
+                      background: C.amber, animation: "pulse 1s infinite" }} />
+                    <span style={{ fontSize: 10, color: C.amber }}>Running…</span>
                   </div>
                 )}
               </div>
@@ -456,29 +720,26 @@ export default function AgentRunner() {
           })}
         </div>
 
-        {/* Right: Live log */}
+        {/* ── CENTER: Live evaluation log ──────────────── */}
         <div style={{ display: "flex", flexDirection: "column" }}>
-          <div style={{ fontSize:12, letterSpacing: 2, color: C.p3, textTransform: "uppercase", marginBottom: 12,
+          <div style={{ fontSize: 11, letterSpacing: 2, color: C.p3, textTransform: "uppercase", marginBottom: 10,
             display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span>Evaluation Log</span>
             {status === "running" && (
-              <span style={{ fontSize:11, color: C.amber }}>
-                {currentTool}/{TOTAL_TOOLS} calls
-              </span>
+              <span style={{ fontSize: 10, color: C.amber }}>{currentTool}/{TOTAL_TOOLS} calls</span>
             )}
           </div>
-
           <div ref={logRef} style={{
-            flex: 1, minHeight: 400, maxHeight: 600, overflow: "auto",
+            flex: 1, minHeight: 380, maxHeight: 560, overflow: "auto",
             background: C.bg0, border: `1px solid ${C.line}`, padding: 0,
           }}>
             {results.length === 0 && status === "idle" && (
-              <div style={{ padding: 40, textAlign: "center", color: C.p3, fontSize:13 }}>
-                <div style={{ fontSize:32, marginBottom: 12 }}>🤖</div>
-                <div style={{ marginBottom: 8 }}>Click <strong style={{ color: C.accent }}>RUN AGENT</strong> to start the DeFi Research Agent.</div>
-                <div style={{ fontSize:12, lineHeight: 1.5 }}>
-                  The agent makes {TOTAL_TOOLS} real tool calls through the Governor's 5-layer pipeline.<br />
-                  Watch decisions stream in real-time, then check Traces and SURGE tabs for persisted data.
+              <div style={{ padding: 32, textAlign: "center", color: C.p3, fontSize: 12 }}>
+                <div style={{ fontSize: 28, marginBottom: 10 }}>🤖</div>
+                <div style={{ marginBottom: 6 }}>Click <strong style={{ color: C.accent }}>RUN AGENT</strong> to start the DeFi Research Agent.</div>
+                <div style={{ fontSize: 11, lineHeight: 1.5 }}>
+                  {TOTAL_TOOLS} real tool calls through the 5-layer governance pipeline.<br />
+                  Watch the equivalent SDK code appear in the right panel as each call runs.
                 </div>
               </div>
             )}
@@ -494,66 +755,43 @@ export default function AgentRunner() {
               return (
                 <React.Fragment key={i}>
                   {phaseChanged && (
-                    <div style={{
-                      padding: "8px 14px", background: C.bg2,
+                    <div style={{ padding: "6px 12px", background: C.bg2,
                       borderBottom: `1px solid ${C.line}`, borderTop: i > 0 ? `1px solid ${C.line}` : "none",
-                      display: "flex", alignItems: "center", gap: 8,
-                    }}>
-                      <span style={{
-                        fontSize:11, letterSpacing: 1, padding: "2px 6px",
-                        border: `1px solid ${phaseDef.color}`, color: phaseDef.color,
-                        textTransform: "uppercase",
-                      }}>Phase {r.phase}</span>
-                      <span style={{ fontSize:12, color: C.p2 }}>{phaseDef.name}</span>
+                      display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 10, letterSpacing: 1, padding: "1px 5px",
+                        border: `1px solid ${phaseDef.color}`, color: phaseDef.color, textTransform: "uppercase" }}>
+                        Phase {r.phase}
+                      </span>
+                      <span style={{ fontSize: 11, color: C.p2 }}>{phaseDef.name}</span>
                     </div>
                   )}
-
-                  <div style={{
-                    padding: "10px 14px",
-                    borderBottom: `1px solid ${C.line}`,
-                    background: C.bg0,
-                  }}>
-                    {/* Main row */}
-                    <div style={{ display: "grid", gridTemplateColumns: "24px 160px 70px 50px 80px 1fr", gap: 8, alignItems: "center" }}>
-                      <span style={{ fontSize:16 }}>{icon}</span>
-                      <span style={{ fontSize:13, color: C.p1, fontWeight: 600 }}>{r.tool}</span>
-                      <span style={{
-                        fontSize:11, letterSpacing: 1, padding: "2px 6px",
-                        border: `1px solid ${dc}`, color: dc,
-                        textTransform: "uppercase", textAlign: "center",
-                      }}>{r.decision}</span>
-                      <span style={{ fontSize:13, fontWeight: 600, color: riskColor(r.risk) }}>
-                        {r.risk}
-                      </span>
-                      <span style={{ fontSize:12, color: C.p3 }}>
-                        {r.duration}ms{r.fee ? ` · ${r.fee} $S` : ""}
-                      </span>
-                      <span style={{ fontSize:12, color: C.p3, textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
-                        {r.explanation.slice(0, 80)}
+                  <div style={{ padding: "8px 12px", borderBottom: `1px solid ${C.line}`, background: C.bg0 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "20px 140px 60px 40px 70px 1fr", gap: 6, alignItems: "center" }}>
+                      <span style={{ fontSize: 14 }}>{icon}</span>
+                      <span style={{ fontSize: 12, color: C.p1, fontWeight: 600 }}>{r.tool}</span>
+                      <span style={{ fontSize: 10, letterSpacing: 1, padding: "1px 5px",
+                        border: `1px solid ${dc}`, color: dc, textTransform: "uppercase", textAlign: "center" }}>{r.decision}</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: riskColor(r.risk) }}>{r.risk}</span>
+                      <span style={{ fontSize: 11, color: C.p3 }}>{r.duration}ms{r.fee ? ` · ${r.fee}$S` : ""}</span>
+                      <span style={{ fontSize: 11, color: C.p3, textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+                        {r.explanation.slice(0, 70)}
                       </span>
                     </div>
-
-                    {/* Chain pattern alert */}
                     {r.chain_pattern && (
-                      <div style={{ marginTop: 6, padding: "4px 8px", background: C.redDim, border: `1px solid ${C.red}`,
-                        fontSize:12, color: C.red, display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ marginTop: 5, padding: "3px 7px", background: C.redDim, border: `1px solid ${C.red}`,
+                        fontSize: 11, color: C.red, display: "flex", alignItems: "center", gap: 5 }}>
                         <span>🔗</span>
                         <span>Chain: <strong>{r.chain_pattern}</strong>{r.chain_description ? ` — ${r.chain_description}` : ""}</span>
                       </div>
                     )}
-
-                    {/* Execution trace layers */}
                     {r.trace && r.trace.length > 0 && (
-                      <div style={{ marginTop: 6, display: "flex", gap: 3, flexWrap: "wrap" }}>
+                      <div style={{ marginTop: 5, display: "flex", gap: 2, flexWrap: "wrap" }}>
                         {r.trace.map((step, j) => {
                           const layerOk = step.outcome === "pass";
                           return (
-                            <span key={j} style={{
-                              fontSize:10, padding: "1px 5px", letterSpacing: 0.5,
+                            <span key={j} style={{ fontSize: 9, padding: "1px 4px", letterSpacing: 0.5,
                               border: `1px solid ${layerOk ? C.line2 : C.red}`,
-                              color: layerOk ? C.p3 : C.red,
-                              background: layerOk ? "transparent" : C.redDim,
-                            }}>
+                              color: layerOk ? C.p3 : C.red, background: layerOk ? "transparent" : C.redDim }}>
                               L{step.layer} {step.name} {layerOk ? "✓" : "✗"} {step.risk_contribution > 0 ? `+${step.risk_contribution}` : ""}
                             </span>
                           );
@@ -565,65 +803,259 @@ export default function AgentRunner() {
               );
             })}
 
-            {/* Done summary */}
             {status === "done" && results.length > 0 && (
-              <div style={{
-                padding: "16px 14px", background: C.bg2,
-                borderTop: `1px solid ${C.line}`,
-              }}>
-                <div style={{ fontSize:12, letterSpacing: 2, color: C.green, textTransform: "uppercase", marginBottom: 8 }}>
+              <div style={{ padding: "14px 12px", background: C.bg2, borderTop: `1px solid ${C.line}` }}>
+                <div style={{ fontSize: 11, letterSpacing: 2, color: C.green, textTransform: "uppercase", marginBottom: 6 }}>
                   ✓ Session Complete
                 </div>
-                <div style={{ fontSize:12, color: C.p2, lineHeight: 1.6 }}>
+                <div style={{ fontSize: 11, color: C.p2, lineHeight: 1.6 }}>
                   <strong>{results.length}</strong> evaluations in {formatMs(elapsed)} ·
                   <span style={{ color: C.green }}> {allowed} allowed</span> ·
                   <span style={{ color: C.amber }}> {reviewed} reviewed</span> ·
                   <span style={{ color: C.red }}> {blocked} blocked</span> ·
-                  avg risk <span style={{ color: riskColor(parseFloat(avgRisk) || 0) }}>{avgRisk}</span> ·
-                  {totalFees !== "0.0000" && <span style={{ color: C.violet }}> {totalFees} $SURGE fees</span>}
+                  avg risk <span style={{ color: riskColor(parseFloat(avgRisk) || 0) }}>{avgRisk}</span>
+                  {totalFees !== "0.0000" && <span style={{ color: C.violet }}> · {totalFees} $SURGE fees</span>}
                 </div>
-                <div style={{ fontSize:11, color: C.p3, marginTop: 6 }}>
-                  Trace <span style={{ color: C.violet }}>{traceId}</span> ingested — view in the <strong>Traces</strong> tab.
-                  Receipts persisted — view in the <strong>SURGE</strong> tab.
+                <div style={{ fontSize: 10, color: C.p3, marginTop: 5 }}>
+                  Trace <span style={{ color: C.violet }}>{traceId}</span> ingested — view in <strong>Traces</strong> tab.
                 </div>
               </div>
             )}
           </div>
         </div>
+
+        {/* ── RIGHT: Live SDK Code Panel ───────────────── */}
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          <div style={{ fontSize: 11, letterSpacing: 2, color: C.violet, textTransform: "uppercase", marginBottom: 10 }}>
+            📦 SDK Equivalent — {sdkLang === "python" ? "Python" : "TypeScript"}
+          </div>
+          <div style={{ flex: 1, minHeight: 380, maxHeight: 560, overflow: "auto",
+            background: C.bg1, border: `1px solid ${C.line}`, padding: 12 }}>
+
+            {/* Before run — show quickstart */}
+            {results.length === 0 && status !== "running" && (
+              <>
+                <div style={{ fontSize: 10, letterSpacing: 1.5, color: C.p3, textTransform: "uppercase", marginBottom: 8 }}>
+                  {sdkLang === "python" ? "Python SDK — evaluate_action()" : "TypeScript SDK — gov.evaluate()"}
+                </div>
+                <CodeBlock lang={sdkLang} code={sdkLang === "python"
+                  ? `from openclaw_governor import evaluate_action
+
+# Every tool call goes through the Governor
+decision = evaluate_action(
+    tool="fetch_price",
+    args={"token": "ETH", "exchange": "uniswap-v3"},
+    context={
+        "agent_id": "defi-research-agent-01",
+        "session_id": "sess-001",
+    }
+)
+
+# decision["decision"] → "allow" | "block" | "review"
+# decision["risk_score"] → 0-100
+# decision["explanation"] → human-readable reason`
+                  : `import { GovernorClient } from "@openclaw/governor-client";
+
+const gov = new GovernorClient({
+  baseUrl: "https://openclaw-governor.fly.dev",
+  apiKey:  process.env.GOVERNOR_API_KEY,
+});
+
+const decision = await gov.evaluate("fetch_price", {
+  token: "ETH",
+  exchange: "uniswap-v3",
+}, {
+  agent_id: "defi-research-agent-01",
+  session_id: "sess-001",
+});
+
+// decision.decision → "allow" | "block" | "review"
+// decision.risk_score → 0-100`
+                } />
+                <div style={{ marginTop: 12, fontSize: 10, letterSpacing: 1.5, color: C.p3, textTransform: "uppercase", marginBottom: 6 }}>
+                  Trace Ingestion
+                </div>
+                <CodeBlock lang={sdkLang} code={sdkLang === "python" ? traceSnippet()
+                  : `await gov.ingestSpans([{
+  trace_id: "trace-defi-abc123",
+  span_id:  "span-001",
+  kind:     "agent",
+  name:     "DeFi Research Agent",
+  status:   "ok",
+  start_time: "2026-02-27T12:00:00Z",
+  end_time:   "2026-02-27T12:01:30Z",
+  agent_id:   "defi-research-agent-01",
+  session_id: "session-xyz",
+}]);`} />
+              </>
+            )}
+
+            {/* During/after run — show live snippet matching last evaluated tool */}
+            {currentSnippet && (
+              <>
+                <div style={{ fontSize: 10, letterSpacing: 1.5, color: C.amber, textTransform: "uppercase", marginBottom: 6 }}>
+                  {status === "running" ? "⚡ Live — " : "Last call — "}
+                  {results.length > 0 ? results[results.length - 1].tool : ""}
+                </div>
+                <CodeBlock lang={sdkLang} code={currentSnippet} />
+
+                {/* Show response shape */}
+                {results.length > 0 && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ fontSize: 10, letterSpacing: 1.5, color: C.p3, textTransform: "uppercase", marginBottom: 6 }}>
+                      ← Response
+                    </div>
+                    <CodeBlock lang="json" code={JSON.stringify({
+                      decision: results[results.length - 1].decision,
+                      risk_score: results[results.length - 1].risk,
+                      explanation: results[results.length - 1].explanation.slice(0, 100),
+                      governance_fee_surge: results[results.length - 1].fee,
+                      chain_pattern: results[results.length - 1].chain_pattern,
+                    }, null, 2)} />
+                  </div>
+                )}
+
+                {/* After done — show trace ingestion snippet */}
+                {status === "done" && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ fontSize: 10, letterSpacing: 1.5, color: C.green, textTransform: "uppercase", marginBottom: 6 }}>
+                      📊 Trace Ingestion (auto-sent)
+                    </div>
+                    <CodeBlock lang={sdkLang} code={sdkLang === "python"
+                      ? `# After all evaluations, ingest the trace
+from openclaw_governor import ingest_spans
+
+ingest_spans([{
+    "trace_id":  "${traceId}",
+    "span_id":   "span-defi-root",
+    "kind":      "agent",
+    "name":      "DeFi Research Agent",
+    "agent_id":  "${agentId}",
+    "session_id": "${sessionId}",
+    "attributes": {
+        "agent.total_calls": ${results.length},
+        "agent.allowed": ${allowed},
+        "agent.blocked": ${blocked},
+    },
+}])`
+                      : `// After all evaluations, ingest the trace
+await gov.ingestSpans([{
+  trace_id:  "${traceId}",
+  span_id:   "span-defi-root",
+  kind:      "agent",
+  name:      "DeFi Research Agent",
+  agent_id:  "${agentId}",
+  session_id: "${sessionId}",
+  attributes: {
+    "agent.total_calls": ${results.length},
+    "agent.allowed": ${allowed},
+    "agent.blocked": ${blocked},
+  },
+}]);`} />
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* How it works info */}
-      {status === "idle" && results.length === 0 && (
-        <div style={{ marginTop: 24, background: C.bg1, border: `1px solid ${C.line}`, padding: 20 }}>
-          <div style={{ fontSize:12, letterSpacing: 2, color: C.p3, textTransform: "uppercase", marginBottom: 12 }}>
-            How It Works
+      {/* ── SDK Walkthrough (expandable) ──────────────── */}
+      <div style={{ marginTop: 20 }}>
+        <button onClick={() => setShowWalkthrough(w => !w)} style={{
+          fontFamily: mono, fontSize: 11, letterSpacing: 1.5, padding: "7px 16px",
+          background: C.violetDim, border: `1px solid ${C.violet}`, color: C.violet,
+          cursor: "pointer", textTransform: "uppercase", width: "100%", textAlign: "left",
+        }}>
+          {showWalkthrough ? "✕ HIDE" : "📖 SHOW"} INTEGRATION WALKTHROUGH — Build a Governed Agent in 6 Steps
+        </button>
+
+        {showWalkthrough && (
+          <div style={{ background: C.bg1, border: `1px solid ${C.violet}`, borderTop: "none", padding: 16 }}>
+            {/* Step navigation */}
+            <div style={{ display: "flex", gap: 4, marginBottom: 16 }}>
+              {WALKTHROUGH.map((w, i) => (
+                <button key={i} onClick={() => setWalkthroughStep(i)} style={{
+                  fontFamily: mono, fontSize: 10, letterSpacing: 1, padding: "4px 10px",
+                  background: walkthroughStep === i ? C.violetDim : "transparent",
+                  border: `1px solid ${walkthroughStep === i ? C.violet : C.line2}`,
+                  color: walkthroughStep === i ? C.violet : C.p3, cursor: "pointer",
+                }}>Step {w.step}</button>
+              ))}
+            </div>
+
+            {/* Current step */}
+            {(() => {
+              const step = WALKTHROUGH[walkthroughStep];
+              return (
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: C.p1, marginBottom: 4 }}>
+                    Step {step.step}: {step.title}
+                  </div>
+                  <div style={{ fontSize: 11, color: C.p2, marginBottom: 12, lineHeight: 1.5 }}>
+                    {step.desc}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    <div>
+                      <div style={{ fontSize: 10, letterSpacing: 1.5, color: C.green, textTransform: "uppercase", marginBottom: 6 }}>
+                        Python
+                      </div>
+                      <CodeBlock lang="python" code={step.python} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10, letterSpacing: 1.5, color: C.amber, textTransform: "uppercase", marginBottom: 6 }}>
+                        TypeScript
+                      </div>
+                      <CodeBlock lang="typescript" code={step.ts} />
+                    </div>
+                  </div>
+                  {/* Navigation */}
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 14 }}>
+                    <button disabled={walkthroughStep === 0} onClick={() => setWalkthroughStep(s => s - 1)} style={{
+                      fontFamily: mono, fontSize: 10, padding: "4px 12px", cursor: walkthroughStep === 0 ? "not-allowed" : "pointer",
+                      background: "transparent", border: `1px solid ${C.line2}`, color: C.p3, opacity: walkthroughStep === 0 ? 0.3 : 1,
+                    }}>← Previous</button>
+                    <div style={{ fontSize: 10, color: C.p3 }}>
+                      {walkthroughStep + 1} / {WALKTHROUGH.length}
+                    </div>
+                    <button disabled={walkthroughStep === WALKTHROUGH.length - 1}
+                      onClick={() => setWalkthroughStep(s => s + 1)} style={{
+                      fontFamily: mono, fontSize: 10, padding: "4px 12px",
+                      cursor: walkthroughStep === WALKTHROUGH.length - 1 ? "not-allowed" : "pointer",
+                      background: "transparent", border: `1px solid ${C.line2}`, color: C.p3,
+                      opacity: walkthroughStep === WALKTHROUGH.length - 1 ? 0.3 : 1,
+                    }}>Next →</button>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: 12, fontSize:12, color: C.p2, lineHeight: 1.5 }}>
-            <div style={{ padding: 12, background: C.bg0, border: `1px solid ${C.line}` }}>
-              <div style={{ color: C.green, fontWeight: 600, marginBottom: 6 }}>1. Kill Switch</div>
-              Global halt — if active, all calls blocked instantly.
-            </div>
-            <div style={{ padding: 12, background: C.bg0, border: `1px solid ${C.line}` }}>
-              <div style={{ color: C.amber, fontWeight: 600, marginBottom: 6 }}>2. Injection Firewall</div>
-              Detects prompt injection in tool args.
-            </div>
-            <div style={{ padding: 12, background: C.bg0, border: `1px solid ${C.line}` }}>
-              <div style={{ color: C.amber, fontWeight: 600, marginBottom: 6 }}>3. Scope Enforcer</div>
-              Rejects tools not in the agent's allowed set.
-            </div>
-            <div style={{ padding: 12, background: C.bg0, border: `1px solid ${C.line}` }}>
-              <div style={{ color: C.red, fontWeight: 600, marginBottom: 6 }}>4. Policy Engine</div>
-              Matches YAML + DB policies (10 base + dynamic).
-            </div>
-            <div style={{ padding: 12, background: C.bg0, border: `1px solid ${C.line}` }}>
-              <div style={{ color: C.p2, fontWeight: 600, marginBottom: 6 }}>5. Neuro + Chain</div>
-              Heuristic risk scoring + multi-step attack detection.
-            </div>
+        )}
+      </div>
+
+      {/* ── How It Works (governance pipeline) ─────────── */}
+      {status === "idle" && results.length === 0 && (
+        <div style={{ marginTop: 16, background: C.bg1, border: `1px solid ${C.line}`, padding: 16 }}>
+          <div style={{ fontSize: 11, letterSpacing: 2, color: C.p3, textTransform: "uppercase", marginBottom: 10 }}>
+            5-Layer Governance Pipeline
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: 10, fontSize: 11, color: C.p2, lineHeight: 1.5 }}>
+            {[
+              { n: "1. Kill Switch", c: C.green, d: "Global halt — if active, all calls blocked instantly." },
+              { n: "2. Injection Firewall", c: C.amber, d: "Detects prompt injection in tool args." },
+              { n: "3. Scope Enforcer", c: C.amber, d: "Rejects tools not in the agent's allowed set." },
+              { n: "4. Policy Engine", c: C.red, d: "Matches YAML + DB policies (10 base + dynamic)." },
+              { n: "5. Neuro + Chain", c: C.p2, d: "Heuristic risk scoring + multi-step attack detection." },
+            ].map(l => (
+              <div key={l.n} style={{ padding: 10, background: C.bg0, border: `1px solid ${C.line}` }}>
+                <div style={{ color: l.c, fontWeight: 600, marginBottom: 5 }}>{l.n}</div>
+                {l.d}
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {/* CSS animation for pulse */}
       <style>{`
         @keyframes pulse {
           0%, 100% { opacity: 1; }
