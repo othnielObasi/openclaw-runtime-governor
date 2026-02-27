@@ -668,7 +668,7 @@ export default function TraceViewer() {
       if (filter.has_blocks === "true") params.has_blocks = "true";
       if (filter.has_blocks === "false") params.has_blocks = "false";
 
-      const token = localStorage.getItem("gov_token");
+      const token = localStorage.getItem("ocg_token");
       const res = await api.get("/traces", {
         params,
         headers: { Authorization: `Bearer ${token}` },
@@ -686,7 +686,7 @@ export default function TraceViewer() {
     setLoading(true);
     setError(null);
     try {
-      const token = localStorage.getItem("gov_token");
+      const token = localStorage.getItem("ocg_token");
       const res = await api.get(`/traces/${traceId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });

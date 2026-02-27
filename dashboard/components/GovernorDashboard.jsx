@@ -3096,7 +3096,7 @@ function AdminUserManagementTab() {
 
 
 // ═══════════════════════════════════════════════════════════
-// SURGE TOKEN GOVERNANCE — receipts + staking (new for v0.3.0)
+// SURGE TOKEN GOVERNANCE — receipts, staking, wallets (v0.3.0)
 // ═══════════════════════════════════════════════════════════
 let _receiptCounter = 0;
 function makeGovernanceReceipt(tool, decision, risk, policy, agentId) {
@@ -3109,29 +3109,118 @@ function makeGovernanceReceipt(tool, decision, risk, policy, agentId) {
   return { id, ts, tool, decision, risk, policy, agentId, digest, fee:"0.001" };
 }
 
-function SurgeTab({ receipts, stakedPolicies, setStaked, userRole }) {
+function SurgeTab({ receipts: localReceipts, stakedPolicies: localStaked, setStaked: setLocalStaked, userRole }) {
+  const API_BASE = (typeof process!=="undefined" && process.env?.NEXT_PUBLIC_GOVERNOR_API) || null;
+  const getToken = () => typeof window!=="undefined" ? localStorage.getItem("ocg_token") : null;
+  const headers = () => ({
+    Authorization:`Bearer ${getToken()}`,
+    "Content-Type":"application/json",
+  });
+
+  // Real backend data
+  const [surgeStatus, setSurgeStatus] = useState(null);
+  const [receipts, setReceipts]       = useState([]);
+  const [staked, setStaked]           = useState([]);
+  const [wallets, setWallets]         = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [err, setErr]                 = useState("");
+
+  // Staking form
   const [spId, setSpId]       = useState("");
+  const [spDesc, setSpDesc]   = useState("");
+  const [spSev, setSpSev]     = useState("50");
   const [spAmt, setSpAmt]     = useState("10");
   const [spWallet, setSpWallet] = useState("0x" + Math.random().toString(16).slice(2,10));
+
+  // Wallet top-up form
+  const [topUpId, setTopUpId]     = useState("");
+  const [topUpAmt, setTopUpAmt]   = useState("100");
+
   const canEdit = userRole==="admin" || userRole==="operator";
 
-  const stake = () => {
-    if (!spId.trim()) return;
-    setStaked(prev => [...prev, { id:spId.trim(), amount:spAmt, wallet:spWallet, ts:new Date().toISOString() }]);
-    setSpId("");
+  const load = async () => {
+    if (!API_BASE) { setLoading(false); return; }
+    setLoading(true);
+    setErr("");
+    try {
+      const [statusRes, receiptsRes, stakedRes, walletsRes] = await Promise.all([
+        fetch(`${API_BASE}/surge/status`,         {headers:headers()}),
+        fetch(`${API_BASE}/surge/receipts`,        {headers:headers()}),
+        fetch(`${API_BASE}/surge/policies/staked`, {headers:headers()}),
+        fetch(`${API_BASE}/surge/wallets`,         {headers:headers()}),
+      ]);
+      if (statusRes.ok)   setSurgeStatus(await statusRes.json());
+      if (receiptsRes.ok) setReceipts(await receiptsRes.json());
+      if (stakedRes.ok)   setStaked(await stakedRes.json());
+      if (walletsRes.ok)  setWallets(await walletsRes.json());
+    } catch (e) { setErr(e.message); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(()=>{ load(); }, []);
+
+  const doStake = async () => {
+    if (!spId.trim() || !API_BASE) return;
+    try {
+      const r = await fetch(`${API_BASE}/surge/policies/stake`, {
+        method:"POST", headers:headers(),
+        body: JSON.stringify({
+          policy_id: spId.trim(),
+          description: spDesc || spId.trim(),
+          severity: parseInt(spSev) || 50,
+          action: "block",
+          surge_amount: spAmt,
+          wallet_address: spWallet,
+        }),
+      });
+      if (!r.ok) { const d = await r.json().catch(()=>({})); setErr(d.detail || "Stake failed"); return; }
+      setSpId(""); setSpDesc("");
+      load();
+    } catch (e) { setErr(e.message); }
+  };
+
+  const doUnstake = async (policyId) => {
+    if (!API_BASE) return;
+    try {
+      await fetch(`${API_BASE}/surge/policies/stake/${encodeURIComponent(policyId)}`, {
+        method:"DELETE", headers:headers(),
+      });
+      load();
+    } catch (e) { setErr(e.message); }
+  };
+
+  const doTopUp = async () => {
+    if (!topUpId || !API_BASE) return;
+    try {
+      const r = await fetch(`${API_BASE}/surge/wallets/${encodeURIComponent(topUpId)}/topup`, {
+        method:"POST", headers:headers(),
+        body: JSON.stringify({ amount: topUpAmt }),
+      });
+      if (!r.ok) { const d = await r.json().catch(()=>({})); setErr(d.detail || "Top-up failed"); return; }
+      setTopUpAmt("100");
+      load();
+    } catch (e) { setErr(e.message); }
   };
 
   const surgeColor = "#8b5cf6";
+  const totalFees = surgeStatus?.total_fees_collected || "0.000";
+  const feeTiers  = surgeStatus?.governance_fee_tiers || {};
 
   return (
     <div style={{padding:20}}>
-      {/* Stats */}
-      <div style={{display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:1, background:C.line, marginBottom:20}}>
+      {err && <div style={{background:"rgba(239,68,68,0.15)", border:`1px solid ${C.red}`, color:C.red,
+        padding:"8px 12px", fontFamily:mono, fontSize:10, marginBottom:16}}>{err}</div>}
+
+      {/* Stats — 6 tiles */}
+      <div style={{display:"grid", gridTemplateColumns:"repeat(6, 1fr)", gap:1, background:C.line, marginBottom:20}}>
         {[
-          { label:"RECEIPTS",       val:receipts.length,                                  color:surgeColor },
-          { label:"$SURGE FEES",    val:(receipts.length*0.001).toFixed(3),                color:surgeColor, sub:"collected" },
-          { label:"STAKED POLICIES",val:stakedPolicies.length,                             color:surgeColor },
-          { label:"TOTAL STAKED",   val:stakedPolicies.reduce((a,p)=>a+parseFloat(p.amount||0),0).toFixed(1), color:surgeColor, sub:"$SURGE" },
+          { label:"RECEIPTS",       val:receipts.length,   color:surgeColor },
+          { label:"$SURGE FEES",    val:totalFees,         color:surgeColor, sub:"collected" },
+          { label:"STAKED POLICIES",val:staked.length,     color:surgeColor },
+          { label:"TOTAL STAKED",   val:staked.reduce((a,p)=>a+parseFloat(p.staked_surge||0),0).toFixed(1), color:surgeColor, sub:"$SURGE" },
+          { label:"WALLETS",        val:wallets.length,    color:"#06b6d4" },
+          { label:"FEE GATING",     val:surgeStatus?.fee_gating_enabled ? "ON" : "OFF",
+            color:surgeStatus?.fee_gating_enabled ? C.green : C.p3 },
         ].map(({label,val,color,sub}) => (
           <div key={label} style={{background:C.bg1, padding:"14px 18px"}}>
             <div style={{fontFamily:mono, fontSize:9, letterSpacing:1.5, color:C.p3,
@@ -3142,13 +3231,79 @@ function SurgeTab({ receipts, stakedPolicies, setStaked, userRole }) {
         ))}
       </div>
 
+      {/* Fee tier reference */}
+      {Object.keys(feeTiers).length > 0 && (
+        <div style={{background:C.bg1, padding:12, marginBottom:20, border:`1px solid ${C.line}`}}>
+          <PanelHd title="Tiered Fee Schedule" tag="RISK → FEE" tagColor={surgeColor}/>
+          <div style={{display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:8, marginTop:8}}>
+            {Object.entries(feeTiers).map(([tier,fee]) => (
+              <div key={tier} style={{padding:"8px 10px", background:C.bg0, border:`1px solid ${C.line}`, textAlign:"center"}}>
+                <div style={{fontFamily:mono, fontSize:9, color:C.p3, textTransform:"uppercase", letterSpacing:1}}>{tier}</div>
+                <div style={{fontFamily:mono, fontSize:16, fontWeight:600, color:surgeColor, marginTop:4}}>{fee}</div>
+                <div style={{fontFamily:mono, fontSize:8, color:C.p3}}>$SURGE</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Wallets */}
+      <div style={{background:C.bg1, padding:16, marginBottom:20, border:`1px solid ${C.line}`}}>
+        <PanelHd title="Virtual $SURGE Wallets" tag={`${wallets.length}`} tagColor="#06b6d4"/>
+        {wallets.length === 0 ? (
+          <div style={{fontFamily:mono, fontSize:10, color:C.p3, textAlign:"center", padding:"20px 0"}}>
+            No wallets yet. Wallets are auto-provisioned on first evaluation, or create one manually.
+          </div>
+        ) : (
+          <div style={{maxHeight:200, overflow:"auto"}}>
+            {wallets.map(w => {
+              const bal = parseFloat(w.balance || 0);
+              const balColor = bal <= 0 ? C.red : bal < 10 ? C.amber : C.green;
+              return (
+                <div key={w.wallet_id} style={{display:"grid", gridTemplateColumns:"160px 100px 100px 100px 1fr",
+                  gap:8, alignItems:"center", padding:"6px 0", borderBottom:`1px solid ${C.line}`, fontFamily:mono, fontSize:10}}>
+                  <span style={{color:surgeColor, fontWeight:600}}>{w.wallet_id}</span>
+                  <span style={{color:balColor, fontWeight:600}}>{parseFloat(w.balance).toFixed(4)} $SURGE</span>
+                  <span style={{color:C.p3}}>deposited: {parseFloat(w.total_deposited).toFixed(2)}</span>
+                  <span style={{color:C.p3}}>fees: {parseFloat(w.total_fees_paid).toFixed(4)}</span>
+                  <span style={{color:C.p3, fontSize:9}}>{w.label || "—"}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {/* Top-up form */}
+        {canEdit && wallets.length > 0 && (
+          <div style={{display:"grid", gridTemplateColumns:"1fr 100px auto", gap:10, alignItems:"end", marginTop:12}}>
+            <Fld label="Wallet ID">
+              <select value={topUpId} onChange={e=>setTopUpId(e.target.value)}
+                style={{width:"100%", background:C.bg0, color:C.p1, border:`1px solid ${C.line}`,
+                  padding:"4px 8px", fontFamily:mono, fontSize:10}}>
+                <option value="">Select wallet…</option>
+                {wallets.map(w => <option key={w.wallet_id} value={w.wallet_id}>{w.wallet_id}</option>)}
+              </select>
+            </Fld>
+            <Fld label="$SURGE">
+              <TextInput value={topUpAmt} onChange={e=>setTopUpAmt(e.target.value)} placeholder="100"/>
+            </Fld>
+            <Btn onClick={doTopUp} variant="violet" style={{fontSize:9, padding:"6px 14px"}}>TOP UP</Btn>
+          </div>
+        )}
+      </div>
+
       {/* Staking form */}
       {canEdit && (
         <div style={{background:C.bg1, padding:16, marginBottom:20, border:`1px solid ${C.line}`}}>
           <PanelHd title="Stake $SURGE on Policy" tag="OPERATOR+" tagColor={surgeColor}/>
-          <div style={{display:"grid", gridTemplateColumns:"1fr 100px 1fr auto", gap:10, alignItems:"end"}}>
+          <div style={{display:"grid", gridTemplateColumns:"1fr 1fr 60px 80px 1fr auto", gap:10, alignItems:"end"}}>
             <Fld label="Policy ID">
               <TextInput value={spId} onChange={e=>setSpId(e.target.value)} placeholder="shell-dangerous"/>
+            </Fld>
+            <Fld label="Description">
+              <TextInput value={spDesc} onChange={e=>setSpDesc(e.target.value)} placeholder="Block dangerous shells"/>
+            </Fld>
+            <Fld label="Severity">
+              <TextInput value={spSev} onChange={e=>setSpSev(e.target.value)} placeholder="50"/>
             </Fld>
             <Fld label="$SURGE">
               <TextInput value={spAmt} onChange={e=>setSpAmt(e.target.value)} placeholder="10"/>
@@ -3156,17 +3311,17 @@ function SurgeTab({ receipts, stakedPolicies, setStaked, userRole }) {
             <Fld label="Wallet">
               <TextInput value={spWallet} onChange={e=>setSpWallet(e.target.value)} placeholder="0x…"/>
             </Fld>
-            <Btn onClick={stake} variant="violet" style={{fontSize:9, padding:"6px 14px"}}>STAKE</Btn>
+            <Btn onClick={doStake} variant="violet" style={{fontSize:9, padding:"6px 14px"}}>STAKE</Btn>
           </div>
-          {stakedPolicies.length > 0 && (
+          {staked.length > 0 && (
             <div style={{marginTop:12}}>
-              {stakedPolicies.map((p,i) => (
-                <div key={i} style={{display:"grid", gridTemplateColumns:"150px 80px 1fr auto",
+              {staked.map((p,i) => (
+                <div key={p.policy_id||i} style={{display:"grid", gridTemplateColumns:"150px 80px 1fr auto",
                   gap:8, alignItems:"center", padding:"6px 0", borderBottom:`1px solid ${C.line}`}}>
-                  <span style={{fontFamily:mono, fontSize:10, color:surgeColor, fontWeight:600}}>{p.id}</span>
-                  <span style={{fontFamily:mono, fontSize:10, color:C.p1}}>{p.amount} $SURGE</span>
-                  <span style={{fontFamily:mono, fontSize:9, color:C.p3}}>{p.wallet}</span>
-                  <Btn onClick={()=>setStaked(prev=>prev.filter((_,j)=>j!==i))} variant="red"
+                  <span style={{fontFamily:mono, fontSize:10, color:surgeColor, fontWeight:600}}>{p.policy_id}</span>
+                  <span style={{fontFamily:mono, fontSize:10, color:C.p1}}>{p.staked_surge} $SURGE</span>
+                  <span style={{fontFamily:mono, fontSize:9, color:C.p3}}>{p.staker_wallet}</span>
+                  <Btn onClick={()=>doUnstake(p.policy_id)} variant="red"
                     style={{fontSize:8, padding:"3px 8px"}}>UNSTAKE</Btn>
                 </div>
               ))}
@@ -3177,28 +3332,36 @@ function SurgeTab({ receipts, stakedPolicies, setStaked, userRole }) {
 
       {/* Receipts */}
       <div style={{background:C.bg1, padding:16, border:`1px solid ${C.line}`}}>
-        <PanelHd title="Governance Receipts" tag={`${receipts.length}`} tagColor={surgeColor}/>
-        {receipts.length === 0 ? (
+        <div style={{display:"flex", justifyContent:"space-between", alignItems:"center"}}>
+          <PanelHd title="Governance Receipts (DB-Persisted)" tag={`${receipts.length}`} tagColor={surgeColor}/>
+          <Btn onClick={load} variant="ghost" style={{fontSize:8, padding:"3px 8px"}}>↻ REFRESH</Btn>
+        </div>
+        {loading ? (
+          <div style={{fontFamily:mono, fontSize:10, color:C.p3, textAlign:"center", padding:"20px 0"}}>
+            Loading…
+          </div>
+        ) : receipts.length === 0 ? (
           <div style={{fontFamily:mono, fontSize:10, color:C.p3, textAlign:"center", padding:"20px 0"}}>
             No receipts yet. Every action evaluation generates a signed governance receipt.
           </div>
         ) : (
           <div style={{maxHeight:460, overflow:"auto"}}>
-            {receipts.slice(0,30).map(r => {
+            {receipts.slice(0,50).map(r => {
               const dc = r.decision==="block"?C.red:r.decision==="review"?C.amber:C.green;
               return (
-                <div key={r.id} style={{padding:"8px 0", borderBottom:`1px solid ${C.line}`}}>
-                  <div style={{display:"grid", gridTemplateColumns:"180px 120px 80px 60px 1fr",
+                <div key={r.receipt_id} style={{padding:"8px 0", borderBottom:`1px solid ${C.line}`}}>
+                  <div style={{display:"grid", gridTemplateColumns:"180px 120px 80px 60px 80px 1fr",
                     gap:8, alignItems:"center", fontFamily:mono, fontSize:10}}>
-                    <span style={{color:surgeColor, fontWeight:600}}>{r.id}</span>
+                    <span style={{color:surgeColor, fontWeight:600}}>{r.receipt_id}</span>
                     <span style={{color:C.p1}}>{r.tool}</span>
                     <span style={{padding:"2px 6px", border:`1px solid ${dc}`, color:dc,
                       fontSize:8, letterSpacing:1, textTransform:"uppercase", textAlign:"center"}}>{r.decision}</span>
-                    <span style={{color:riskColor(r.risk), fontWeight:600}}>{r.risk}</span>
-                    <span style={{color:C.p3, fontSize:9}}>{r.fee} $SURGE</span>
+                    <span style={{color:riskColor(r.risk_score), fontWeight:600}}>{r.risk_score}</span>
+                    <span style={{color:C.p3, fontSize:9}}>{r.governance_fee_surge || "—"} $SURGE</span>
+                    <span style={{color:C.p3, fontSize:8}}>{r.agent_id || "—"}</span>
                   </div>
                   <div style={{fontFamily:mono, fontSize:8, color:C.p3, marginTop:3,
-                    wordBreak:"break-all"}}>SHA-256: {r.digest.slice(0,48)}…</div>
+                    wordBreak:"break-all"}}>SHA-256: {r.digest?.slice(0,48) || "—"}…</div>
                 </div>
               );
             })}

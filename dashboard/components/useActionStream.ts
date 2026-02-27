@@ -55,7 +55,7 @@ export function useActionStream(opts: UseActionStreamOptions = {}) {
     // Build URL with auth — EventSource doesn't support custom headers,
     // so we pass the JWT token as a query param (the backend accepts both).
     const token =
-      typeof window !== "undefined" ? localStorage.getItem("governor_token") : null;
+      typeof window !== "undefined" ? localStorage.getItem("ocg_token") : null;
 
     const url = token
       ? `${baseUrl}/actions/stream?token=${encodeURIComponent(token)}`
@@ -117,7 +117,7 @@ export function useActionStream(opts: UseActionStreamOptions = {}) {
       try {
         const token =
           typeof window !== "undefined"
-            ? localStorage.getItem("governor_token")
+            ? localStorage.getItem("ocg_token")
             : null;
         const res = await fetch(`${baseUrl}/actions/stream/status`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
