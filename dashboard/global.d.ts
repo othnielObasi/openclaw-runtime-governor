@@ -1,4 +1,4 @@
-declare module "../components/GovernorComplete" {
+declare module "../GovernorComplete" {
   import type React from "react";
   const GovernorApp: React.ComponentType<any>;
   export default GovernorApp;
