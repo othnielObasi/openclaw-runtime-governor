@@ -72,39 +72,23 @@ The pipeline **short-circuits**: a kill switch fires before the injection scan e
 | Output filtering | After LLM response | ❌ Post-hoc | Partially | ❌ | ❌ |
 | Fine-tuning / RLHF | Model weights | ❌ Static | ❌ Probabilistic | ❌ | ❌ |
 | API rate limiting | HTTP layer | ✅ | ✅ | ❌ | Partially |
-| Observability platforms | LLM layer | ✅ Passive | N/A — monitors, can't enforce | Post-hoc correlation | ✅ Logs only |
 | **OpenClaw Governor** | **Tool call interception** | **✅ Real-time** | **✅ 100%** | **✅ 6 patterns** | **✅ Full trace + attestation** |
 
 The Governor doesn't try to make the AI "behave better." It operates at the **execution boundary** — the moment an agent's decision becomes a real-world action — with deterministic, auditable, policy-driven rules that no prompt injection can bypass.
 
-### Why this isn't "another observability platform"
+### Key capabilities:
 
-Existing AI observability platforms are excellent at **passive monitoring** — they trace LLM calls, measure token usage, detect embedding drift, and score hallucinations. They tell you *what happened*.
-
-The OpenClaw Governor is fundamentally different: it **actively prevents** dangerous actions from executing. By the time an observability platform shows you that an agent ran `rm -rf /`, the damage is done. The Governor intercepts that call *before execution* and returns a `block` verdict — the tool never fires.
-
-| Capability | Observability Platforms | OpenClaw Governor |
-|---|---|---|
-| **Can block a dangerous tool call?** | ❌ No — observe only | ✅ Yes — inline enforcement |
-| **Prompt injection defense** | Detect in LLM output (post-hoc) | Block in tool payload (pre-execution, 11 patterns) |
-| **Policy engine** | None — manual alert configuration | Full CRUD — YAML + DB policies, toggle, regex, PATCH |
-| **Kill switch** | No concept | Global emergency halt, DB-persisted |
-| **Multi-step attack detection** | Post-hoc trace correlation | Real-time — 6 chain patterns across 60-min session window |
-| **Cryptographic attestation** | No | SHA-256 SURGE receipts per decision |
-| **LLM-layer diagnostics** | ✅ Deep (tokens, latency, drift) | Not the focus — complementary |
-
-**In practice, you'd use both**: an observability platform to optimize your agent's LLM quality, and OpenClaw to ensure it can never do anything dangerous regardless of what the LLM outputs. Observe + Govern.
-
-### Key differentiators:
-
-- **Language & framework agnostic.** Three SDKs (Python, TypeScript/JS, Java) — wrap any agent in 3 lines of code.
-- **Real-time streaming.** Server-Sent Events push every governance decision to dashboards and monitoring tools within milliseconds. You don't poll for safety — you *watch* it happen.
-- **Chain analysis.** Session-aware pattern detection across a 60-minute window catches multi-step attacks (credential theft → exfiltration, read → write → execute, repeated scope probing) that single-call checks miss entirely.
-- **Zero-trust architecture.** The agent never touches tools directly. Every action is intercepted, evaluated, logged, and either allowed or blocked before execution.
-- **Agent trace observability.** Full agent lifecycle tracing: every LLM call, tool invocation, and retrieval step is captured as spans in an OpenTelemetry-inspired trace tree. Governance decisions are auto-injected as child spans, so you can see *exactly* where in the agent's reasoning chain each policy fired.
-- **Post-mortem reconstruction.** When an agent misbehaves, you don't guess — you pull the full trace, expand each span, see the governance pipeline results, and trace root cause from the agent's first thought to its last blocked action.
-- **Multi-agent visibility.** Filter traces by `agent_id` to compare governance patterns across agents. Spot which agents are hitting blocks, which are probing scope boundaries, and which are operating cleanly — all from one dashboard.
-- **On-chain attestation.** SURGE governance receipts (SHA-256) provide cryptographic proof of every governance decision for regulatory compliance.
+- **🛡️ Inline enforcement.** This is not passive monitoring. Every tool call is intercepted, evaluated against layered policies, and either allowed or blocked *before it executes*. The dangerous action never fires.
+- **🔥 Prompt injection firewall.** 11 injection patterns scanned on every tool-call payload — catches jailbreaks that survive the LLM layer and reach the tool execution boundary.
+- **📜 Full policy engine.** YAML base policies + dynamic DB policies with CRUD, partial updates (PATCH), active/inactive toggle, and regex validation. Not just alerts — enforceable rules.
+- **🚨 Kill switch.** One API call halts every agent globally. DB-persisted, survives restarts. When things go wrong at 3 AM, you have an instant off switch.
+- **🔗 Multi-step attack detection.** 6 chain patterns evaluated in real-time across a 60-minute session window. Catches credential-then-exfiltration, read-write-execute chains, and scope probing that look innocent one step at a time.
+- **⚡ Real-time streaming.** Server-Sent Events push every governance decision to dashboards within milliseconds. You don't poll for safety — you *watch* it happen.
+- **🔍 Agent trace observability.** Full agent lifecycle tracing: LLM calls, tool invocations, and retrieval steps captured as spans in an OpenTelemetry-inspired trace tree. Governance decisions are auto-injected as child spans — see *exactly* where in the agent's reasoning chain each policy fired.
+- **🔬 Post-mortem reconstruction.** When an agent misbehaves, pull the full trace, expand each span, see the governance pipeline results, and trace root cause from the agent's first thought to its last blocked action.
+- **👥 Multi-agent visibility.** Filter traces by `agent_id` to compare governance patterns across agents. Spot which agents are hitting blocks, which are probing scope boundaries, and which are operating cleanly — all from one dashboard.
+- **🌐 Language & framework agnostic.** Three SDKs (Python, TypeScript/JS, Java) — wrap any agent in 3 lines of code. No agent rewrites required.
+- **🔐 Cryptographic attestation.** SURGE governance receipts (SHA-256) provide provable evidence of every governance decision for regulatory compliance.
 
 ---
 
