@@ -87,12 +87,22 @@ openclaw-runtime-governor/
 │
 ├── openclaw-skills/
 │   ├── governed-tools/
-│   │   ├── governor_client.py             # Python SDK
+│   │   ├── governor_client.py             # Python SDK (PyPI: openclaw-governor-client)
 │   │   ├── skill.toml
-│   │   ├── js-client/                     # @openclaw/ocg-client (npm)
-│   │   │   ├── src/index.ts
+│   │   ├── js-client/                     # TypeScript/JS SDK (npm: @openclaw/governor-client)
+│   │   │   ├── src/index.ts               # GovernorClient class
+│   │   │   ├── tsconfig.json              # CJS build config
+│   │   │   ├── tsconfig.esm.json          # ESM build config
 │   │   │   ├── examples/proxy-server.js
 │   │   │   └── tests/
+│   │   ├── java-client/                   # Java SDK (Maven: dev.openclaw:governor-client)
+│   │   │   ├── pom.xml
+│   │   │   └── src/main/java/dev/openclaw/governor/
+│   │   │       ├── GovernorClient.java     # Builder pattern client
+│   │   │       ├── GovernorDecision.java
+│   │   │       ├── GovernorBlockedError.java
+│   │   │       ├── GovernorException.java
+│   │   │       └── SimpleJson.java         # Zero-dep JSON parser
 │   │   └── python-proxy/                  # FastAPI proxy server
 │   │       ├── proxy_server.py
 │   │       └── tests/
@@ -223,7 +233,9 @@ The `matches()` method checks tool name, URL regex, and args regex against the i
 Dual auth via FastAPI dependency injection (`auth/dependencies.py`):
 
 1. **JWT Bearer** — `Authorization: Bearer <token>` from `/auth/login`
-2. **API Key** — `X-API-Key: ocg_<32-byte-key>`
+2. **API Key** — `X-API-Key: ocg_<key>` (generated via `POST /auth/me/rotate-key` or dashboard API Keys tab)
+
+API keys use the `ocg_` prefix + `secrets.token_urlsafe(32)` (~43 chars total). Every authenticated user can rotate their own key (self-service).
 
 Role guards are composable FastAPI dependencies:
 ```python
@@ -294,7 +306,7 @@ cd governor-service
 pytest tests/ -v
 ```
 
-The test suite (`tests/test_governor.py`) covers:
+The test suite (`tests/test_governor.py`, 24 tests) covers:
 
 | Category | Tests |
 |----------|-------|
@@ -313,10 +325,13 @@ The test suite (`tests/test_governor.py`) covers:
 ### Client Tests
 
 ```bash
-# JavaScript client
+# TypeScript/JavaScript client (6 tests)
 cd openclaw-skills/governed-tools/js-client
-node tests/test_client.js
-node tests/test_client_headers.js
+npm test
+
+# Java client (6 tests)
+cd openclaw-skills/governed-tools/java-client
+mvn test
 
 # Python proxy
 cd openclaw-skills/governed-tools/python-proxy
@@ -469,8 +484,9 @@ See [`DEPLOY.md`](DEPLOY.md) for detailed deployment steps.
 
 | Package | Registry | Workflow |
 |---------|----------|----------|
-| `governed-tools` | PyPI | `.github/workflows/publish-python.yml` |
-| `@openclaw/ocg-client` | npm | `.github/workflows/publish-js.yml` |
+| `openclaw-governor-client` | PyPI | `.github/workflows/publish-python.yml` |
+| `@openclaw/governor-client` | npm | `.github/workflows/publish-js.yml` |
+| `dev.openclaw:governor-client` | Maven Central | `.github/workflows/publish-java.yml` |
 
 See [`PUBLISHING.md`](PUBLISHING.md) for secrets setup and manual publish instructions.
 

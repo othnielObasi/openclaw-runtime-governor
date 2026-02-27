@@ -11,11 +11,13 @@ The entire codebase was created specifically for this hackathon (Feb 4 – Mar 1
 | `governor-service/` FastAPI backend | ✅ 100% original | Custom-written 5-layer evaluation pipeline, policy engine, schema design, audit logger |
 | `governor-service/app/policies/` | ✅ 100% original | Policy dataclass, YAML loader, engine logic — no templates used |
 | `governor-service/app/neuro/` | ✅ 100% original | Heuristic risk estimator designed for this project |
-| `openclaw-skills/governed-tools/` | ✅ 100% original | Governor client, GovernorBlockedError, governed_call wrapper |
+| `openclaw-skills/governed-tools/` | ✅ 100% original | Governor client, GovernorBlockedError, governed_call wrapper, X-API-Key auth |
+| `openclaw-skills/governed-tools/js-client/` | ✅ 100% original | TypeScript/JavaScript SDK, dual CJS+ESM build, GovernorClient class |
+| `openclaw-skills/governed-tools/java-client/` | ✅ 100% original | Java SDK, builder pattern, zero-dep JSON parser, GovernorBlockedError |
 | `openclaw-skills/moltbook-reporter/` | ✅ 100% original | Full Moltbook API client, post composer, autonomous loop, register helper |
 | `dashboard/` Next.js | ✅ 100% original | All components hand-written (SummaryPanel, RecentActions, ActionTester, PolicyEditor, AdminStatus) |
 | `docs/` | ✅ 100% original | Architecture diagrams, deployment guides |
-| Test suite (10 tests) | ✅ 100% original | Written to match the actual implementation |
+| Test suite (24+ tests) | ✅ 100% original | Written to match the actual implementation |
 
 ---
 
@@ -68,6 +70,9 @@ This is the most important section for submission compliance. Everything used mu
 | PyYAML | 6.0.2 | YAML policy file parsing | MIT |
 | python-dotenv | 1.0.1 | .env file loading | BSD-3 |
 | httpx | 0.27.2 | Async/sync HTTP client (reporter + governed-tools) | BSD-3 |
+| python-jose | 3.3.0 | JWT encoding/decoding (HS256) | MIT |
+| bcrypt | 4.2.0 | Password hashing | Apache-2.0 |
+| slowapi | 0.1.9 | Rate limiting middleware | MIT |
 | pytest | 8.3.3 | Test runner | MIT |
 
 ### JavaScript / Node Dependencies (`dashboard/package.json`)
@@ -99,8 +104,9 @@ This is the most important section for submission compliance. Everything used mu
 Copy this into the "Long Description" or "Disclosures" field of the LabLab submission form:
 
 > **Third-party disclosures:**
-> Backend: FastAPI, SQLAlchemy, Pydantic, PyYAML, httpx, Uvicorn (all MIT/BSD).
-> Dashboard: Next.js 14, React 18, Axios (all MIT).
+> Backend: FastAPI, SQLAlchemy, Pydantic, PyYAML, httpx, python-jose, bcrypt, slowapi, Uvicorn (all MIT/BSD).
+> Dashboard: Next.js 14, React 18, Axios, TypeScript (all MIT/Apache-2.0).
+> SDKs: Python SDK uses httpx (BSD-3). TypeScript/JS SDK: zero runtime deps (built-in fetch). Java SDK: zero runtime deps (java.net.http).
 > External services: Moltbook API (agent social network, used for autonomous status reporting to the lablab submolt as required by hackathon rules). OpenClaw (the agent runtime platform this tool governs).
 > No pre-trained AI models or third-party ML APIs are used. The risk estimator is an original heuristic function.
 > All code was written during the Feb 4–Mar 1, 2026 hackathon period.

@@ -45,7 +45,9 @@ The pipeline **short-circuits** on the first block — kill switch fires before 
 |-----------|------|---------|
 | [`governor-service/`](governor-service/) | FastAPI backend — evaluation pipeline, auth, SURGE, audit logging | 0.3.0 |
 | [`dashboard/`](dashboard/) | Next.js control panel — live monitoring, policy editor, admin controls | 0.2.0 |
-| [`openclaw-skills/governed-tools/`](openclaw-skills/governed-tools/) | Python + JS clients that wire agents to the governor | 0.2.0 / 0.1.0 |
+| [`openclaw-skills/governed-tools/`](openclaw-skills/governed-tools/) | Python SDK (`openclaw-governor-client` on PyPI) | 0.2.0 |
+| [`openclaw-skills/governed-tools/js-client/`](openclaw-skills/governed-tools/js-client/) | TypeScript/JS SDK (`@openclaw/governor-client` on npm) — dual CJS + ESM | 0.2.0 |
+| [`openclaw-skills/governed-tools/java-client/`](openclaw-skills/governed-tools/java-client/) | Java SDK (`dev.openclaw:governor-client` on Maven Central) — zero deps, Java 11+ | 0.2.0 |
 | [`openclaw-skills/moltbook-reporter/`](openclaw-skills/moltbook-reporter/) | Automated Moltbook status reporter | 0.3.0 |
 | [`governor_agent.py`](governor_agent.py) | Autonomous governance agent (observe → reason → act loop) | — |
 | [`docs/`](docs/) | Architecture docs & diagrams | — |
@@ -84,6 +86,10 @@ Set `NEXT_PUBLIC_GOVERNOR_API` to point at your backend (default: `http://localh
 
 ### 3. Test an Evaluation
 
+You can authenticate with **JWT** or an **API key**.
+
+#### Option A — JWT Bearer token
+
 ```bash
 # Login
 TOKEN=$(curl -s -X POST http://localhost:8000/auth/login \
@@ -102,6 +108,26 @@ curl -X POST http://localhost:8000/actions/evaluate \
 ```
 
 Response includes the decision, risk score, explanation, matched policy IDs, and full execution trace.
+
+#### Option B — API Key
+
+```bash
+curl -X POST http://localhost:8000/actions/evaluate \
+  -H "X-API-Key: ocg_your_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool": "shell",
+    "args": {"command": "ls -la"},
+    "context": {"agent_id": "test-agent"}
+  }'
+```
+
+Rotate your own API key any time (self-service):
+
+```bash
+curl -X POST http://localhost:8000/auth/me/rotate-key \
+  -H "Authorization: Bearer $TOKEN"
+```
 
 ---
 
@@ -186,12 +212,14 @@ Both methods are supported simultaneously on every protected endpoint.
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | `POST` | `/auth/login` | None | Login (rate-limited 5/min) |
+| `POST` | `/auth/signup` | None | Public registration (username, password, display name) |
 | `GET` | `/auth/me` | Any | Current user info |
 | `GET` | `/auth/users` | Admin | List all users |
 | `POST` | `/auth/users` | Admin | Create user |
 | `PATCH` | `/auth/users/{id}` | Admin | Update user |
 | `DELETE` | `/auth/users/{id}` | Admin | Deactivate user (soft delete) |
-| `POST` | `/auth/users/{id}/rotate-key` | Admin | Rotate API key |
+| `POST` | `/auth/me/rotate-key` | Any | Rotate own API key (self-service) |
+| `POST` | `/auth/users/{id}/rotate-key` | Admin | Rotate any user's API key |
 
 ### Governance
 | Method | Path | Auth | Description |
@@ -230,34 +258,66 @@ Both methods are supported simultaneously on every protected endpoint.
 
 ## Client SDKs
 
-### Python
+Three official SDKs — all authenticate with `X-API-Key` and throw on `block` decisions.
+
+### Python  ·  `pip install openclaw-governor-client`
 
 ```python
-from governor_client import evaluate_action, governed_call
+import governor_client
+from governor_client import evaluate_action, GovernorBlockedError
 
-# Direct evaluation
-decision = evaluate_action("shell", {"command": "rm -rf /"})
-# decision.decision == "block"
+governor_client.GOVERNOR_URL = "https://openclaw-governor.fly.dev"
+governor_client.GOVERNOR_API_KEY = "ocg_your_key_here"
 
-# Convenience wrapper — raises GovernorBlockedError on block
-result = governed_call("file_read", {"path": "/etc/passwd"}, your_tool_fn)
+try:
+    decision = evaluate_action("shell", {"command": "rm -rf /"})
+    print(decision["decision"])   # "allow" | "review"
+except GovernorBlockedError:
+    print("Blocked!")
 ```
 
-### JavaScript / TypeScript
+### TypeScript / JavaScript  ·  `npm install @openclaw/governor-client`
+
+Dual CJS + ESM build — works with `require()` and `import`.
 
 ```typescript
-import { GovernorClient } from "@openclaw/ocg-client";
+import { GovernorClient, GovernorBlockedError } from "@openclaw/governor-client";
 
-const client = new GovernorClient({
-  url: "https://your-governor.fly.dev",
+const gov = new GovernorClient({
+  baseUrl: "https://openclaw-governor.fly.dev",
   apiKey: "ocg_your_key_here",
 });
 
-const result = await client.request("/actions/evaluate", {
-  method: "POST",
-  body: { tool: "shell", args: { command: "ls" } },
-});
+try {
+  const decision = await gov.evaluate("shell", { command: "ls" });
+  console.log(decision.decision);   // "allow" | "review"
+} catch (err) {
+  if (err instanceof GovernorBlockedError) console.error("Blocked!");
+}
 ```
+
+### Java  ·  `dev.openclaw:governor-client:0.2.0`
+
+Zero runtime dependencies. Java 11+.
+
+```java
+import dev.openclaw.governor.*;
+import java.util.Map;
+
+GovernorClient gov = new GovernorClient.Builder()
+    .baseUrl("https://openclaw-governor.fly.dev")
+    .apiKey("ocg_your_key_here")
+    .build();
+
+try {
+    GovernorDecision d = gov.evaluate("shell", Map.of("command", "ls"));
+    System.out.println(d.getDecision());   // "allow" | "review"
+} catch (GovernorBlockedError e) {
+    System.err.println("Blocked!");
+}
+```
+
+See [`docs/SDK_OVERVIEW.md`](docs/SDK_OVERVIEW.md) for a full comparison of all SDKs.
 
 ### Proxy Servers
 Both Python (FastAPI) and JavaScript (Express) proxy servers are included for environments where agents can't reach the governor directly:
@@ -297,28 +357,31 @@ python governor_agent.py --no-moltbook
 | Governor Service | Fly.io | [`fly.toml`](governor-service/fly.toml), [`Dockerfile`](governor-service/Dockerfile) |
 | Dashboard | Vercel | [`vercel.json`](dashboard/vercel.json) |
 
-See [`DEPLOY.md`](DEPLOY.md) for full deployment instructions and [`PUBLISHING.md`](PUBLISHING.md) for PyPI/npm package publishing workflows.
+See [`DEPLOY.md`](DEPLOY.md) for full deployment instructions, [`PUBLISHING.md`](PUBLISHING.md) for PyPI / npm / Maven publishing workflows, and [`docs/SDK_OVERVIEW.md`](docs/SDK_OVERVIEW.md) for a full SDK comparison.
 
 ---
 
 ## Testing
 
 ```bash
-# Backend — 22 test cases
+# Backend — 24 test cases
 cd governor-service
 pytest tests/ -v
 
-# JS client
+# TypeScript/JS client — 6 tests
 cd openclaw-skills/governed-tools/js-client
-node tests/test_client.js
-node tests/test_client_headers.js
+npm test
+
+# Java client — 6 tests
+cd openclaw-skills/governed-tools/java-client
+mvn test
 
 # Python proxy
 cd openclaw-skills/governed-tools/python-proxy
 pytest tests/ -v
 ```
 
-Tests cover all 5 pipeline layers, chain analysis patterns, SURGE governance receipts, policy cache invalidation, and client SDK behavior.
+Tests cover all 5 pipeline layers, chain analysis patterns, SURGE governance receipts, policy cache invalidation, and all three client SDKs.
 
 ---
 
@@ -362,6 +425,7 @@ Tests cover all 5 pipeline layers, chain analysis patterns, SURGE governance rec
 | Variable | Description |
 |----------|-------------|
 | `GOVERNOR_URL` | Governor service URL |
+| `GOVERNOR_API_KEY` | API key (`ocg_…`) for `X-API-Key` auth |
 | `GOVERNOR_AGENT_ID` | Agent identifier |
 | `GOVERNOR_HEARTBEAT_SEC` | Check interval in seconds (default: 30) |
 | `MOLTBOOK_API_KEY` | Moltbook API key |
@@ -409,7 +473,10 @@ openclaw-runtime-governor/
 │   ├── app/                    # Pages (landing, layout)
 │   └── components/             # Dashboard, login, editors, panels
 ├── openclaw-skills/
-│   ├── governed-tools/         # Python + JS client SDKs, proxy servers
+│   ├── governed-tools/         # Python SDK + proxy servers
+│   │   ├── governor_client.py  # Python client (PyPI: openclaw-governor-client)
+│   │   ├── js-client/          # TypeScript/JS client (npm: @openclaw/governor-client)
+│   │   └── java-client/        # Java client (Maven: dev.openclaw:governor-client)
 │   └── moltbook-reporter/      # Automated Moltbook status poster
 ├── governor_agent.py           # Autonomous governance agent
 ├── GovernorComplete.jsx        # Standalone preview artifact
@@ -417,7 +484,9 @@ openclaw-runtime-governor/
 ├── PUBLISHING.md               # Package publishing guide
 ├── DEVELOPER.md                # Developer guide
 ├── DISCLOSURES.md              # Hackathon compliance
-└── docs/ARCHITECTURE.md        # Architecture deep-dive
+└── docs/
+    ├── ARCHITECTURE.md         # Architecture deep-dive
+    └── SDK_OVERVIEW.md         # Multi-language SDK comparison
 ```
 
 ---
