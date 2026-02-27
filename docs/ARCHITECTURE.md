@@ -78,6 +78,7 @@ governor-service/
 │   │   ├── routes_actions.py ← POST /actions/evaluate, GET /actions
 │   │   ├── routes_stream.py  ← GET /actions/stream (SSE), GET /actions/stream/status
 │   │   ├── routes_policies.py← GET/POST/PATCH/DELETE /policies (+ toggle, regex validation)
+│   │   ├── routes_traces.py  ← POST /traces/ingest, GET /traces, GET /traces/{id}, DELETE
 │   │   ├── routes_summary.py ← GET /summary/moltbook
 │   │   ├── routes_admin.py   ← GET /admin/status, POST /admin/kill|resume
 │   │   └── routes_surge.py   ← SURGE receipts, staking, fee gating
@@ -108,6 +109,7 @@ dashboard/
     ├── ActionTester.tsx       ← POST /actions/evaluate UI
     ├── AdminStatus.tsx        ← Kill switch toggle
     ├── PolicyEditor.tsx       ← Full CRUD policy editor (create, inline edit, toggle, delete)
+    ├── TraceViewer.tsx        ← Agent trace explorer (span tree, governance correlation, detail panel)
     ├── useActionStream.ts     ← React hook for SSE — auto-connect, reconnect, event buffer
     ├── RecentActions.tsx      ← GET /actions audit feed + live SSE merge (LIVE badge)
     ├── SummaryPanel.tsx       ← Stats overview (auto-refresh on SSE events)
@@ -150,5 +152,7 @@ openclaw-skills/
 | CORS middleware on FastAPI | Allows dashboard on different origin (Vercel) to talk to backend (Fly.io) |
 | SURGE governance receipts (SHA-256) | Immutable attestation for on-chain governance proofs |
 | SSE over WebSocket for real-time streaming | Simpler protocol, auto-reconnect, works through HTTP proxies/CDNs, one-directional push is sufficient |
+| Trace span model (OpenTelemetry-inspired) | trace_id → span_id → parent_span_id tree; governance spans auto-created on evaluate when trace_id in context |
+| Governance span injection | Zero SDK changes: just pass trace_id in context and the Governor inserts its own span into the agent’s trace tree |
 | In-memory event bus (asyncio.Queue per subscriber) | Zero external deps (no Redis), low latency, sufficient for single-instance deployment |
 | `?token=` query param auth for SSE | Browser EventSource API cannot set custom headers; query param fallback enables dashboard connectivity |

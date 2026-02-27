@@ -129,16 +129,10 @@ class TestSSEEndpoint:
     """Tests for GET /actions/stream and /actions/stream/status."""
 
     @pytest.fixture(autouse=True)
-    def _setup(self):
-        """Create test client and auth header."""
+    def _setup(self, admin_token):
+        """Create test client and auth header using shared token."""
         self.client = TestClient(app)
-        # Login to get a token
-        r = self.client.post(
-            "/auth/login",
-            json={"username": "admin", "password": "changeme"},
-        )
-        assert r.status_code == 200, f"Login failed: {r.text}"
-        self.token = r.json()["access_token"]
+        self.token = admin_token
         self.headers = {"Authorization": f"Bearer {self.token}"}
 
     def test_stream_requires_auth(self):

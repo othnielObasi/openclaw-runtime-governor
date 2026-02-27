@@ -86,6 +86,8 @@ class ActionLogRead(BaseModel):
     session_id: Optional[str] = None
     user_id: Optional[str] = None
     channel: Optional[str] = None
+    trace_id: Optional[str] = None
+    span_id: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -143,3 +145,84 @@ class SummaryOut(BaseModel):
 
 class GovernorStatus(BaseModel):
     kill_switch: bool = Field(..., description="If true, all actions will be blocked.")
+
+
+# ---------------------------------------------------------------------------
+# Traces — Agent lifecycle observability
+# ---------------------------------------------------------------------------
+
+class SpanCreate(BaseModel):
+    """One span in an agent trace (ingested from SDK / agent framework)."""
+    trace_id: str = Field(..., min_length=1, max_length=128, description="Groups all spans of one agent task.")
+    span_id: str = Field(..., min_length=1, max_length=128, description="Unique identifier for this span.")
+    parent_span_id: Optional[str] = Field(default=None, max_length=128, description="Parent span for nesting.")
+    kind: str = Field(..., pattern="^(agent|llm|tool|governance|retrieval|chain|custom)$")
+    name: str = Field(..., min_length=1, max_length=256)
+    status: str = Field(default="ok", pattern="^(ok|error)$")
+    start_time: datetime
+    end_time: Optional[datetime] = None
+    duration_ms: Optional[float] = None
+    agent_id: Optional[str] = Field(default=None, max_length=128)
+    session_id: Optional[str] = Field(default=None, max_length=128)
+    attributes: Optional[Dict[str, Any]] = Field(default=None, description="Flexible metadata (model, tokens, cost, etc.)")
+    input: Optional[str] = Field(default=None, description="LLM prompt / tool args.")
+    output: Optional[str] = Field(default=None, description="LLM response / tool result.")
+    events: Optional[List[Dict[str, Any]]] = Field(default=None, description="Timestamped sub-events within the span.")
+
+
+class SpanBatchCreate(BaseModel):
+    """Batch ingest multiple spans."""
+    spans: List[SpanCreate] = Field(..., min_length=1, max_length=500)
+
+
+class SpanRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    trace_id: str
+    span_id: str
+    parent_span_id: Optional[str] = None
+    kind: str
+    name: str
+    status: str = "ok"
+    start_time: datetime
+    end_time: Optional[datetime] = None
+    duration_ms: Optional[float] = None
+    agent_id: Optional[str] = None
+    session_id: Optional[str] = None
+    attributes: Optional[Dict[str, Any]] = None
+    input: Optional[str] = None
+    output: Optional[str] = None
+    events: Optional[List[Dict[str, Any]]] = None
+    created_at: datetime
+
+
+class TraceListItem(BaseModel):
+    """Summary of a trace for listing."""
+    trace_id: str
+    agent_id: Optional[str] = None
+    session_id: Optional[str] = None
+    span_count: int
+    governance_count: int = 0
+    root_span_name: Optional[str] = None
+    start_time: datetime
+    end_time: Optional[datetime] = None
+    total_duration_ms: Optional[float] = None
+    has_errors: bool = False
+    has_blocks: bool = False
+
+
+class TraceDetail(BaseModel):
+    """Full trace with all spans and correlated governance decisions."""
+    trace_id: str
+    agent_id: Optional[str] = None
+    session_id: Optional[str] = None
+    spans: List[SpanRead]
+    governance_decisions: List[ActionLogRead] = Field(default_factory=list)
+    span_count: int
+    governance_count: int = 0
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    total_duration_ms: Optional[float] = None
+    has_errors: bool = False
+    has_blocks: bool = False

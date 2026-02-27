@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import TraceViewer from "./TraceViewer";
 
 // ═══════════════════════════════════════════════════════════
 // DESIGN TOKENS — SOVEREIGN AI LAB
@@ -2213,6 +2214,21 @@ function LiveFeedPanel({ log, total }) {
 // Immutable append-only log of all governance events.
 // Three event types: DECISION, POLICY_CHANGE, KILL_SWITCH
 // ═══════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════
+// TRACES TAB — Agent lifecycle observability
+// ═══════════════════════════════════════════════════════════
+function TracesTab() {
+  return (
+    <div style={{background:C.bg1, border:`1px solid ${C.line}`, height:"100%", display:"flex", flexDirection:"column"}}>
+      <TraceViewer/>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+// AUDIT TRAIL TAB
+// ═══════════════════════════════════════════════════════════
 function AuditTrailTab({ auditLog, policySnapshots }) {
   const [filter, setFilter] = useState("ALL");
   const [search, setSearch] = useState("");
@@ -3201,9 +3217,9 @@ function SurgeTab({ receipts, stakedPolicies, setStaked, userRole }) {
 // ROLE_TABS + ALL_TABS (SURGE + Topology added)
 // ═══════════════════════════════════════════════════════════
 const ROLE_TABS = {
-  admin:    ["dashboard","tester","policies","surge","audit","topology","apikeys","users"],
-  operator: ["dashboard","tester","policies","surge","audit","topology","apikeys"],
-  auditor:  ["dashboard","surge","audit","topology","apikeys"],
+  admin:    ["dashboard","tester","policies","surge","audit","traces","topology","apikeys","users"],
+  operator: ["dashboard","tester","policies","surge","audit","traces","topology","apikeys"],
+  auditor:  ["dashboard","surge","audit","traces","topology","apikeys"],
 };
 
 const ALL_TABS = [
@@ -3212,6 +3228,7 @@ const ALL_TABS = [
   { id:"policies",  label:"Policy Editor",     icon:"◆" },
   { id:"surge",     label:"SURGE",             icon:"⬡" },
   { id:"audit",     label:"Audit Trail",       icon:"☰" },
+  { id:"traces",    label:"Traces",            icon:"⧉" },
   { id:"topology",  label:"Topology",          icon:"◎" },
   { id:"apikeys",   label:"API Keys",          icon:"🔑" },
   { id:"users",     label:"User Management",   icon:"⚙", adminOnly:true },
@@ -3638,6 +3655,7 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
             }}/>}
           {tab==="surge"     && <SurgeTab receipts={surgeReceipts} stakedPolicies={stakedPolicies} setStaked={setStakedPolicies} userRole={userRole}/>}
           {tab==="audit"     && <AuditTrailTab auditLog={auditLog} policySnapshots={policySnapshots}/>}
+          {tab==="traces"    && <TracesTab/>}
           {tab==="topology"  && <TopologyTab gs={gs} killSwitch={killSwitch} degraded={degraded}/>}
           {tab==="apikeys"   && <ApiKeysTab/>}
           {tab==="users"     && userRole==="admin" && <AdminUserManagementTab/>}

@@ -11,8 +11,9 @@ def log_action(action: ActionInput, decision: ActionDecision) -> None:
     """
     Persist a governed action to the audit log.
 
-    Context metadata (agent_id, session_id, user_id, channel) is extracted
-    from action.context and stored as indexed columns for easy filtering.
+    Context metadata (agent_id, session_id, user_id, channel, trace_id,
+    span_id) is extracted from action.context and stored as indexed
+    columns for easy filtering and trace correlation.
     """
     ctx = action.context or {}
 
@@ -26,6 +27,9 @@ def log_action(action: ActionInput, decision: ActionDecision) -> None:
             session_id=ctx.get("session_id"),
             user_id=ctx.get("user_id"),
             channel=ctx.get("channel"),
+            # Trace correlation
+            trace_id=ctx.get("trace_id"),
+            span_id=ctx.get("span_id"),
             # Decision
             decision=decision.decision,
             risk_score=decision.risk_score,

@@ -334,7 +334,7 @@ python governor_agent.py --demo   # Single observation cycle
 ### Governance
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `POST` | `/actions/evaluate` | Operator+ | Evaluate a tool call |
+| `POST` | `/actions/evaluate` | Operator+ | Evaluate a tool call (auto-creates governance span if `trace_id` in context) |
 | `GET` | `/actions` | Any | List action logs (filterable) |
 | `GET` | `/actions/stream` | Any | **Real-time SSE event stream** |
 | `GET` | `/actions/stream/status` | Any | Active stream subscribers |
@@ -360,12 +360,20 @@ python governor_agent.py --demo   # Single observation cycle
 | `GET` | `/surge/receipts` | Any | List governance receipts |
 | `POST` | `/surge/policies/stake` | Operator+ | Stake $SURGE on a policy |
 
+### Traces — Agent Lifecycle Observability
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `POST` | `/traces/ingest` | Operator+ | Batch ingest agent trace spans (up to 500, idempotent) |
+| `GET` | `/traces` | Any | List traces with summary (`?agent_id=`, `?has_blocks=true`) |
+| `GET` | `/traces/{trace_id}` | Any | Full trace: all spans + correlated governance decisions |
+| `DELETE` | `/traces/{trace_id}` | Operator+ | Delete all spans for a trace |
+
 ---
 
 ## Testing
 
 ```bash
-# Backend — 52 tests (24 governance + 18 policy management + 10 SSE streaming)
+# Backend — 68 tests (24 governance + 18 policy + 16 traces + 10 SSE streaming)
 cd governor-service && pytest tests/ -v
 
 # TypeScript/JS SDK — 6 tests

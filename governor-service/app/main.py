@@ -8,7 +8,7 @@ from slowapi.errors import RateLimitExceeded
 from .config import settings
 from .database import Base, engine
 from .rate_limit import limiter
-from .api import routes_actions, routes_policies, routes_summary, routes_admin, routes_surge, routes_stream
+from .api import routes_actions, routes_policies, routes_summary, routes_admin, routes_surge, routes_stream, routes_traces
 from .auth.routes_auth import router as auth_router
 from .auth.seed import seed_admin
 
@@ -49,6 +49,7 @@ app.include_router(routes_summary.router)
 app.include_router(routes_admin.router)
 app.include_router(routes_surge.router)
 app.include_router(routes_stream.router)
+app.include_router(routes_traces.router)
 
 
 @app.get("/", tags=["meta"])

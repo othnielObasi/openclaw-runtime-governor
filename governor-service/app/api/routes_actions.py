@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import secrets
+from datetime import datetime, timezone
 from typing import List
 
 from fastapi import APIRouter, Depends, Query
@@ -9,13 +11,73 @@ from sqlalchemy import select
 from ..auth.dependencies import require_any, require_operator
 from ..database import db_session
 from ..event_bus import ActionEvent, action_bus
-from ..models import ActionLog, User
+from ..models import ActionLog, TraceSpan, User
 from ..policies.engine import evaluate_action
 from ..schemas import ActionInput, ActionDecision, ActionLogRead
 from ..telemetry.logger import log_action
 from .routes_surge import create_governance_receipt
 
 router = APIRouter(prefix="/actions", tags=["actions"])
+
+
+def _create_governance_span(
+    action: ActionInput, decision: ActionDecision, eval_start: datetime,
+) -> None:
+    """Auto-create a 'governance' trace span when trace_id is in context.
+
+    This links the Governor's evaluation into the agent's trace tree so
+    GET /traces/{trace_id} shows governance decisions inline with the
+    agent's own reasoning and tool-call spans.
+    """
+    ctx = action.context or {}
+    trace_id = ctx.get("trace_id")
+    if not trace_id:
+        return
+
+    now = datetime.now(timezone.utc)
+    dur = (now - eval_start).total_seconds() * 1000
+
+    # Build a descriptive attributes payload
+    attrs = {
+        "governor.decision": decision.decision,
+        "governor.risk_score": decision.risk_score,
+        "governor.policy_ids": decision.policy_ids,
+        "governor.tool": action.tool,
+    }
+    if decision.chain_pattern:
+        attrs["governor.chain_pattern"] = decision.chain_pattern
+    trace_steps = [
+        {"layer": s.layer, "name": s.name, "outcome": s.outcome,
+         "risk": s.risk_contribution, "matched": s.matched_ids,
+         "duration_ms": s.duration_ms}
+        for s in decision.execution_trace
+    ]
+    attrs["governor.trace"] = trace_steps
+
+    span_id = f"gov-{secrets.token_hex(12)}"
+
+    with db_session() as session:
+        row = TraceSpan(
+            trace_id=trace_id,
+            span_id=span_id,
+            parent_span_id=ctx.get("span_id"),   # nest under calling span if provided
+            kind="governance",
+            name=f"governor.evaluate({action.tool})",
+            status="ok",
+            start_time=eval_start,
+            end_time=now,
+            duration_ms=round(dur, 2),
+            agent_id=ctx.get("agent_id"),
+            session_id=ctx.get("session_id"),
+            attributes_json=json.dumps(attrs),
+            input_text=json.dumps({"tool": action.tool, "args": action.args}),
+            output_text=json.dumps({
+                "decision": decision.decision,
+                "risk_score": decision.risk_score,
+                "explanation": decision.explanation,
+            }),
+        )
+        session.add(row)
 
 
 @router.post("/evaluate", response_model=ActionDecision)
@@ -27,9 +89,15 @@ def evaluate_action_route(
 
     Requires operator or admin credentials (JWT or API key).
     Also generates a SURGE governance receipt for on-chain attestation.
+    When trace_id is present in context, a 'governance' span is auto-created
+    in the trace for full agent lifecycle visibility.
     """
+    eval_start = datetime.now(timezone.utc)
     decision = evaluate_action(action)
     log_action(action, decision)
+
+    # Auto-create governance span if trace_id in context
+    _create_governance_span(action, decision, eval_start)
 
     # Broadcast to real-time SSE subscribers
     ctx = action.context or {}
@@ -95,6 +163,8 @@ def list_actions(
                 session_id=r.session_id,
                 user_id=r.user_id,
                 channel=r.channel,
+                trace_id=r.trace_id,
+                span_id=r.span_id,
             )
             for r in rows
         ]

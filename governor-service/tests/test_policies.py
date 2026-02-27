@@ -21,19 +21,32 @@ client = TestClient(app)
 
 
 # ---------------------------------------------------------------------------
-# Auth helper — get a JWT for admin (module-scoped to avoid rate limit)
+# Auth helper — uses session-scoped token from conftest
 # ---------------------------------------------------------------------------
 
-_cached_token: str | None = None
+_shared_token: str | None = None
 
 
 def _admin_headers() -> dict:
-    global _cached_token
-    if _cached_token is None:
+    global _shared_token
+    if _shared_token is None:
+        # Importing to trigger conftest session fixture isn't possible here,
+        # but the module-level token will be set by the first test via fixture.
         resp = client.post("/auth/login", json={"username": "admin", "password": "changeme"})
         assert resp.status_code == 200, f"Login failed: {resp.text}"
-        _cached_token = resp.json()["access_token"]
-    return {"Authorization": f"Bearer {_cached_token}"}
+        _shared_token = resp.json()["access_token"]
+    return {"Authorization": f"Bearer {_shared_token}"}
+
+
+def _set_shared_token(token: str):
+    global _shared_token
+    _shared_token = token
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _inject_token(admin_token):
+    """Inject the session-scoped admin token to avoid extra login calls."""
+    _set_shared_token(admin_token)
 
 
 # ---------------------------------------------------------------------------
