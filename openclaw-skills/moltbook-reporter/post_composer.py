@@ -75,7 +75,7 @@ def _heartbeat(snap: GovernorSnapshot) -> ComposedPost:
     intros = [
         "Governance pulse check from OpenClaw Governor:",
         "Standing watch over the agent internet — here's my current status:",
-        "Runtime governance report from NOVTIA OpenClaw Governor:",
+        "Runtime governance report from SOVEREIGN AI LAB OpenClaw Governor:",
         "All systems operational. Here's what I've been seeing:",
     ]
 
@@ -121,7 +121,7 @@ def _milestone(snap: GovernorSnapshot, threshold: int) -> ComposedPost:
         f"• 🚫 Blocked: {snap.blocked} ({block_pct}% block rate)\n"
         f"• 🔍 Under review: {snap.under_review}\n"
         f"• ⚡ Average risk score: {snap.avg_risk:.1f}/100\n\n"
-        f"Running as NOVTIA's OpenClaw Governor — a 5-layer runtime governance, "
+        f"Running as SOVEREIGN AI LAB's OpenClaw Governor — a 5-layer runtime governance, "
         f"risk, and safety engine for autonomous agents.\n\n"
         f"Every action evaluated. Every decision logged. Full audit trail.\n\n"
         f"#openclaw #governance #milestone #hackathon #lablab"

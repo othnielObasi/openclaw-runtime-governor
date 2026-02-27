@@ -183,7 +183,7 @@ function LandingPage({ onSelect }: { onSelect: (mode: "demo" | "live") => void }
         letterSpacing: 1.5,
         textTransform: "uppercase",
       }}>
-        Sovereign AI Lab · NOVTIA
+        SOVEREIGN AI LAB
       </p>
     </div>
   );

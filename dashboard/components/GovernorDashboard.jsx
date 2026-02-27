@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 
 // ═══════════════════════════════════════════════════════════
-// DESIGN TOKENS — NOVTIA Sovereign
+// DESIGN TOKENS — SOVEREIGN AI LAB
 // One hue (navy), four depths for panel hierarchy.
 // Text:    p1 primary | p2 secondary | p3 tertiary
 // Signals: green=allow | amber=review | red=block
@@ -302,7 +302,7 @@ const AGENT_REGISTRY = {
   },
   "sovereign-robotics-ops": {
     capabilities:["http_request","file_read","file_write","shell"],
-    owner:"novtia-sovereign", registered:"2026-02-10",
+    owner:"sovereign-ai-lab", registered:"2026-02-10",
     fingerprint:"f1e2d3c4", trustLevel:"trusted",
   },
 };
@@ -3412,7 +3412,7 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
           <div style={{display:"flex", alignItems:"center", gap:10}}>
             <span style={{fontFamily:mono, fontSize:8, color:C.muted}}>⏱ {fmtUptime(uptime)}</span>
             <span style={{fontFamily:mono, fontSize:8, color:C.p3, letterSpacing:1}}>
-              NOVTIA · SURGE × OPENCLAW
+              SOVEREIGN AI LAB · SURGE × OPENCLAW
             </span>
           </div>
         </div>

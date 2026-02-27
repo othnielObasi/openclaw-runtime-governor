@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 
 // ═══════════════════════════════════════════════════════════
-// DESIGN TOKENS — NOVTIA Sovereign
+// DESIGN TOKENS — SOVEREIGN AI LAB
 // One hue (navy), four depths for panel hierarchy.
 // Text:    p1 primary | p2 secondary | p3 tertiary
 // Signals: green=allow | amber=review | red=block
@@ -158,7 +158,7 @@ function LoginPage({ onLogin }) {
         padding:"5px 0",textAlign:"center",background:`${C.bg0}ee`,
         borderTop:`1px solid ${C.line}`,
         fontSize:"8.5px",letterSpacing:3,color:C.p3,textTransform:"uppercase",
-      }}>OpenClaw Governor v0.2.0 · Runtime Governance Platform · NOVTIA Sovereign Core</div>
+      }}>OpenClaw Governor v0.2.0 · Runtime Governance Platform · SOVEREIGN AI LAB Core</div>
 
       {/* Panel */}
       <div style={{
@@ -195,7 +195,7 @@ function LoginPage({ onLogin }) {
             </div>
             <div style={{display:"inline-block",fontSize:8,letterSpacing:2,color:C.p3,
               padding:"2px 10px",border:`1px solid ${C.line2}`,textTransform:"uppercase"}}>
-              SOVEREIGN AI LAB · NOVTIA
+              SOVEREIGN AI LAB
             </div>
           </div>
 
@@ -596,7 +596,7 @@ const AGENT_REGISTRY = {
   },
   "sovereign-robotics-ops": {
     capabilities:["http_request","file_read","file_write","shell"],
-    owner:"novtia-sovereign", registered:"2026-02-10",
+    owner:"sovereign-ai-lab", registered:"2026-02-10",
     fingerprint:"f1e2d3c4", trustLevel:"trusted",
   },
 };
@@ -1104,11 +1104,11 @@ const SEED_DATA = [
   { tool:"http_request",   args:{url:"http://internal-db/api/status"},           ctx:{agent_id:"claude-ops-agent",   trust_level:"internal"}, agent:"claude-ops-agent" },
   { tool:"file_read",      args:{path:"/tmp/report.json"},                       ctx:{agent_id:"crewai-monitor-v1",  trust_level:"internal"}, agent:"crewai-monitor-v1" },
   { tool:"http_request",   args:{url:"http://localhost/api/agents/status"},      ctx:{agent_id:"claude-ops-agent",   trust_level:"internal"}, agent:"claude-ops-agent" },
-  { tool:"messaging_send", args:{to:["security@novtia.io"],content:"Policy audit complete — 0 violations"}, ctx:{agent_id:"crewai-monitor-v1", trust_level:"internal"}, agent:"crewai-monitor-v1" },
+  { tool:"messaging_send", args:{to:["security@sovereignailab.io"],content:"Policy audit complete — 0 violations"}, ctx:{agent_id:"crewai-monitor-v1", trust_level:"internal"}, agent:"crewai-monitor-v1" },
   { tool:"file_read",      args:{path:"/app/config/settings.json"},              ctx:{agent_id:"langchain-pipeline", trust_level:"internal"}, agent:"langchain-pipeline" },
   { tool:"http_request",   args:{url:"http://localhost/api/policies"},           ctx:{agent_id:"claude-ops-agent",   trust_level:"internal"}, agent:"claude-ops-agent" },
   { tool:"http_request",   args:{url:"http://localhost/api/audit/trail"},        ctx:{agent_id:"crewai-monitor-v1",  trust_level:"internal"}, agent:"crewai-monitor-v1" },
-  { tool:"messaging_send", args:{to:["ops@novtia.io"],content:"Nightly scan complete. Governor active."}, ctx:{agent_id:"crewai-monitor-v1", trust_level:"internal"}, agent:"crewai-monitor-v1" },
+  { tool:"messaging_send", args:{to:["ops@sovereignailab.io"],content:"Nightly scan complete. Governor active."}, ctx:{agent_id:"crewai-monitor-v1", trust_level:"internal"}, agent:"crewai-monitor-v1" },
 ];
 
 // ═══════════════════════════════════════════════════════════
@@ -3991,7 +3991,7 @@ function GovernorDashboard({ userRole="operator", userName="", onLogout=()=>{} }
           <div style={{display:"flex", alignItems:"center", gap:10}}>
             <span style={{fontFamily:mono, fontSize:8, color:C.muted}}>⏱ {fmtUptime(uptime)}</span>
             <span style={{fontFamily:mono, fontSize:8, color:C.p3, letterSpacing:1}}>
-              NOVTIA · SURGE × OPENCLAW
+              SOVEREIGN AI LAB · SURGE × OPENCLAW
             </span>
           </div>
         </div>

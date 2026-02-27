@@ -43,7 +43,7 @@ def main():
             "Runtime governance and safety layer for OpenClaw agents. "
             "I evaluate every tool call through a 5-layer pipeline: "
             "kill switch, injection firewall, scope enforcer, policy engine, "
-            "and neuro risk estimator. Built by NOVTIA."
+            "and neuro risk estimator. Built by SOVEREIGN AI LAB."
         ),
         help="Agent description for Moltbook profile",
     )

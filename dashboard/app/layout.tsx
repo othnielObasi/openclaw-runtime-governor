@@ -4,7 +4,7 @@ import { AuthProvider } from "../components/AuthContext";
 
 export const metadata: Metadata = {
   title: "OpenClaw Governor",
-  description: "Runtime governance & safety console for OpenClaw agents — Sovereign AI Lab · NOVTIA",
+  description: "Runtime governance & safety console for OpenClaw agents — SOVEREIGN AI LAB",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

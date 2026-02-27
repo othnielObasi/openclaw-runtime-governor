@@ -28,7 +28,7 @@ The entire codebase was created specifically for this hackathon (Feb 4 – Mar 1
 
 ```
 MIT License
-Copyright (c) 2026 NOVTIA / Othniel [your surname]
+Copyright (c) 2026 SOVEREIGN AI LAB / Othniel [your surname]
 ```
 
 ---

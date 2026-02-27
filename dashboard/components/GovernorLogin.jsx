@@ -181,7 +181,7 @@ export default function GovernorLogin() {
         fontSize:8.5, letterSpacing:3, color:C.p3,
         textTransform:"uppercase",
       }}>
-        OpenClaw Governor v0.2.0 · Runtime Governance Platform · NOVTIA Sovereign Core
+        OpenClaw Governor v0.2.0 · Runtime Governance Platform · SOVEREIGN AI LAB Core
       </div>
 
       {/* ── CORNER BRACKETS ── */}
@@ -262,7 +262,7 @@ export default function GovernorLogin() {
               border:`1px solid ${C.line2}`,
               textTransform:"uppercase",
             }}>
-              SOVEREIGN AI LAB · NOVTIA
+              SOVEREIGN AI LAB
             </div>
           </div>
 
