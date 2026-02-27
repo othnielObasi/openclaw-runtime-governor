@@ -103,11 +103,23 @@ class PolicyCreate(PolicyBase):
     action: str = Field(..., pattern="^(allow|block|review)$")
 
 
+class PolicyUpdate(BaseModel):
+    """Partial update — only supplied fields are changed."""
+    description: Optional[str] = None
+    severity: Optional[int] = Field(default=None, ge=0, le=100)
+    match_json: Optional[Dict[str, Any]] = None
+    action: Optional[str] = Field(default=None, pattern="^(allow|block|review)$")
+    is_active: Optional[bool] = None
+
+
 class PolicyRead(PolicyBase):
     model_config = ConfigDict(from_attributes=True)
 
     match_json: Dict[str, Any]
     action: str
+    is_active: bool = True
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 
 # ---------------------------------------------------------------------------

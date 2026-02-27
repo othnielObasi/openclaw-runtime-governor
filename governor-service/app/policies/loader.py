@@ -81,13 +81,15 @@ def load_base_policies() -> List[Policy]:
 
 
 def load_db_policies() -> List[Policy]:
-    """Load dynamically created policies from the database."""
+    """Load dynamically created **active** policies from the database."""
     from sqlalchemy import select
     from ..database import db_session
     from ..models import PolicyModel
 
     with db_session() as session:
-        rows = session.execute(select(PolicyModel)).scalars().all()
+        rows = session.execute(
+            select(PolicyModel).where(PolicyModel.is_active == True)  # noqa: E712
+        ).scalars().all()
         return [
             Policy(
                 id=row.policy_id,
