@@ -15,7 +15,7 @@ from ..models import ActionLog, TraceSpan, User
 from ..policies.engine import evaluate_action
 from ..schemas import ActionInput, ActionDecision, ActionLogRead
 from ..telemetry.logger import log_action
-from .routes_surge import create_governance_receipt
+from .routes_surge import create_governance_receipt, check_wallet_balance
 
 router = APIRouter(prefix="/actions", tags=["actions"])
 
@@ -91,7 +91,14 @@ def evaluate_action_route(
     Also generates a SURGE governance receipt for on-chain attestation.
     When trace_id is present in context, a 'governance' span is auto-created
     in the trace for full agent lifecycle visibility.
+
+    If SURGE fee gating is enabled, the agent's wallet balance is checked
+    before evaluation. Returns 402 Payment Required if balance ≤ 0.
     """
+    # Check SURGE wallet balance before evaluation (402 if empty)
+    ctx = action.context or {}
+    check_wallet_balance(ctx.get("agent_id"))
+
     eval_start = datetime.now(timezone.utc)
     decision = evaluate_action(action)
     log_action(action, decision)
@@ -100,7 +107,6 @@ def evaluate_action_route(
     _create_governance_span(action, decision, eval_start)
 
     # Broadcast to real-time SSE subscribers
-    ctx = action.context or {}
     action_bus.publish(
         ActionEvent(
             event_type="action_evaluated",

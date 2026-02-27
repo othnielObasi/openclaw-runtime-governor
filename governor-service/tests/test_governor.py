@@ -7,8 +7,10 @@ Run with: pytest tests/ -v
 from __future__ import annotations
 
 import pytest
+from fastapi.testclient import TestClient
 from app.policies.engine import evaluate_action
 from app.schemas import ActionInput
+from app.main import app
 
 
 # ---------------------------------------------------------------------------
@@ -279,3 +281,225 @@ def test_governance_receipt_creation():
     assert len(receipt.digest) == 64  # SHA-256 hex
     assert receipt.tool == "shell"
     assert receipt.decision == "block"
+
+
+# ---------------------------------------------------------------------------
+# SURGE tiered fee computation
+# ---------------------------------------------------------------------------
+
+def test_fee_tier_standard():
+    from app.api.routes_surge import compute_fee
+    from decimal import Decimal
+    assert compute_fee(0) == Decimal("0.001")
+    assert compute_fee(30) == Decimal("0.001")
+    assert compute_fee(39) == Decimal("0.001")
+
+
+def test_fee_tier_elevated():
+    from app.api.routes_surge import compute_fee
+    from decimal import Decimal
+    assert compute_fee(40) == Decimal("0.005")
+    assert compute_fee(69) == Decimal("0.005")
+
+
+def test_fee_tier_high():
+    from app.api.routes_surge import compute_fee
+    from decimal import Decimal
+    assert compute_fee(70) == Decimal("0.010")
+    assert compute_fee(89) == Decimal("0.010")
+
+
+def test_fee_tier_critical():
+    from app.api.routes_surge import compute_fee
+    from decimal import Decimal
+    assert compute_fee(90) == Decimal("0.025")
+    assert compute_fee(100) == Decimal("0.025")
+
+
+# ---------------------------------------------------------------------------
+# SURGE DB-persisted receipts
+# ---------------------------------------------------------------------------
+
+def test_receipt_persisted_in_db():
+    from app.api.routes_surge import create_governance_receipt
+    from app.database import db_session
+    from app.models import SurgeReceipt
+    from sqlalchemy import select
+
+    receipt = create_governance_receipt(
+        tool="fetch_price",
+        decision="allow",
+        risk_score=10,
+        policy_ids=[],
+        agent_id="test-persist",
+    )
+
+    # Verify it's in the database
+    with db_session() as session:
+        row = session.execute(
+            select(SurgeReceipt).where(SurgeReceipt.receipt_id == receipt.receipt_id)
+        ).scalar_one_or_none()
+        assert row is not None
+        assert row.tool == "fetch_price"
+        assert row.decision == "allow"
+        assert row.risk_score == 10
+        assert row.agent_id == "test-persist"
+
+
+# ---------------------------------------------------------------------------
+# SURGE API routes (via TestClient)
+# ---------------------------------------------------------------------------
+
+def test_surge_status_endpoint(admin_token):
+    client = TestClient(app)
+    resp = client.get(
+        "/surge/status",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "fee_gating_enabled" in data
+    assert "governance_fee_tiers" in data
+    assert "total_receipts_issued" in data
+    assert "total_fees_collected" in data
+
+
+def test_surge_receipts_list_endpoint(admin_token):
+    client = TestClient(app)
+    resp = client.get(
+        "/surge/receipts",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert isinstance(data, list)
+
+
+def test_surge_wallet_lifecycle(admin_token):
+    """Test wallet creation, retrieval, and top-up."""
+    client = TestClient(app)
+    headers = {"Authorization": f"Bearer {admin_token}"}
+
+    # Create wallet
+    resp = client.post("/surge/wallets", json={
+        "wallet_id": "test-wallet-lifecycle",
+        "label": "Test Wallet",
+        "initial_balance": "50.0000",
+    }, headers=headers)
+    assert resp.status_code == 201
+    wallet = resp.json()
+    assert wallet["wallet_id"] == "test-wallet-lifecycle"
+    assert wallet["balance"] == "50.0000"
+
+    # Get wallet
+    resp = client.get("/surge/wallets/test-wallet-lifecycle", headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["balance"] == "50.0000"
+
+    # Top up
+    resp = client.post("/surge/wallets/test-wallet-lifecycle/topup", json={
+        "amount": "25.0000",
+    }, headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["balance"] == "75.0000"
+    assert resp.json()["total_deposited"] == "75.0000"
+
+    # List wallets
+    resp = client.get("/surge/wallets", headers=headers)
+    assert resp.status_code == 200
+    wallets = resp.json()
+    assert any(w["wallet_id"] == "test-wallet-lifecycle" for w in wallets)
+
+
+def test_surge_wallet_duplicate_rejected(admin_token):
+    client = TestClient(app)
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    client.post("/surge/wallets", json={
+        "wallet_id": "test-wallet-dup",
+        "label": "Dup Test",
+        "initial_balance": "10.0000",
+    }, headers=headers)
+    # Second creation should fail
+    resp = client.post("/surge/wallets", json={
+        "wallet_id": "test-wallet-dup",
+        "label": "Dup Test 2",
+        "initial_balance": "10.0000",
+    }, headers=headers)
+    assert resp.status_code == 400
+
+
+def test_surge_policy_stake_lifecycle(admin_token):
+    """Test stake creation, listing, and unstaking."""
+    client = TestClient(app)
+    headers = {"Authorization": f"Bearer {admin_token}"}
+
+    # Stake policy
+    resp = client.post("/surge/policies/stake", json={
+        "policy_id": "test-stake-policy",
+        "description": "Test policy for staking",
+        "severity": 80,
+        "match_json": {},
+        "action": "block",
+        "surge_amount": "5.0000",
+        "wallet_address": "0xTestWallet123",
+    }, headers=headers)
+    assert resp.status_code == 201
+    stake = resp.json()
+    assert stake["policy_id"] == "test-stake-policy"
+    assert stake["staked_surge"] == "5.0000"
+
+    # List staked policies
+    resp = client.get("/surge/policies/staked", headers=headers)
+    assert resp.status_code == 200
+    staked = resp.json()
+    assert any(s["policy_id"] == "test-stake-policy" for s in staked)
+
+    # Unstake
+    resp = client.delete("/surge/policies/stake/test-stake-policy", headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "unstaked"
+    assert resp.json()["surge_returned"] == "5.0000"
+
+
+def test_surge_wallet_deduct_on_receipt():
+    """When fee gating is enabled, receipt creation should deduct from wallet."""
+    from app.api.routes_surge import create_governance_receipt
+    from app.database import db_session
+    from app.models import SurgeWallet
+    from app.config import settings
+    from sqlalchemy import select
+    from decimal import Decimal
+
+    # Create a wallet manually
+    with db_session() as session:
+        wallet = SurgeWallet(
+            wallet_id="test-deduct-agent",
+            label="Deduction Test",
+            balance="10.0000",
+            total_deposited="10.0000",
+        )
+        session.add(wallet)
+
+    # Temporarily enable fee gating
+    original = settings.surge_governance_fee_enabled
+    settings.surge_governance_fee_enabled = True
+    try:
+        # Create receipt with risk_score=90 (critical tier: 0.025 SURGE)
+        create_governance_receipt(
+            tool="deploy_contract",
+            decision="block",
+            risk_score=90,
+            policy_ids=["scope-violation"],
+            agent_id="test-deduct-agent",
+        )
+    finally:
+        settings.surge_governance_fee_enabled = original
+
+    # Verify balance was deducted
+    with db_session() as session:
+        wallet = session.execute(
+            select(SurgeWallet).where(SurgeWallet.wallet_id == "test-deduct-agent")
+        ).scalar_one()
+        balance = Decimal(wallet.balance)
+        assert balance == Decimal("9.9750")  # 10.0 - 0.025
+        assert Decimal(wallet.total_fees_paid) == Decimal("0.0250")

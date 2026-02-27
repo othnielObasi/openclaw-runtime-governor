@@ -109,3 +109,64 @@ class GovernorState(Base):
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str] = mapped_column(Text, default="")
+
+
+# ---------------------------------------------------------------------------
+# SURGE Token Governance — DB-persisted models
+# ---------------------------------------------------------------------------
+
+class SurgeReceipt(Base):
+    """DB-persisted governance receipt — every evaluation is recorded for on-chain attestation."""
+
+    __tablename__ = "surge_receipts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    receipt_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    tool: Mapped[str] = mapped_column(String(128), index=True)
+    decision: Mapped[str] = mapped_column(String(32))
+    risk_score: Mapped[int] = mapped_column(Integer)
+    policy_ids: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # comma-separated
+    chain_pattern: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    agent_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
+    digest: Mapped[str] = mapped_column(String(64))
+    governance_fee: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    idempotency_key: Mapped[Optional[str]] = mapped_column(String(128), unique=True, nullable=True, index=True)
+
+
+class SurgeStakedPolicy(Base):
+    """A policy backed by $SURGE token stake — persisted in DB."""
+
+    __tablename__ = "surge_staked_policies"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    policy_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    description: Mapped[str] = mapped_column(Text)
+    severity: Mapped[int] = mapped_column(Integer)
+    staked_surge: Mapped[str] = mapped_column(String(32))
+    staker_wallet: Mapped[str] = mapped_column(String(256))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class SurgeWallet(Base):
+    """Virtual SURGE wallet balance per agent/org — enforced during evaluations.
+
+    In production this would verify on-chain balances. For the hackathon demo
+    we maintain a virtual ledger that gates /evaluate when empty.
+    """
+
+    __tablename__ = "surge_wallets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    wallet_id: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    label: Mapped[str] = mapped_column(String(256), default="")
+    balance: Mapped[str] = mapped_column(String(32), default="100.0000")  # start with 100 SURGE
+    total_deposited: Mapped[str] = mapped_column(String(32), default="100.0000")
+    total_fees_paid: Mapped[str] = mapped_column(String(32), default="0.0000")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
