@@ -1265,7 +1265,7 @@ function ActionTesterTab({ killSwitch, extraPolicies, sessionMemory, onResult })
   const getToken = () => typeof window!=="undefined" ? localStorage.getItem("ocg_token") : null;
 
   const [tool, setTool]   = useState("http_request");
-  const [agent, setAgent] = useState("agent-demo-01");
+  const [agent, setAgent] = useState("");
   const [args, setArgs]   = useState(`{"url": "http://localhost/api/health"}`);
   const [ctx, setCtx]     = useState(`{"session_id": "sess-001"}`);
   const [result, setResult] = useState(null);
@@ -1488,7 +1488,7 @@ function ActionTesterTab({ killSwitch, extraPolicies, sessionMemory, onResult })
             </select>
           </Fld>
           <Fld label="Agent ID">
-            <TextInput value={agent} onChange={e=>setAgent(e.target.value)} placeholder="agent-demo-01"/>
+            <TextInput value={agent} onChange={e=>setAgent(e.target.value)} placeholder="e.g. my-agent-01"/>
           </Fld>
         </div>
         <Fld label="Args (JSON)"><TA value={args} onChange={e=>setArgs(e.target.value)} rows={3}/></Fld>
