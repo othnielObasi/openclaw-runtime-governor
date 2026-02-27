@@ -3527,28 +3527,6 @@ function SurgeTab({ receipts: localReceipts, stakedPolicies: localStaked, setSta
             <Btn onClick={doTopUp} variant="violet" style={{fontSize:12, padding:"6px 14px"}}>TOP UP</Btn>
           </div>
         )}
-        {/* Create wallet form */}
-        {canEdit && (
-          <div style={{marginTop:12}}>
-            {!showCreateWallet ? (
-              <Btn onClick={()=>setShowCreateWallet(true)} variant="ghost" style={{fontSize:12, padding:"6px 14px", border:`1px dashed ${surgeColor}`, color:surgeColor}}>
-                + CREATE WALLET
-              </Btn>
-            ) : (
-              <div style={{display:"grid", gridTemplateColumns:"1fr 100px auto auto", gap:10, alignItems:"end",
-                padding:12, background:C.bg0, border:`1px solid ${surgeColor}`}}>
-                <Fld label="Label (optional)">
-                  <TextInput value={newWalletLabel} onChange={e=>setNewWalletLabel(e.target.value)} placeholder="my-agent-wallet"/>
-                </Fld>
-                <Fld label="Initial $SURGE">
-                  <TextInput value={newWalletBal} onChange={e=>setNewWalletBal(e.target.value)} placeholder="100"/>
-                </Fld>
-                <Btn onClick={doCreateWallet} variant="violet" style={{fontSize:12, padding:"6px 14px"}}>CREATE</Btn>
-                <Btn onClick={()=>setShowCreateWallet(false)} variant="ghost" style={{fontSize:12, padding:"6px 14px", color:C.p3}}>CANCEL</Btn>
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Staking form */}
