@@ -3360,6 +3360,148 @@ function TopologyTab({ gs, killSwitch, degraded }) {
 }
 
 // ═══════════════════════════════════════════════════════════
+// TAB: API KEYS — self-service key management (demo mode)
+// ═══════════════════════════════════════════════════════════
+function ApiKeysTab() {
+  const [apiKey, setApiKey]     = useState("ocg_xK92mNpR44aB1cDeFgHiJkLmNoPqRsTuVwXyZ");
+  const [copied, setCopied]     = useState(false);
+  const [showFull, setShowFull] = useState(false);
+  const [confirmRotate, setConfirmRotate] = useState(false);
+
+  const rotateKey = () => {
+    if (!confirmRotate) { setConfirmRotate(true); setTimeout(()=>setConfirmRotate(false), 5000); return; }
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    const key = "ocg_" + Array.from({length:36}, ()=>chars[Math.floor(Math.random()*chars.length)]).join("");
+    setApiKey(key);
+    setShowFull(true);
+    setCopied(false);
+    setConfirmRotate(false);
+  };
+
+  const copyKey = async () => {
+    try { await navigator.clipboard.writeText(apiKey); } catch {}
+    setCopied(true);
+    setTimeout(()=>setCopied(false), 3000);
+  };
+
+  const masked = apiKey.slice(0,8) + "•".repeat(24) + apiKey.slice(-4);
+
+  return (
+    <div style={{padding:20, maxWidth:720}}>
+      <div style={{marginBottom:24, paddingBottom:14, borderBottom:`1px solid ${C.line2}`}}>
+        <div style={{fontFamily:mono,fontSize:13,fontWeight:700,color:C.p1,letterSpacing:1}}>
+          API Keys
+        </div>
+        <div style={{fontFamily:mono,fontSize:9,color:C.p3,marginTop:4,letterSpacing:0.5,lineHeight:1.6}}>
+          Use your API key to authenticate requests from your agents.
+          Include it as the <span style={{color:C.p2}}>X-API-Key</span> header in every request to the Governor API.
+        </div>
+        <div style={{fontFamily:mono,fontSize:8,color:C.amber,marginTop:6,letterSpacing:0.5}}>
+          ● DEMO MODE — keys shown are simulated
+        </div>
+      </div>
+
+      <div style={{background:C.bg1, border:`1px solid ${C.line}`, padding:20, marginBottom:20}}>
+        <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16}}>
+          <div>
+            <div style={{fontFamily:mono,fontSize:8,letterSpacing:2,color:C.p3,textTransform:"uppercase",marginBottom:4}}>
+              YOUR API KEY
+            </div>
+            <div style={{fontFamily:mono,fontSize:9,color:C.p2}}>
+              Owner: <span style={{color:C.p1, fontWeight:600}}>demo-user</span>
+            </div>
+          </div>
+          <div style={{fontFamily:mono,fontSize:8,letterSpacing:1,
+            padding:"3px 10px",border:`1px solid ${C.green}`,color:C.green}}>
+            ACTIVE
+          </div>
+        </div>
+
+        <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:16}}>
+          <div style={{flex:1,background:C.bg0,border:`1px solid ${C.line2}`,
+            padding:"10px 14px",fontFamily:mono,fontSize:11,color:C.p1,
+            letterSpacing:0.5,wordBreak:"break-all",cursor:"pointer",
+            transition:"border-color 0.15s",
+            borderColor:copied?C.green:C.line2}}
+            onClick={()=>setShowFull(s=>!s)}>
+            {showFull ? apiKey : masked}
+          </div>
+          <button onClick={copyKey} style={{
+            fontFamily:mono,fontSize:9,letterSpacing:1,padding:"10px 16px",
+            border:`1px solid ${copied?C.green:C.line2}`,
+            color:copied?C.green:C.p2,
+            background:copied?C.greenDim:"transparent",
+            cursor:"pointer",transition:"all 0.15s",flexShrink:0}}>
+            {copied?"✓ COPIED":"COPY"}
+          </button>
+        </div>
+
+        <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:16}}>
+          <button onClick={()=>setShowFull(s=>!s)} style={{
+            fontFamily:mono,fontSize:8,letterSpacing:1,padding:"4px 10px",
+            border:`1px solid ${C.line2}`,color:C.p3,
+            background:"transparent",cursor:"pointer"}}>
+            {showFull?"◉ HIDE KEY":"○ REVEAL KEY"}
+          </button>
+        </div>
+
+        <div style={{fontFamily:mono,fontSize:8,color:C.amber,letterSpacing:0.5,lineHeight:1.6,
+          padding:"8px 12px",background:C.amberDim,border:`1px solid ${C.amber}22`}}>
+          ⚠ Keep your API key secret. Do not share it or commit it to version control.
+          Anyone with this key can make governed requests on your behalf.
+        </div>
+      </div>
+
+      <div style={{background:C.bg1, border:`1px solid ${C.line}`, padding:20, marginBottom:20}}>
+        <div style={{fontFamily:mono,fontSize:8,letterSpacing:2,color:C.p3,
+          textTransform:"uppercase",marginBottom:8}}>
+          REGENERATE KEY
+        </div>
+        <div style={{fontFamily:mono,fontSize:9,color:C.p2,marginBottom:14,lineHeight:1.6}}>
+          Generating a new key immediately invalidates the previous one.
+          All agents and integrations using the old key will need to be updated.
+        </div>
+        <button onClick={rotateKey} style={{
+          fontFamily:mono,fontSize:9,letterSpacing:1,padding:"8px 18px",
+          border:`1px solid ${confirmRotate?C.red:C.amber}`,
+          color:confirmRotate?C.red:C.amber,
+          background:confirmRotate?C.redDim:C.amberDim,
+          cursor:"pointer",transition:"all 0.15s"}}>
+          {confirmRotate?"CONFIRM REGENERATE":"↻ REGENERATE API KEY"}
+        </button>
+      </div>
+
+      <div style={{background:C.bg1, border:`1px solid ${C.line}`, padding:20}}>
+        <div style={{fontFamily:mono,fontSize:8,letterSpacing:2,color:C.p3,
+          textTransform:"uppercase",marginBottom:12}}>
+          QUICK START
+        </div>
+        <div style={{fontFamily:mono,fontSize:9,color:C.p3,marginBottom:8}}>Python (openclaw-governor-client)</div>
+        <pre style={{background:C.bg0,border:`1px solid ${C.line2}`,padding:14,
+          fontFamily:mono,fontSize:10,color:C.p1,overflow:"auto",marginBottom:14,lineHeight:1.6}}>
+{`pip install openclaw-governor-client
+
+from governor_client import GovernorClient
+client = GovernorClient(
+    base_url="https://openclaw-governor.fly.dev",
+    api_key="${apiKey.slice(0,8)}…"
+)`}
+        </pre>
+        <div style={{fontFamily:mono,fontSize:9,color:C.p3,marginBottom:8}}>cURL</div>
+        <pre style={{background:C.bg0,border:`1px solid ${C.line2}`,padding:14,
+          fontFamily:mono,fontSize:10,color:C.p1,overflow:"auto",lineHeight:1.6}}>
+{`curl https://openclaw-governor.fly.dev/evaluate \\
+  -H "X-API-Key: ${apiKey.slice(0,8)}…" \\
+  -H "Content-Type: application/json" \\
+  -d '{"tool":"shell","args":{"cmd":"ls -la"}}'`}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
+
+// ═══════════════════════════════════════════════════════════
 // TAB: USER MANAGEMENT (admin only — inline, no external import)
 // ═══════════════════════════════════════════════════════════
 // Simulated in-memory user store — no backend needed in artifact/demo preview
@@ -3517,9 +3659,9 @@ function AdminUserManagementTab() {
 // REDESIGNED — ROLE_TABS + ALL_TABS (SURGE added)
 // ═══════════════════════════════════════════════════════════
 const ROLE_TABS = {
-  admin:    ["dashboard","tester","simulator","policies","surge","audit","topology","users"],
-  operator: ["dashboard","tester","simulator","policies","surge","audit","topology"],
-  auditor:  ["dashboard","surge","audit","topology"],
+  admin:    ["dashboard","tester","simulator","policies","surge","audit","topology","apikeys","users"],
+  operator: ["dashboard","tester","simulator","policies","surge","audit","topology","apikeys"],
+  auditor:  ["dashboard","surge","audit","topology","apikeys"],
 };
 
 const ALL_TABS = [
@@ -3530,6 +3672,7 @@ const ALL_TABS = [
   { id:"surge",     label:"SURGE",             icon:"⬡" },
   { id:"audit",     label:"Audit Trail",       icon:"☰" },
   { id:"topology",  label:"Topology",          icon:"◎" },
+  { id:"apikeys",   label:"API Keys",          icon:"🔑" },
   { id:"users",     label:"User Management",   icon:"⚙", adminOnly:true },
 ];
 
@@ -4041,6 +4184,7 @@ function GovernorDashboard({ userRole="operator", userName="", onLogout=()=>{} }
           {tab==="surge"     && <SurgeTab receipts={surgeReceipts} stakedPolicies={stakedPolicies} setStaked={setStakedPolicies} userRole={userRole}/>}
           {tab==="audit"     && <AuditTrailTab auditLog={auditLog} policySnapshots={policySnapshots}/>}
           {tab==="topology"  && <TopologyTab gs={gs} killSwitch={killSwitch} degraded={degraded}/>}
+          {tab==="apikeys"   && <ApiKeysTab/>}
           {tab==="users"     && userRole==="admin" && <AdminUserManagementTab/>}
         </div>
       </div>

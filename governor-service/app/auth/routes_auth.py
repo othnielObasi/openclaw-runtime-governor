@@ -227,3 +227,25 @@ def rotate_api_key(user_id: int, admin: User = Depends(require_admin)) -> UserRe
         session.flush()
         session.refresh(user)
         return UserRead.model_validate(user)
+
+
+# ---------------------------------------------------------------------------
+# Self-service API key management — any authenticated user
+# ---------------------------------------------------------------------------
+
+@router.post("/me/rotate-key", response_model=MeResponse)
+def rotate_own_key(current_user: User = Depends(get_current_user)) -> MeResponse:
+    """Let authenticated users regenerate their own API key."""
+    with db_session() as session:
+        user = session.get(User, current_user.id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found.")
+        user.api_key = generate_api_key()
+        session.flush()
+        session.refresh(user)
+        return MeResponse(
+            username=user.username,
+            name=user.name,
+            role=user.role,
+            api_key=user.api_key,
+        )
