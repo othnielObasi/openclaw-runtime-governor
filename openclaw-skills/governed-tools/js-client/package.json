@@ -1,0 +1,35 @@
+{
+  "name": "@openclaw/governor-client",
+  "version": "0.2.0",
+  "description": "TypeScript/JavaScript client for the OpenClaw Governor – runtime governance for AI agents",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test tests/client.test.mjs",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "openclaw",
+    "governor",
+    "ai-safety",
+    "agent-governance",
+    "runtime-governance"
+  ],
+  "author": "Sovereign AI Lab",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/othnielObasi/openclaw-runtime-governor"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.2",
+    "typescript": "^5.4.0"
+  }
+}

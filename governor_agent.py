@@ -52,8 +52,17 @@ logging.basicConfig(
 logger = logging.getLogger("governor-agent")
 
 GOVERNOR_URL = os.getenv("GOVERNOR_URL", "http://localhost:8000")
+GOVERNOR_API_KEY = os.getenv("GOVERNOR_API_KEY", "")
 AGENT_ID = os.getenv("GOVERNOR_AGENT_ID", "governor-agent-01")
 HEARTBEAT_SEC = int(os.getenv("GOVERNOR_HEARTBEAT_SEC", "60"))
+
+
+def _auth_headers() -> dict:
+    """Build headers with X-API-Key when configured."""
+    h: dict = {}
+    if GOVERNOR_API_KEY:
+        h["X-API-Key"] = GOVERNOR_API_KEY
+    return h
 
 # ── Threat thresholds (autonomous decision logic) ──────────────
 THREAT_HIGH_RISK_THRESHOLD = 5     # high-risk actions before auto-kill
@@ -95,7 +104,7 @@ def observe(memory: AgentMemory) -> Optional[dict]:
     Returns a unified snapshot dict, or None if governor is unreachable.
     """
     try:
-        with httpx.Client(timeout=8.0) as client:
+        with httpx.Client(timeout=8.0, headers=_auth_headers()) as client:
             summary_r = client.get(f"{GOVERNOR_URL}/summary/moltbook")
             admin_r   = client.get(f"{GOVERNOR_URL}/admin/status")
             actions_r = client.get(
@@ -233,7 +242,7 @@ def act(plan: dict, snapshot: dict, memory: AgentMemory) -> None:
     # Activate kill switch
     if plan["activate_kill_switch"]:
         try:
-            with httpx.Client(timeout=8.0) as client:
+            with httpx.Client(timeout=8.0, headers=_auth_headers()) as client:
                 r = client.post(f"{GOVERNOR_URL}/admin/kill")
             logger.info("[ACT] Kill switch ACTIVATED — %s", r.json())
             memory.kill_switch_activations += 1
@@ -243,7 +252,7 @@ def act(plan: dict, snapshot: dict, memory: AgentMemory) -> None:
     # Release kill switch
     if plan["release_kill_switch"]:
         try:
-            with httpx.Client(timeout=8.0) as client:
+            with httpx.Client(timeout=8.0, headers=_auth_headers()) as client:
                 r = client.post(f"{GOVERNOR_URL}/admin/resume")
             logger.info("[ACT] Kill switch RELEASED — %s", r.json())
         except Exception as exc:

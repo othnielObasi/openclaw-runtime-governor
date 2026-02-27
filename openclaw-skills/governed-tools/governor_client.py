@@ -7,7 +7,8 @@ raises an error for blocked actions and logs review decisions.
 
 Environment variables
 ---------------------
-GOVERNOR_URL  – Base URL of the governor service (default: http://localhost:8000)
+GOVERNOR_URL      – Base URL of the governor service (default: http://localhost:8000)
+GOVERNOR_API_KEY  – API key for authentication (ocg_… format, sent as X-API-Key header)
 """
 from __future__ import annotations
 
@@ -17,7 +18,17 @@ from typing import Any, Dict, Optional
 import httpx
 
 GOVERNOR_URL = os.getenv("GOVERNOR_URL", "http://localhost:8000")
+GOVERNOR_API_KEY = os.getenv("GOVERNOR_API_KEY", "")
 _TIMEOUT = 10.0
+
+
+def _headers() -> Dict[str, str]:
+    """Build request headers, including X-API-Key when configured."""
+    h: Dict[str, str] = {"Content-Type": "application/json"}
+    key = GOVERNOR_API_KEY
+    if key:
+        h["X-API-Key"] = key
+    return h
 
 
 class GovernorBlockedError(RuntimeError):
@@ -38,7 +49,7 @@ def evaluate_action(
     Raises GovernorBlockedError if decision == "block".
     """
     payload = {"tool": tool, "args": args, "context": context}
-    with httpx.Client(timeout=_TIMEOUT) as client:
+    with httpx.Client(timeout=_TIMEOUT, headers=_headers()) as client:
         resp = client.post(f"{GOVERNOR_URL}/actions/evaluate", json=payload)
         resp.raise_for_status()
 

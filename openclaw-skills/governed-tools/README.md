@@ -15,6 +15,11 @@ pip install openclaw-governor-client
 
 ```python
 from governor_client import evaluate_action, GovernorBlockedError
+import governor_client
+
+# Set your API key (or export GOVERNOR_API_KEY in your environment)
+governor_client.GOVERNOR_API_KEY = "ocg_your_key_here"
+governor_client.GOVERNOR_URL = "https://openclaw-governor.fly.dev"
 
 # Evaluate a tool call against the Governor
 try:
@@ -35,13 +40,15 @@ except GovernorBlockedError as e:
 | Environment variable | Default | Description |
 |---|---|---|
 | `GOVERNOR_URL` | `http://localhost:8000` | Base URL of the Governor service |
+| `GOVERNOR_API_KEY` | *(empty)* | API key (`ocg_…`) sent as `X-API-Key` header |
 
-You can also pass the URL programmatically:
+You can also set them programmatically:
 
 ```python
 import governor_client
 
 governor_client.GOVERNOR_URL = "https://openclaw-governor.fly.dev"
+governor_client.GOVERNOR_API_KEY = "ocg_your_key_here"
 ```
 
 ## API
