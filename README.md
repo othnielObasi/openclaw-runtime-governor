@@ -1,41 +1,85 @@
 # OpenClaw Runtime Governor
 
-> Runtime governance, risk, and safety layer for autonomous AI agents.
-
-**Track 3 – Developer Infrastructure & Tools** · **SURGE × OpenClaw Hackathon** · **Sovereign AI Lab**
+> **The missing safety layer between AI agents and the real world.**
 
 [![CI - Dashboard](https://github.com/othnielObasi/openclaw-runtime-governor/actions/workflows/ci.yml/badge.svg)](https://github.com/othnielObasi/openclaw-runtime-governor/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+**Sovereign AI Lab** · SURGE × OpenClaw Hackathon · Track 3: Developer Infrastructure & Tools
+
 ---
 
-## What It Does
+## The Problem
 
-Every tool call made by an OpenClaw agent is intercepted, evaluated through a **5-layer governance pipeline**, and returned as an **allow / block / review** decision — with full audit trail and SURGE token governance receipts.
+Autonomous AI agents can now browse the web, execute shell commands, read and write files, manage databases, and call APIs — **unsupervised**. The capabilities are extraordinary. The guardrails are not.
+
+Today, when you deploy an AI agent in production:
+
+- **There is no runtime check** on what tools the agent invokes. A coding assistant can `rm -rf /`. A data pipeline agent can exfiltrate credentials via HTTP. A customer support bot can be jailbroken into ignoring its instructions.
+- **There is no audit trail.** You find out what your agent did *after* the damage — if you find out at all.
+- **There is no real-time visibility.** You deploy an agent and hope for the best. If it starts behaving dangerously at 3 AM, nobody knows until morning.
+- **There is no multi-step attack detection.** An agent that reads a credential file, then sends an HTTP request a minute later, looks innocent at each step — but the *sequence* is a textbook exfiltration pattern.
+- **There is no standard governance API.** Every team builds ad-hoc safety checks buried inside agent code. Nothing is reusable, testable, or auditable.
+
+Existing solutions either require rewriting agent internals, rely on brittle prompt engineering ("please don't do bad things"), or operate only at the LLM layer — completely blind to what tools the agent actually calls at runtime.
+
+**The OpenClaw Runtime Governor intercepts tool calls *between* the agent and the real world — the exact point where intent becomes action — and applies layered, deterministic governance before anything executes.**
+
+---
+
+## How It Works
+
+Every tool call your AI agent wants to make passes through the Governor first. The agent doesn't call tools directly — it asks permission, receives a verdict, and only proceeds if allowed.
 
 ```
-Agent calls tool
-       │
-       ▼
- ┌─────────────────────────────────────────────────────┐
- │              Governor Service (FastAPI)              │
- │                                                     │
- │  1. Kill Switch ───► instant halt if engaged        │
- │  2. Injection Firewall ───► prompt-injection scan   │
- │  3. Scope Enforcer ───► allowed_tools check         │
- │  4. Policy Engine ───► YAML + dynamic DB rules      │
- │  5. Neuro Risk Estimator + Chain Analysis           │
- │                                                     │
- │  ───► ActionDecision { allow | block | review }     │
- │  ───► Execution Trace (per-layer timing & detail)   │
- │  ───► SURGE Governance Receipt (SHA-256)            │
- └─────────────────────────────────────────────────────┘
-       │
-       ▼
- Dashboard (Next.js) ─── live monitoring & control
+Your AI Agent                          The Real World
+     │                                       ▲
+     │  "I want to run: shell rm -rf /"      │
+     ▼                                       │
+ ┌───────────────────────────────────────┐   │
+ │     OpenClaw Runtime Governor         │   │
+ │                                       │   │
+ │  ① Kill Switch ── emergency halt?     │   │
+ │  ② Injection Firewall ── jailbreak?   │   │
+ │  ③ Scope Enforcer ── tool allowed?    │   │
+ │  ④ Policy Engine ── rule match?       │   │
+ │  ⑤ Neuro Risk + Chain Analysis        │   │
+ │                                       │   │
+ │  Verdict: BLOCK (risk 95/100)         │   │
+ │  "Destructive filesystem operation"   │   │
+ │                                       │   │
+ │  ──► Audit log persisted              │   │
+ │  ──► SSE event pushed to dashboard    │   │
+ │  ──► SURGE receipt generated          │   │
+ └───────────────────────────────────────┘   │
+     │                                       │
+     ✗  Agent receives block — tool          │
+        never executes                       │
 ```
 
-The pipeline **short-circuits** on the first block — kill switch fires before anything else, injection firewall before policy evaluation, and so on. Every evaluation produces a detailed execution trace showing exactly which layers fired and why.
+The pipeline **short-circuits**: a kill switch fires before the injection scan even starts, the firewall fires before policy evaluation, and so on. Every evaluation produces a detailed trace showing exactly which layers fired, their timing, and the rationale — making every governance decision fully explainable.
+
+---
+
+## What Makes This Different
+
+| Approach | Where it operates | Runtime? | Deterministic? | Multi-step detection? | Auditable? |
+|----------|-------------------|----------|----------------|-----------------------|------------|
+| Prompt engineering | Inside the LLM | ❌ Static | ❌ Probabilistic | ❌ | ❌ |
+| Output filtering | After LLM response | ❌ Post-hoc | Partially | ❌ | ❌ |
+| Fine-tuning / RLHF | Model weights | ❌ Static | ❌ Probabilistic | ❌ | ❌ |
+| API rate limiting | HTTP layer | ✅ | ✅ | ❌ | Partially |
+| **OpenClaw Governor** | **Tool call interception** | **✅ Real-time** | **✅ 100%** | **✅ 6 patterns** | **✅ Full trace** |
+
+The Governor doesn't try to make the AI "behave better." It operates at the **execution boundary** — the moment an agent's decision becomes a real-world action — with deterministic, auditable, policy-driven rules that no prompt injection can bypass.
+
+### Key differentiators:
+
+- **Language & framework agnostic.** Three SDKs (Python, TypeScript/JS, Java) — wrap any agent in 3 lines of code.
+- **Real-time streaming.** Server-Sent Events push every governance decision to dashboards and monitoring tools within milliseconds. You don't poll for safety — you *watch* it happen.
+- **Chain analysis.** Session-aware pattern detection across a 60-minute window catches multi-step attacks (credential theft → exfiltration, read → write → execute, repeated scope probing) that single-call checks miss entirely.
+- **Zero-trust architecture.** The agent never touches tools directly. Every action is intercepted, evaluated, logged, and either allowed or blocked before execution.
+- **On-chain attestation.** SURGE governance receipts (SHA-256) provide cryptographic proof of every governance decision for regulatory compliance.
 
 ---
 
@@ -43,14 +87,14 @@ The pipeline **short-circuits** on the first block — kill switch fires before 
 
 | Directory | What | Version |
 |-----------|------|---------|
-| [`governor-service/`](governor-service/) | FastAPI backend — evaluation pipeline, auth, SURGE, audit logging | 0.3.0 |
-| [`dashboard/`](dashboard/) | Next.js control panel — live monitoring, policy editor, admin controls | 0.2.0 |
+| [`governor-service/`](governor-service/) | FastAPI backend — 5-layer pipeline, auth, SSE streaming, SURGE, audit | 0.3.0 |
+| [`dashboard/`](dashboard/) | Next.js control panel — real-time monitoring, policy editor, admin | 0.2.0 |
 | [`openclaw-skills/governed-tools/`](openclaw-skills/governed-tools/) | Python SDK (`openclaw-governor-client` on PyPI) | 0.2.0 |
 | [`openclaw-skills/governed-tools/js-client/`](openclaw-skills/governed-tools/js-client/) | TypeScript/JS SDK (`@openclaw/governor-client` on npm) — dual CJS + ESM | 0.2.0 |
 | [`openclaw-skills/governed-tools/java-client/`](openclaw-skills/governed-tools/java-client/) | Java SDK (`dev.openclaw:governor-client` on Maven Central) — zero deps, Java 11+ | 0.2.0 |
 | [`openclaw-skills/moltbook-reporter/`](openclaw-skills/moltbook-reporter/) | Automated Moltbook status reporter | 0.3.0 |
 | [`governor_agent.py`](governor_agent.py) | Autonomous governance agent (observe → reason → act loop) | — |
-| [`docs/`](docs/) | Architecture docs & diagrams | — |
+| [`docs/`](docs/) | Architecture docs, SDK comparison | — |
 
 ---
 
@@ -66,67 +110,75 @@ uvicorn app.main:app --reload --port 8000
 
 Default dev credentials: `admin` / `changeme`
 
-The API is now live at `http://localhost:8000`. Check health:
-
-```bash
-curl http://localhost:8000/health
-```
-
 ### 2. Dashboard
 
 ```bash
 cd dashboard
 npm install
-npm run dev
+NEXT_PUBLIC_GOVERNOR_API=http://localhost:8000 npm run dev
 ```
 
-Open `http://localhost:3000`. The landing page offers **Demo Mode** (self-contained, no backend) or **Live Mode** (connects to governor-service).
+Open `http://localhost:3000` — **Demo Mode** (self-contained) or **Live Mode** (connects to backend).
 
-Set `NEXT_PUBLIC_GOVERNOR_API` to point at your backend (default: `http://localhost:8000`).
-
-### 3. Test an Evaluation
-
-You can authenticate with **JWT** or an **API key**.
-
-#### Option A — JWT Bearer token
+### 3. Evaluate a tool call
 
 ```bash
-# Login
+# Get a token
 TOKEN=$(curl -s -X POST http://localhost:8000/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"changeme"}' | jq -r .access_token)
 
-# Evaluate a tool call
+# Ask the Governor: "Can this agent run rm -rf /?"
 curl -X POST http://localhost:8000/actions/evaluate \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "tool": "shell",
-    "args": {"command": "ls -la"},
-    "context": {"agent_id": "test-agent"}
+    "args": {"command": "rm -rf /"},
+    "context": {"agent_id": "my-agent"}
   }'
 ```
 
-Response includes the decision, risk score, explanation, matched policy IDs, and full execution trace.
+Response: `{ "decision": "block", "risk_score": 95, "explanation": "Destructive filesystem operation", ... }`
 
-#### Option B — API Key
+### 4. Watch it happen in real time
 
 ```bash
-curl -X POST http://localhost:8000/actions/evaluate \
-  -H "X-API-Key: ocg_your_key_here" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "tool": "shell",
-    "args": {"command": "ls -la"},
-    "context": {"agent_id": "test-agent"}
-  }'
+# Open an SSE stream — events arrive within milliseconds of each evaluation
+curl -N -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8000/actions/stream
 ```
 
-Rotate your own API key any time (self-service):
+Every time any agent calls `/actions/evaluate`, you'll see the decision appear instantly.
+
+---
+
+## Real-Time Monitoring
+
+The Governor pushes every governance decision to connected clients via **Server-Sent Events (SSE)** — no polling delay, no missed events.
+
+| Endpoint | What |
+|----------|------|
+| `GET /actions/stream` | SSE stream of all governance events (requires auth) |
+| `GET /actions/stream/status` | Active subscriber count + heartbeat info |
+
+### Dashboard integration
+The dashboard connects automatically. Real-time events appear with a **LIVE** badge. The summary panel refreshes within 2 seconds of any new decision. When streaming is connected, polling backs off to 60s (from 30s) to reduce load.
+
+### Connect from code
+
+```javascript
+// Browser / Node.js
+const es = new EventSource("https://your-governor.fly.dev/actions/stream?token=<jwt>");
+es.addEventListener("action_evaluated", (e) => {
+  const { tool, decision, risk_score } = JSON.parse(e.data);
+  console.log(`${tool}: ${decision} (risk ${risk_score})`);
+});
+```
 
 ```bash
-curl -X POST http://localhost:8000/auth/me/rotate-key \
-  -H "Authorization: Bearer $TOKEN"
+# Terminal monitoring
+curl -N -H "X-API-Key: ocg_..." https://your-governor.fly.dev/actions/stream
 ```
 
 ---
@@ -134,7 +186,7 @@ curl -X POST http://localhost:8000/auth/me/rotate-key \
 ## Governance Pipeline
 
 ### Layer 1 — Kill Switch
-Global emergency halt. When engaged, **every** evaluation returns `block` immediately. Persisted to database (survives restarts). Toggled via API or dashboard by admins only.
+Global emergency halt. When engaged, **every** evaluation returns `block` immediately. Persisted to database (survives restarts). Admin-only toggle via API or dashboard.
 
 ### Layer 2 — Injection Firewall
 Scans the entire payload (tool name, args, context) against 11 known prompt-injection patterns: jailbreak, override, ignore previous, disable safety, etc. Triggers block with risk score 95.
@@ -144,65 +196,123 @@ If the calling context includes `allowed_tools`, the requested tool must be in t
 
 ### Layer 4 — Policy Engine
 Matches against two policy sources:
-
 - **Base policies** — 10 YAML rules shipped with the service ([`base_policies.yml`](governor-service/app/policies/base_policies.yml))
 - **Dynamic policies** — created at runtime via API, stored in the database
-
-Policies match on tool name, URL regex, and args regex. Each carries a severity (`low` / `medium` / `high` / `critical`) and action (`allow` / `block` / `review`).
 
 ### Layer 5 — Neuro Risk Estimator + Chain Analysis
 Heuristic risk scorer (0–100) based on tool type, sensitive keywords, and bulk-recipient detection. **Chain analysis** examines session history across a 60-minute window to detect 6 multi-step attack patterns:
 
-| Pattern | Risk Boost | Description |
-|---------|------------|-------------|
-| `browse-then-exfil` | +35 | Browse/read followed by HTTP send |
-| `read-write-exec` | +45 | File read → write → shell execution |
-| `repeated-scope-probing` | +60 | Multiple out-of-scope attempts |
-| `credential-then-http` | +55 | Credential access then HTTP request |
+| Pattern | Risk Boost | What it catches |
+|---------|------------|-----------------|
+| `browse-then-exfil` | +35 | Data reconnaissance followed by HTTP send |
+| `read-write-exec` | +45 | File read → write → shell execution chain |
+| `repeated-scope-probing` | +60 | Multiple out-of-scope tool attempts |
+| `credential-then-http` | +55 | Credential access then network request |
 | `rapid-tool-switching` | +30 | 5+ distinct tools in quick succession |
-| `block-bypass-retry` | +40 | Retrying after being blocked |
-
-If combined risk score reaches 80+, the decision is promoted to `review`.
+| `block-bypass-retry` | +40 | Retrying a blocked action with variations |
 
 ---
 
-## SURGE Token Governance
+## Client SDKs
 
-Integration with the SURGE token economy:
+Three official SDKs — authenticate with `X-API-Key`, throw on `block` decisions.
 
-| Feature | Description |
-|---------|-------------|
-| **Governance Receipts** | Every evaluation produces a SHA-256 signed receipt suitable for on-chain attestation |
-| **Policy Staking** | Operators stake $SURGE on policies to signal confidence |
-| **Fee Gating** | Optional micro-fee (0.001 $SURGE) per evaluation for premium governance tiers |
-| **Token-Aware Policies** | Built-in rules for `surge_launch`, `surge_trade`, `surge_transfer`, `surge_ownership_transfer` |
+### Python  ·  `pip install openclaw-governor-client`
+
+```python
+from governor_client import evaluate_action, GovernorBlockedError
+
+try:
+    decision = evaluate_action("shell", {"command": "rm -rf /"})
+except GovernorBlockedError:
+    print("Blocked!")
+```
+
+### TypeScript / JavaScript  ·  `npm install @openclaw/governor-client`
+
+```typescript
+import { GovernorClient, GovernorBlockedError } from "@openclaw/governor-client";
+
+const gov = new GovernorClient({
+  baseUrl: "https://openclaw-governor.fly.dev",
+  apiKey: "ocg_your_key_here",
+});
+
+try {
+  const d = await gov.evaluate("shell", { command: "ls" });
+} catch (err) {
+  if (err instanceof GovernorBlockedError) console.error("Blocked!");
+}
+```
+
+### Java  ·  `dev.openclaw:governor-client:0.2.0`
+
+```java
+GovernorClient gov = new GovernorClient.Builder()
+    .baseUrl("https://openclaw-governor.fly.dev")
+    .apiKey("ocg_your_key_here")
+    .build();
+
+try {
+    GovernorDecision d = gov.evaluate("shell", Map.of("command", "ls"));
+} catch (GovernorBlockedError e) {
+    System.err.println("Blocked!");
+}
+```
+
+See [`docs/SDK_OVERVIEW.md`](docs/SDK_OVERVIEW.md) for a full multi-language comparison.
 
 ---
 
 ## Security Model
 
 ### Authentication
-All endpoints (except `/health` and `/`) require authentication via:
-- **JWT Bearer token** — obtained from `POST /auth/login`
-- **API Key** — `X-API-Key: ocg_<key>` header
-
-Both methods are supported simultaneously on every protected endpoint.
+All protected endpoints accept:
+- **JWT Bearer** — `Authorization: Bearer <token>` from `POST /auth/login`
+- **API Key** — `X-API-Key: ocg_<key>` (self-service rotation via dashboard or API)
+- **Query param** — `?token=<jwt>` (for SSE/EventSource which can't set headers)
 
 ### Role-Based Access Control
 
-| Role | Evaluate | View Logs | Policies | Kill Switch | Users |
-|------|----------|-----------|----------|-------------|-------|
-| `admin` | ✅ | ✅ | ✅ CRUD | ✅ | ✅ CRUD |
-| `operator` | ✅ | ✅ | ✅ CRUD | ❌ | ❌ |
-| `auditor` | ❌ | ✅ | Read only | ❌ | ❌ |
+| Role | Evaluate | Logs | Policies | Kill Switch | Users | Stream |
+|------|----------|------|----------|-------------|-------|--------|
+| `admin` | ✅ | ✅ | ✅ CRUD | ✅ | ✅ CRUD | ✅ |
+| `operator` | ✅ | ✅ | ✅ CRUD | ❌ | ❌ | ✅ |
+| `auditor` | ❌ | ✅ | Read | ❌ | ❌ | ✅ |
 
 ### Production Safeguards
-- JWT secret **must** be changed from default — startup fails otherwise in non-dev environments
-- Admin seed password refused in production unless explicitly overridden
-- Login rate-limited: 5 requests/min per IP
-- Evaluate rate-limited: 120 requests/min per IP
+- JWT secret **must** be changed from default — startup fails otherwise
+- Login rate-limited (5/min), evaluate rate-limited (120/min)
 - Kill switch state persisted to database
-- Policy engine cached with configurable TTL (default 10s)
+- Policy engine cached with configurable TTL
+
+---
+
+## SURGE Token Governance
+
+| Feature | Description |
+|---------|-------------|
+| **Governance Receipts** | SHA-256 signed receipt for every evaluation — on-chain attestation ready |
+| **Policy Staking** | Operators stake $SURGE on policies to signal confidence |
+| **Fee Gating** | Optional micro-fee (0.001 $SURGE) per evaluation |
+| **Token-Aware Policies** | Built-in rules for `surge_launch`, `surge_trade`, `surge_transfer` |
+
+---
+
+## Autonomous Governance Agent
+
+[`governor_agent.py`](governor_agent.py) runs an autonomous observe → reason → act loop:
+
+- Monitors governor health and action statistics on a configurable heartbeat
+- Auto-engages kill switch after 5+ high-risk actions
+- Auto-releases when threat levels subside
+- Alerts on anomalies: >40% block rate, average risk >75
+- Posts status updates to Moltbook
+
+```bash
+python governor_agent.py          # Full autonomous mode
+python governor_agent.py --demo   # Single observation cycle
+```
 
 ---
 
@@ -212,20 +322,22 @@ Both methods are supported simultaneously on every protected endpoint.
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | `POST` | `/auth/login` | None | Login (rate-limited 5/min) |
-| `POST` | `/auth/signup` | None | Public registration (username, password, display name) |
+| `POST` | `/auth/signup` | None | Public registration |
 | `GET` | `/auth/me` | Any | Current user info |
+| `POST` | `/auth/me/rotate-key` | Any | Rotate own API key (self-service) |
 | `GET` | `/auth/users` | Admin | List all users |
 | `POST` | `/auth/users` | Admin | Create user |
 | `PATCH` | `/auth/users/{id}` | Admin | Update user |
-| `DELETE` | `/auth/users/{id}` | Admin | Deactivate user (soft delete) |
-| `POST` | `/auth/me/rotate-key` | Any | Rotate own API key (self-service) |
-| `POST` | `/auth/users/{id}/rotate-key` | Admin | Rotate any user's API key |
+| `DELETE` | `/auth/users/{id}` | Admin | Deactivate user |
+| `POST` | `/auth/users/{id}/rotate-key` | Admin | Rotate any user's key |
 
 ### Governance
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | `POST` | `/actions/evaluate` | Operator+ | Evaluate a tool call |
 | `GET` | `/actions` | Any | List action logs (filterable) |
+| `GET` | `/actions/stream` | Any | **Real-time SSE event stream** |
+| `GET` | `/actions/stream/status` | Any | Active stream subscribers |
 | `GET` | `/policies` | Any | List all policies |
 | `POST` | `/policies` | Operator+ | Create dynamic policy |
 | `DELETE` | `/policies/{id}` | Operator+ | Delete a policy |
@@ -243,109 +355,21 @@ Both methods are supported simultaneously on every protected endpoint.
 |--------|------|------|-------------|
 | `GET` | `/surge/status` | Any | SURGE integration status |
 | `GET` | `/surge/receipts` | Any | List governance receipts |
-| `GET` | `/surge/receipts/{id}` | Any | Get specific receipt |
 | `POST` | `/surge/policies/stake` | Operator+ | Stake $SURGE on a policy |
-| `GET` | `/surge/policies/staked` | Any | List staked policies |
-| `DELETE` | `/surge/policies/stake/{id}` | Operator+ | Unstake a policy |
-
-### Meta
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| `GET` | `/` | None | Service info |
-| `GET` | `/health` | None | Health check |
 
 ---
 
-## Client SDKs
-
-Three official SDKs — all authenticate with `X-API-Key` and throw on `block` decisions.
-
-### Python  ·  `pip install openclaw-governor-client`
-
-```python
-import governor_client
-from governor_client import evaluate_action, GovernorBlockedError
-
-governor_client.GOVERNOR_URL = "https://openclaw-governor.fly.dev"
-governor_client.GOVERNOR_API_KEY = "ocg_your_key_here"
-
-try:
-    decision = evaluate_action("shell", {"command": "rm -rf /"})
-    print(decision["decision"])   # "allow" | "review"
-except GovernorBlockedError:
-    print("Blocked!")
-```
-
-### TypeScript / JavaScript  ·  `npm install @openclaw/governor-client`
-
-Dual CJS + ESM build — works with `require()` and `import`.
-
-```typescript
-import { GovernorClient, GovernorBlockedError } from "@openclaw/governor-client";
-
-const gov = new GovernorClient({
-  baseUrl: "https://openclaw-governor.fly.dev",
-  apiKey: "ocg_your_key_here",
-});
-
-try {
-  const decision = await gov.evaluate("shell", { command: "ls" });
-  console.log(decision.decision);   // "allow" | "review"
-} catch (err) {
-  if (err instanceof GovernorBlockedError) console.error("Blocked!");
-}
-```
-
-### Java  ·  `dev.openclaw:governor-client:0.2.0`
-
-Zero runtime dependencies. Java 11+.
-
-```java
-import dev.openclaw.governor.*;
-import java.util.Map;
-
-GovernorClient gov = new GovernorClient.Builder()
-    .baseUrl("https://openclaw-governor.fly.dev")
-    .apiKey("ocg_your_key_here")
-    .build();
-
-try {
-    GovernorDecision d = gov.evaluate("shell", Map.of("command", "ls"));
-    System.out.println(d.getDecision());   // "allow" | "review"
-} catch (GovernorBlockedError e) {
-    System.err.println("Blocked!");
-}
-```
-
-See [`docs/SDK_OVERVIEW.md`](docs/SDK_OVERVIEW.md) for a full comparison of all SDKs.
-
-### Proxy Servers
-Both Python (FastAPI) and JavaScript (Express) proxy servers are included for environments where agents can't reach the governor directly:
-- **Python proxy**: [`openclaw-skills/governed-tools/python-proxy/`](openclaw-skills/governed-tools/python-proxy/)
-- **JS proxy**: [`openclaw-skills/governed-tools/js-client/examples/`](openclaw-skills/governed-tools/js-client/examples/)
-
----
-
-## Autonomous Governance Agent
-
-[`governor_agent.py`](governor_agent.py) runs an autonomous **observe → reason → act → update memory** loop:
-
-- Monitors governor health and action statistics on a configurable heartbeat
-- Maintains persistent in-process memory of threat trends
-- Auto-engages kill switch after 5+ high-risk actions in one window
-- Auto-releases kill switch when threat levels subside
-- Alerts on anomalies: >40% block rate, average risk >75
-- Posts status updates to Moltbook
+## Testing
 
 ```bash
-# Full autonomous mode
-python governor_agent.py
+# Backend — 34 tests (governance pipeline + SSE streaming)
+cd governor-service && pytest tests/ -v
 
-# Single observation cycle (dry run)
-python governor_agent.py --demo
+# TypeScript/JS SDK — 6 tests
+cd openclaw-skills/governed-tools/js-client && npm test
 
-# Without Moltbook posting
-python governor_agent.py --no-moltbook
+# Java SDK — 6 tests
+cd openclaw-skills/governed-tools/java-client && mvn test
 ```
 
 ---
@@ -357,81 +381,7 @@ python governor_agent.py --no-moltbook
 | Governor Service | Fly.io | [`fly.toml`](governor-service/fly.toml), [`Dockerfile`](governor-service/Dockerfile) |
 | Dashboard | Vercel | [`vercel.json`](dashboard/vercel.json) |
 
-See [`DEPLOY.md`](DEPLOY.md) for full deployment instructions, [`PUBLISHING.md`](PUBLISHING.md) for PyPI / npm / Maven publishing workflows, and [`docs/SDK_OVERVIEW.md`](docs/SDK_OVERVIEW.md) for a full SDK comparison.
-
----
-
-## Testing
-
-```bash
-# Backend — 24 test cases
-cd governor-service
-pytest tests/ -v
-
-# TypeScript/JS client — 6 tests
-cd openclaw-skills/governed-tools/js-client
-npm test
-
-# Java client — 6 tests
-cd openclaw-skills/governed-tools/java-client
-mvn test
-
-# Python proxy
-cd openclaw-skills/governed-tools/python-proxy
-pytest tests/ -v
-```
-
-Tests cover all 5 pipeline layers, chain analysis patterns, SURGE governance receipts, policy cache invalidation, and all three client SDKs.
-
----
-
-## Environment Variables
-
-<details>
-<summary><strong>Governor Service</strong> (14 variables)</summary>
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `GOVERNOR_DATABASE_URL` | `sqlite:///./governor.db` | Database connection string |
-| `GOVERNOR_JWT_SECRET` | *(must set in prod)* | JWT signing secret |
-| `GOVERNOR_ENVIRONMENT` | `development` | `development` or `production` |
-| `GOVERNOR_LOG_LEVEL` | `info` | Logging level |
-| `GOVERNOR_LOG_SQL` | `false` | Echo SQL queries to stdout |
-| `GOVERNOR_ALLOW_CORS_ORIGINS` | `["*"]` | CORS allowed origins (JSON) |
-| `GOVERNOR_POLICIES_PATH` | `app/policies/base_policies.yml` | Base policy YAML path |
-| `GOVERNOR_POLICY_CACHE_TTL_SECONDS` | `10` | Policy cache TTL |
-| `GOVERNOR_JWT_EXPIRE_MINUTES` | `480` | JWT token expiry (8 hours) |
-| `GOVERNOR_LOGIN_RATE_LIMIT` | `5/minute` | Login rate limit |
-| `GOVERNOR_EVALUATE_RATE_LIMIT` | `120/minute` | Evaluate rate limit |
-| `GOVERNOR_ADMIN_USERNAME` | `admin` | Seed admin username |
-| `GOVERNOR_ADMIN_PASSWORD` | `changeme` | Seed admin password |
-| `GOVERNOR_SURGE_GOVERNANCE_FEE_ENABLED` | `false` | Enable $SURGE micro-fees |
-| `GOVERNOR_SURGE_WALLET_ADDRESS` | *(empty)* | SURGE wallet address |
-
-</details>
-
-<details>
-<summary><strong>Dashboard</strong> (1 variable)</summary>
-
-| Variable | Description |
-|----------|-------------|
-| `NEXT_PUBLIC_GOVERNOR_API` | Governor service URL (default: `http://localhost:8000`) |
-
-</details>
-
-<details>
-<summary><strong>Autonomous Agent</strong> (5 variables)</summary>
-
-| Variable | Description |
-|----------|-------------|
-| `GOVERNOR_URL` | Governor service URL |
-| `GOVERNOR_API_KEY` | API key (`ocg_…`) for `X-API-Key` auth |
-| `GOVERNOR_AGENT_ID` | Agent identifier |
-| `GOVERNOR_HEARTBEAT_SEC` | Check interval in seconds (default: 30) |
-| `MOLTBOOK_API_KEY` | Moltbook API key |
-| `MOLTBOOK_SUBMOLT` | Target submolt (default: `lablab`) |
-
-</details>
+See [`DEPLOY.md`](DEPLOY.md) for full instructions, [`PUBLISHING.md`](PUBLISHING.md) for SDK publishing, [`DEVELOPER.md`](DEVELOPER.md) for contributor guide.
 
 ---
 
@@ -440,61 +390,15 @@ Tests cover all 5 pipeline layers, chain analysis patterns, SURGE governance rec
 | Layer | Technology |
 |-------|-----------|
 | Backend | Python 3.12, FastAPI 0.115, SQLAlchemy 2.0, Pydantic 2.8 |
-| Auth | bcrypt, python-jose (JWT HS256), slowapi |
+| Real-time | Server-Sent Events (SSE), asyncio event bus |
+| Auth | bcrypt, python-jose (JWT HS256), slowapi rate limiting |
 | Database | SQLite (dev) / PostgreSQL (prod) |
-| Dashboard | Next.js 14.2, React 18.3, TypeScript, Axios |
+| Dashboard | Next.js 14.2, React 18.3, TypeScript |
+| SDKs | Python (httpx), TypeScript/JS (fetch), Java (HttpClient) |
 | Deployment | Fly.io (backend), Vercel (dashboard) |
-| CI/CD | GitHub Actions |
-
----
-
-## Project Structure
-
-```
-openclaw-runtime-governor/
-├── governor-service/           # FastAPI backend
-│   ├── app/
-│   │   ├── main.py             # App init, CORS, route registration
-│   │   ├── config.py           # Pydantic settings (all env vars)
-│   │   ├── database.py         # SQLAlchemy engine & session
-│   │   ├── models.py           # ActionLog, PolicyModel, User, GovernorState
-│   │   ├── schemas.py          # Pydantic request/response models
-│   │   ├── state.py            # Kill switch (DB-persisted, thread-safe)
-│   │   ├── session_store.py    # Session history for chain analysis
-│   │   ├── chain_analysis.py   # Multi-step attack pattern detection
-│   │   ├── rate_limit.py       # slowapi rate limiter
-│   │   ├── api/                # Route handlers
-│   │   ├── auth/               # JWT + API key auth, RBAC, user seed
-│   │   ├── neuro/              # Heuristic risk estimator
-│   │   ├── policies/           # Engine, YAML loader, base rules
-│   │   └── telemetry/          # Audit logger
-│   └── tests/                  # pytest test suite
-├── dashboard/                  # Next.js control panel
-│   ├── app/                    # Pages (landing, layout)
-│   └── components/             # Dashboard, login, editors, panels
-├── openclaw-skills/
-│   ├── governed-tools/         # Python SDK + proxy servers
-│   │   ├── governor_client.py  # Python client (PyPI: openclaw-governor-client)
-│   │   ├── js-client/          # TypeScript/JS client (npm: @openclaw/governor-client)
-│   │   └── java-client/        # Java client (Maven: dev.openclaw:governor-client)
-│   └── moltbook-reporter/      # Automated Moltbook status poster
-├── governor_agent.py           # Autonomous governance agent
-├── GovernorComplete.jsx        # Standalone preview artifact
-├── DEPLOY.md                   # Deployment guide
-├── PUBLISHING.md               # Package publishing guide
-├── DEVELOPER.md                # Developer guide
-├── DISCLOSURES.md              # Hackathon compliance
-└── docs/
-    ├── ARCHITECTURE.md         # Architecture deep-dive
-    └── SDK_OVERVIEW.md         # Multi-language SDK comparison
-```
 
 ---
 
 ## License
 
 [MIT](LICENSE) — Copyright © 2026 Sovereign AI Lab
-
----
-
-**Sovereign AI Lab** · SURGE × OpenClaw Hackathon · Track 3: Developer Infrastructure & Tools

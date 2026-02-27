@@ -31,10 +31,12 @@ openclaw-runtime-governor/
 │   │   ├── state.py         # Kill switch — DB-persisted, thread-safe
 │   │   ├── session_store.py # Session history reconstruction for chain analysis
 │   │   ├── chain_analysis.py# Multi-step attack pattern detector
+│   │   ├── event_bus.py     # In-memory pub/sub for SSE streaming
 │   │   ├── rate_limit.py    # slowapi rate limiter singleton
 │   │   │
 │   │   ├── api/
 │   │   │   ├── routes_actions.py   # POST /actions/evaluate, GET /actions
+│   │   │   ├── routes_stream.py    # GET /actions/stream (SSE), /stream/status
 │   │   │   ├── routes_policies.py  # CRUD /policies
 │   │   │   ├── routes_admin.py     # Kill switch control
 │   │   │   ├── routes_summary.py   # GET /summary/moltbook
@@ -58,7 +60,8 @@ openclaw-runtime-governor/
 │   │       └── logger.py       # Writes action logs to DB
 │   │
 │   ├── tests/
-│   │   └── test_governor.py    # 22 test cases
+│   │   ├── test_governor.py    # 24 governance pipeline tests
+│   │   └── test_stream.py     # 10 SSE streaming tests
 │   ├── conftest.py             # Session-scoped DB fixtures
 │   ├── requirements.txt
 │   ├── Dockerfile
@@ -78,8 +81,9 @@ openclaw-runtime-governor/
 │   │   ├── ActionTester.tsx       # Tool evaluation form
 │   │   ├── AdminStatus.tsx        # Kill switch toggle
 │   │   ├── PolicyEditor.tsx       # Policy CRUD
-│   │   ├── RecentActions.tsx      # Audit log feed
-│   │   ├── SummaryPanel.tsx       # Stats overview
+│   │   ├── useActionStream.ts     # React hook for SSE auto-connect/reconnect
+│   │   ├── RecentActions.tsx      # Audit log feed + live SSE merge
+│   │   ├── SummaryPanel.tsx       # Stats overview (auto-refresh on SSE)
 │   │   └── UserManagement.tsx     # User admin
 │   ├── package.json
 │   ├── tsconfig.json
@@ -234,6 +238,7 @@ Dual auth via FastAPI dependency injection (`auth/dependencies.py`):
 
 1. **JWT Bearer** — `Authorization: Bearer <token>` from `/auth/login`
 2. **API Key** — `X-API-Key: ocg_<key>` (generated via `POST /auth/me/rotate-key` or dashboard API Keys tab)
+3. **Query Param** — `?token=<jwt>` (for SSE/EventSource which can't set custom headers)
 
 API keys use the `ocg_` prefix + `secrets.token_urlsafe(32)` (~43 chars total). Every authenticated user can rotate their own key (self-service).
 
@@ -262,6 +267,24 @@ Session-based multi-step attack detection (`chain_analysis.py`):
 - Scoped by `agent_id` and optional `session_id`
 - Evaluates 6 known attack patterns in descending risk-boost order
 - Returns first matching pattern with risk boost
+
+### Real-Time Streaming (SSE)
+
+The system pushes every governance decision to connected clients via Server-Sent Events:
+
+- **Event Bus** (`app/event_bus.py`): In-memory pub/sub using `asyncio.Queue` per subscriber. `routes_actions.py` publishes an `ActionEvent` after every evaluation.
+- **SSE Endpoint** (`app/api/routes_stream.py`): `GET /actions/stream` opens a persistent connection and yields events as they occur. 15-second heartbeat keeps connections alive.
+- **Dashboard Integration**: `useActionStream.ts` React hook auto-connects, auto-reconnects (3s backoff), and buffers the last 50 events. `RecentActions.tsx` merges SSE events with polled data and shows a **LIVE** badge. `SummaryPanel.tsx` auto-refreshes within 2s of a new event.
+
+**Auth for SSE**: Since browser `EventSource` cannot set custom headers, the stream endpoint accepts a `?token=<jwt>` query parameter as a fallback. API keys via `X-API-Key` header also work (e.g., from `curl`).
+
+```bash
+# Monitor all governance decisions in real-time
+curl -N -H "X-API-Key: ocg_..." http://localhost:8000/actions/stream
+
+# Check subscriber count
+curl http://localhost:8000/actions/stream/status
+```
 
 ### SURGE Integration
 
@@ -306,7 +329,9 @@ cd governor-service
 pytest tests/ -v
 ```
 
-The test suite (`tests/test_governor.py`, 24 tests) covers:
+The test suite (**34 tests** across two files) covers:
+
+**`tests/test_governor.py`** (24 tests) — Governance pipeline:
 
 | Category | Tests |
 |----------|-------|
@@ -320,6 +345,14 @@ The test suite (`tests/test_governor.py`, 24 tests) covers:
 | Policy cache | Invalidation behavior |
 | SURGE | Token launch review, ownership transfer block, receipt SHA-256 |
 
+**`tests/test_stream.py`** (10 tests) — SSE streaming:
+
+| Category | Tests |
+|----------|-------|
+| Event bus | Subscribe/unsubscribe, publish/receive, multiple subscribers, queue isolation, cleanup |
+| Action event | Dataclass construction and field validation |
+| SSE endpoint | Auth required, status endpoint, query param auth, evaluate→publish integration |
+
 **Fixtures** (`conftest.py`): Session-scoped autouse fixture creates all tables before the suite and drops them after.
 
 ### Client Tests
@@ -332,10 +365,6 @@ npm test
 # Java client (6 tests)
 cd openclaw-skills/governed-tools/java-client
 mvn test
-
-# Python proxy
-cd openclaw-skills/governed-tools/python-proxy
-pytest tests/ -v
 ```
 
 ### Writing New Tests

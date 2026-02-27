@@ -8,6 +8,8 @@ All SDKs share the same design principles:
 - **Zero or minimal runtime dependencies**
 - **Environment variable configuration** (`GOVERNOR_URL`, `GOVERNOR_API_KEY`)
 
+> **Real-time streaming**: The Governor also exposes `GET /actions/stream` (Server-Sent Events) for real-time monitoring of all governance decisions. SSE can be consumed from any language using standard EventSource or HTTP streaming clients — see the main [README](../README.md#real-time-monitoring) for examples.
+
 ---
 
 ## Comparison

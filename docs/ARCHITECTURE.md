@@ -28,7 +28,15 @@ OpenClaw Agent / SDK
      └─► ActionDecision { decision, risk_score, explanation, policy_ids, trace }
               │
               ├─► Audit Logger  →  action_logs table (SQLite / Postgres)
+              ├─► Event Bus     →  broadcasts to SSE subscribers (real-time)
               └─► SURGE Receipt →  SHA-256 governance attestation
+
+ SSE Streaming (GET /actions/stream)
+     │
+     ├─ Auth: JWT header, API Key header, or ?token= query param
+     ├─ Event Bus: in-memory pub/sub with asyncio.Queue per subscriber
+     ├─ Heartbeat: 15-second keep-alive pings
+     └─ Events: "connected" on join, "action_evaluated" per evaluation
 ```
 
 ## Authentication
@@ -39,16 +47,17 @@ Dual auth via FastAPI dependency injection (`auth/dependencies.py`):
 |--------|--------|-----------|
 | JWT Bearer | `Authorization: Bearer <token>` | `POST /auth/login` |
 | API Key | `X-API-Key: ocg_<key>` | `POST /auth/me/rotate-key` (self-service) |
+| Query Param | `?token=<jwt>` | For SSE/EventSource (can't set headers) |
 
 Both methods are supported simultaneously on every protected endpoint. API keys use the `ocg_` prefix + `secrets.token_urlsafe(32)` (~43 chars).
 
 ### RBAC
 
-| Role | Evaluate | View Logs | Policies | Kill Switch | Users | API Keys |
-|------|----------|-----------|----------|-------------|-------|----------|
-| `admin` | ✅ | ✅ | ✅ CRUD | ✅ | ✅ CRUD | ✅ own + any |
-| `operator` | ✅ | ✅ | ✅ CRUD | ❌ | ❌ | ✅ own |
-| `auditor` | ❌ | ✅ | Read only | ❌ | ❌ | ✅ own |
+| Role | Evaluate | View Logs | Policies | Kill Switch | Users | Stream | API Keys |
+|------|----------|-----------|----------|-------------|-------|--------|----------|
+| `admin` | ✅ | ✅ | ✅ CRUD | ✅ | ✅ CRUD | ✅ | ✅ own + any |
+| `operator` | ✅ | ✅ | ✅ CRUD | ❌ | ❌ | ✅ | ✅ own |
+| `auditor` | ❌ | ✅ | Read only | ❌ | ❌ | ✅ | ✅ own |
 
 ## File Map
 
@@ -63,9 +72,11 @@ governor-service/
 │   ├── state.py              ← Kill switch — DB-persisted, thread-safe
 │   ├── session_store.py      ← Session history reconstruction for chain analysis
 │   ├── chain_analysis.py     ← 6 multi-step attack pattern detector
+│   ├── event_bus.py          ← In-memory pub/sub — asyncio.Queue per SSE subscriber
 │   ├── rate_limit.py         ← slowapi rate limiter singleton
 │   ├── api/
 │   │   ├── routes_actions.py ← POST /actions/evaluate, GET /actions
+│   │   ├── routes_stream.py  ← GET /actions/stream (SSE), GET /actions/stream/status
 │   │   ├── routes_policies.py← GET/POST/DELETE /policies
 │   │   ├── routes_summary.py ← GET /summary/moltbook
 │   │   ├── routes_admin.py   ← GET /admin/status, POST /admin/kill|resume
@@ -97,8 +108,9 @@ dashboard/
     ├── ActionTester.tsx       ← POST /actions/evaluate UI
     ├── AdminStatus.tsx        ← Kill switch toggle
     ├── PolicyEditor.tsx       ← Create/delete dynamic policies
-    ├── RecentActions.tsx      ← GET /actions audit feed
-    ├── SummaryPanel.tsx       ← Stats overview
+    ├── useActionStream.ts     ← React hook for SSE — auto-connect, reconnect, event buffer
+    ├── RecentActions.tsx      ← GET /actions audit feed + live SSE merge (LIVE badge)
+    ├── SummaryPanel.tsx       ← Stats overview (auto-refresh on SSE events)
     └── UserManagement.tsx     ← User admin CRUD
 │
 openclaw-skills/
@@ -137,3 +149,6 @@ openclaw-skills/
 | Context metadata indexed in DB | Enables efficient filtering by agent_id, user_id, channel |
 | CORS middleware on FastAPI | Allows dashboard on different origin (Vercel) to talk to backend (Fly.io) |
 | SURGE governance receipts (SHA-256) | Immutable attestation for on-chain governance proofs |
+| SSE over WebSocket for real-time streaming | Simpler protocol, auto-reconnect, works through HTTP proxies/CDNs, one-directional push is sufficient |
+| In-memory event bus (asyncio.Queue per subscriber) | Zero external deps (no Redis), low latency, sufficient for single-instance deployment |
+| `?token=` query param auth for SSE | Browser EventSource API cannot set custom headers; query param fallback enables dashboard connectivity |

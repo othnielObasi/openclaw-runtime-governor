@@ -100,6 +100,7 @@ The Governor supports two authentication methods that work on every protected en
 |--------|--------|-----------|
 | **JWT Bearer** | `Authorization: Bearer <token>` | `POST /auth/login` |
 | **API Key** | `X-API-Key: ocg_<key>` | Dashboard → API Keys tab, or `POST /auth/me/rotate-key` |
+| **Query Param** | `?token=<jwt>` | For SSE/EventSource (browser can't set headers) |
 
 ### Environment Variables for Auth
 
@@ -152,3 +153,26 @@ The **API Keys** tab in the dashboard provides a GUI for:
 2. Go to User Management tab
 3. Click **+ ADD OPERATOR**
 4. Set role to `operator` or `auditor`
+
+---
+
+## Real-Time Monitoring (SSE)
+
+The Governor streams every governance decision via Server-Sent Events at `GET /actions/stream`.
+
+### Verify SSE after deployment
+
+```bash
+# Get a token
+TOKEN=$(curl -s -X POST https://your-app.fly.dev/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"your-password"}' | jq -r .access_token)
+
+# Open the stream (events appear as evaluations happen)
+curl -N -H "Authorization: Bearer $TOKEN" https://your-app.fly.dev/actions/stream
+
+# Check active subscribers
+curl https://your-app.fly.dev/actions/stream/status
+```
+
+The dashboard connects to the SSE stream automatically when in Live Mode. A **LIVE** badge appears in the Audit Log tab when streaming is active.

@@ -8,16 +8,18 @@ The entire codebase was created specifically for this hackathon (Feb 4 – Mar 1
 
 | Component | Originality | Notes |
 |-----------|-------------|-------|
-| `governor-service/` FastAPI backend | ✅ 100% original | Custom-written 5-layer evaluation pipeline, policy engine, schema design, audit logger |
+| `governor-service/` FastAPI backend | ✅ 100% original | Custom-written 5-layer evaluation pipeline, SSE streaming, policy engine, schema design, audit logger |
+| `governor-service/app/event_bus.py` | ✅ 100% original | In-memory pub/sub for real-time SSE streaming |
+| `governor-service/app/api/routes_stream.py` | ✅ 100% original | SSE endpoint with heartbeat, auth, subscriber tracking |
 | `governor-service/app/policies/` | ✅ 100% original | Policy dataclass, YAML loader, engine logic — no templates used |
 | `governor-service/app/neuro/` | ✅ 100% original | Heuristic risk estimator designed for this project |
 | `openclaw-skills/governed-tools/` | ✅ 100% original | Governor client, GovernorBlockedError, governed_call wrapper, X-API-Key auth |
 | `openclaw-skills/governed-tools/js-client/` | ✅ 100% original | TypeScript/JavaScript SDK, dual CJS+ESM build, GovernorClient class |
 | `openclaw-skills/governed-tools/java-client/` | ✅ 100% original | Java SDK, builder pattern, zero-dep JSON parser, GovernorBlockedError |
 | `openclaw-skills/moltbook-reporter/` | ✅ 100% original | Full Moltbook API client, post composer, autonomous loop, register helper |
-| `dashboard/` Next.js | ✅ 100% original | All components hand-written (SummaryPanel, RecentActions, ActionTester, PolicyEditor, AdminStatus) |
+| `dashboard/` Next.js | ✅ 100% original | All components hand-written (SummaryPanel, RecentActions, ActionTester, PolicyEditor, AdminStatus, useActionStream SSE hook) |
 | `docs/` | ✅ 100% original | Architecture diagrams, deployment guides |
-| Test suite (24+ tests) | ✅ 100% original | Written to match the actual implementation |
+| Test suite (34 tests) | ✅ 100% original | Written to match the actual implementation (24 governance + 10 SSE streaming) |
 
 ---
 
@@ -107,6 +109,7 @@ Copy this into the "Long Description" or "Disclosures" field of the LabLab submi
 > Backend: FastAPI, SQLAlchemy, Pydantic, PyYAML, httpx, python-jose, bcrypt, slowapi, Uvicorn (all MIT/BSD).
 > Dashboard: Next.js 14, React 18, Axios, TypeScript (all MIT/Apache-2.0).
 > SDKs: Python SDK uses httpx (BSD-3). TypeScript/JS SDK: zero runtime deps (built-in fetch). Java SDK: zero runtime deps (java.net.http).
+> Real-time monitoring: SSE (Server-Sent Events) using standard asyncio — no external broker/dependency.
 > External services: Moltbook API (agent social network, used for autonomous status reporting to the lablab submolt as required by hackathon rules). OpenClaw (the agent runtime platform this tool governs).
 > No pre-trained AI models or third-party ML APIs are used. The risk estimator is an original heuristic function.
 > All code was written during the Feb 4–Mar 1, 2026 hackathon period.
