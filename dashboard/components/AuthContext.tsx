@@ -24,6 +24,7 @@ interface AuthContextValue {
   token: string | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  signup: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
   isAdmin: boolean;
   isOperator: boolean;
@@ -80,6 +81,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser({ email: data.email, name: data.name, role: data.role });
   }, []);
 
+  const signup = useCallback(async (name: string, email: string, password: string) => {
+    const res = await fetch(`${API_BASE}/auth/signup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, email, password }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Signup failed.");
+    }
+
+    const data = await res.json();
+    localStorage.setItem(TOKEN_KEY, data.access_token);
+    setToken(data.access_token);
+    setUser({ email: data.email, name: data.name, role: data.role });
+  }, []);
+
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
     setToken(null);
@@ -89,7 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{
       user, token, loading,
-      login, logout,
+      login, signup, logout,
       isAdmin:    user?.role === "admin",
       isOperator: user?.role === "admin" || user?.role === "operator",
     }}>

@@ -9,6 +9,8 @@
  */
 
 import React, { useState, useEffect } from "react";
+import { useAuth } from "../components/AuthContext";
+import GovernorLogin from "../components/GovernorLogin";
 import GovernorDashboard from "../components/GovernorDashboard";
 import DemoDashboard from "../components/Governordashboard-demo";
 
@@ -364,9 +366,41 @@ function LandingPage({ onSelect }: { onSelect: (mode: "demo" | "live") => void }
 }
 
 export default function Page() {
+  const { user, logout, loading } = useAuth();
   const [mode, setMode] = useState<"landing" | "demo" | "live">("landing");
 
-  if (mode === "demo") return <DemoDashboard />;
-  if (mode === "live") return <GovernorDashboard />;
+  // Loading auth state from localStorage
+  if (loading) {
+    return (
+      <div style={{
+        minHeight:"100vh", background:"#080e1a",
+        display:"flex", alignItems:"center", justifyContent:"center",
+        fontFamily: mono, fontSize: 10, color: "#3d5e7a",
+        letterSpacing: 3, textTransform: "uppercase",
+      }}>
+        INITIALISING GOVERNOR…
+      </div>
+    );
+  }
+
+  // Demo mode — self-contained, has its own login/logout
+  if (mode === "demo") {
+    return <DemoDashboard onExit={() => setMode("landing")} />;
+  }
+
+  // Live mode — require real authentication
+  if (mode === "live") {
+    if (!user) {
+      return <GovernorLogin onBack={() => setMode("landing")} />;
+    }
+    return (
+      <GovernorDashboard
+        userRole={user.role}
+        userName={user.name}
+        onLogout={() => { logout(); setMode("landing"); }}
+      />
+    );
+  }
+
   return <LandingPage onSelect={setMode} />;
 }

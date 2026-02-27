@@ -35,18 +35,40 @@ function ClawIcon({ size = 54, pulse = false }: { size?: number; pulse?: boolean
   );
 }
 
-const SCAN_STEPS = [
+const SCAN_STEPS_LOGIN = [
   "Verifying identity token…",
   "Checking authority binding…",
   "Loading governance context…",
   "Establishing secure session…",
 ];
 
-export default function GovernorLogin() {
-  const { login } = useAuth();
+const SCAN_STEPS_SIGNUP = [
+  "Validating registration data…",
+  "Provisioning operator account…",
+  "Generating API credentials…",
+  "Establishing secure session…",
+];
+
+interface GovernorLoginProps {
+  onBack?: () => void;
+}
+
+export default function GovernorLogin({ onBack }: GovernorLoginProps) {
+  const { login, signup } = useAuth();
+
+  // Form mode: signup is primary
+  const [mode, setMode] = useState<"signup"|"login">("signup");
+
+  // Common fields
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
+
+  // Signup-only fields
+  const [name, setName]               = useState("");
+  const [confirmPass, setConfirmPass] = useState("");
+
+  // UI state
   const [phase, setPhase]       = useState<"idle"|"scanning"|"error"|"success">("idle");
   const [scanStep, setScanStep] = useState(0);
   const [errorMsg, setErrorMsg] = useState("");
@@ -63,27 +85,56 @@ export default function GovernorLogin() {
     return () => clearInterval(t);
   }, []);
 
-  const handleAuth = async () => {
-    if (!email || !password || phase === "scanning") return;
+  const scanSteps = mode === "signup" ? SCAN_STEPS_SIGNUP : SCAN_STEPS_LOGIN;
+
+  const canSubmit = mode === "signup"
+    ? (name.trim() && email && password && confirmPass && password === confirmPass)
+    : (email && password);
+
+  const handleSubmit = async () => {
+    if (!canSubmit || phase === "scanning") return;
+
+    if (mode === "signup" && password !== confirmPass) {
+      setErrorMsg("Passwords do not match.");
+      setPhase("error");
+      setTimeout(() => setPhase("idle"), 3000);
+      return;
+    }
+
+    if (mode === "signup" && password.length < 6) {
+      setErrorMsg("Password must be at least 6 characters.");
+      setPhase("error");
+      setTimeout(() => setPhase("idle"), 3000);
+      return;
+    }
+
     setPhase("scanning");
     setScanStep(0);
     setErrorMsg("");
 
-    // Animate scan steps
-    for (let i = 0; i < SCAN_STEPS.length; i++) {
+    for (let i = 0; i < scanSteps.length; i++) {
       await new Promise(r => setTimeout(r, 480));
       setScanStep(i + 1);
     }
 
     try {
-      await login(email, password);
+      if (mode === "signup") {
+        await signup(name.trim(), email, password);
+      } else {
+        await login(email, password);
+      }
       setPhase("success");
-      // page.tsx will redirect automatically via AuthContext state change
     } catch (err: any) {
       setErrorMsg(err.message || "Access denied.");
       setPhase("error");
       setTimeout(() => setPhase("idle"), 3000);
     }
+  };
+
+  const switchMode = () => {
+    setMode(m => m === "signup" ? "login" : "signup");
+    setPhase("idle");
+    setErrorMsg("");
   };
 
   const isScanning = phase === "scanning";
@@ -129,13 +180,13 @@ export default function GovernorLogin() {
         borderTop:`1px solid ${C.line}`,
         fontSize:"8.5px", letterSpacing:3, color:C.p3, textTransform:"uppercase",
       }}>
-        OpenClaw Governor v0.2.0 · Runtime Governance Platform · SOVEREIGN AI LAB Core
+        OpenClaw Governor v0.3.0 · Runtime Governance Platform · SOVEREIGN AI LAB Core
       </div>
 
       {/* Login panel */}
       <div style={{
         position:"relative", zIndex:5,
-        width:"100%", maxWidth:400, margin:"0 auto", padding:"0 20px",
+        width:"100%", maxWidth:420, margin:"0 auto", padding:"0 20px",
         opacity: mounted ? 1 : 0,
         transform: mounted ? "translateY(0)" : "translateY(16px)",
         transition:"opacity 0.6s ease, transform 0.6s ease",
@@ -154,8 +205,8 @@ export default function GovernorLogin() {
             borderBottom:`1px solid ${C.line2}`, borderLeft:`1px solid ${C.line2}` }}/>
 
           {/* Wordmark */}
-          <div style={{ textAlign:"center", marginBottom:28 }}>
-            <div style={{ marginBottom:16, display:"flex", justifyContent:"center" }}>
+          <div style={{ textAlign:"center", marginBottom:24 }}>
+            <div style={{ marginBottom:14, display:"flex", justifyContent:"center" }}>
               <ClawIcon size={54} pulse={isScanning || isSuccess}/>
             </div>
             <div style={{
@@ -176,13 +227,38 @@ export default function GovernorLogin() {
             </div>
           </div>
 
-          {/* Divider */}
-          <div style={{ borderTop:`1px solid ${C.line}`, marginBottom:22, position:"relative" }}>
-            <span style={{
-              position:"absolute", top:-8, left:"50%", transform:"translateX(-50%)",
-              background:C.bg1, padding:"0 10px",
-              fontSize:"8px", letterSpacing:2, color:C.p3, textTransform:"uppercase",
-            }}>AUTHENTICATE</span>
+          {/* Mode tabs */}
+          <div style={{
+            display:"flex", marginBottom:20, borderBottom:`1px solid ${C.line}`,
+          }}>
+            <button
+              onClick={() => !isScanning && !isSuccess && setMode("signup")}
+              style={{
+                flex:1, padding:"10px 0",
+                fontFamily:mono, fontSize:9, fontWeight:mode==="signup"?700:400,
+                letterSpacing:2, textTransform:"uppercase",
+                color: mode==="signup" ? C.accent : C.p3,
+                background:"transparent", border:"none", cursor:"pointer",
+                borderBottom: mode==="signup" ? `2px solid ${C.accent}` : "2px solid transparent",
+                transition:"all 0.2s",
+              }}
+            >
+              Create Account
+            </button>
+            <button
+              onClick={() => !isScanning && !isSuccess && setMode("login")}
+              style={{
+                flex:1, padding:"10px 0",
+                fontFamily:mono, fontSize:9, fontWeight:mode==="login"?700:400,
+                letterSpacing:2, textTransform:"uppercase",
+                color: mode==="login" ? C.accent : C.p3,
+                background:"transparent", border:"none", cursor:"pointer",
+                borderBottom: mode==="login" ? `2px solid ${C.accent}` : "2px solid transparent",
+                transition:"all 0.2s",
+              }}
+            >
+              Sign In
+            </button>
           </div>
 
           {/* Error */}
@@ -193,7 +269,7 @@ export default function GovernorLogin() {
               fontSize:"9px", letterSpacing:1, color:C.red,
               textTransform:"uppercase", textAlign:"center",
             }}>
-              ⚠ ACCESS DENIED — {errorMsg}
+              ⚠ {errorMsg}
             </div>
           )}
 
@@ -205,22 +281,49 @@ export default function GovernorLogin() {
               fontSize:"9px", letterSpacing:1, color:C.green,
               textTransform:"uppercase", textAlign:"center",
             }}>
-              ✓ AUTHENTICATED — Loading Governor…
+              ✓ {mode === "signup" ? "ACCOUNT CREATED" : "AUTHENTICATED"} — Loading Governor…
             </div>
           )}
 
           {/* Fields */}
           <div style={{ display:"flex", flexDirection:"column", gap:12, marginBottom:18 }}>
+
+            {/* Name — signup only */}
+            {mode === "signup" && (
+              <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                <label style={{ fontSize:"8px", letterSpacing:2, color:C.p3, textTransform:"uppercase" }}>
+                  Display Name
+                </label>
+                <input
+                  type="text" value={name}
+                  onChange={e => setName(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && handleSubmit()}
+                  disabled={isScanning || isSuccess}
+                  placeholder="Your name"
+                  autoFocus
+                  style={{
+                    background:C.bg0, border:`1px solid ${C.line2}`,
+                    borderBottom:`1px solid ${name ? C.accent : C.line2}`,
+                    color:C.p1, fontFamily:mono, fontSize:11,
+                    padding:"10px 12px", outline:"none", width:"100%", boxSizing:"border-box",
+                    transition:"border-color 0.2s",
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Email */}
             <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
               <label style={{ fontSize:"8px", letterSpacing:2, color:C.p3, textTransform:"uppercase" }}>
-                Operator Email
+                Email Address
               </label>
               <input
                 type="email" value={email}
                 onChange={e => setEmail(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && handleAuth()}
+                onKeyDown={e => e.key === "Enter" && handleSubmit()}
                 disabled={isScanning || isSuccess}
-                placeholder="operator@organisation.io"
+                placeholder="you@organisation.io"
+                autoFocus={mode === "login"}
                 style={{
                   background:C.bg0, border:`1px solid ${C.line2}`,
                   borderBottom:`1px solid ${email ? C.accent : C.line2}`,
@@ -230,17 +333,19 @@ export default function GovernorLogin() {
                 }}
               />
             </div>
+
+            {/* Password */}
             <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
               <label style={{ fontSize:"8px", letterSpacing:2, color:C.p3, textTransform:"uppercase" }}>
-                Access Key
+                Password
               </label>
               <div style={{ position:"relative" }}>
                 <input
                   type={showPass ? "text" : "password"} value={password}
                   onChange={e => setPassword(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && handleAuth()}
+                  onKeyDown={e => e.key === "Enter" && handleSubmit()}
                   disabled={isScanning || isSuccess}
-                  placeholder="••••••••••••"
+                  placeholder={mode === "signup" ? "Min 6 characters" : "••••••••••••"}
                   style={{
                     background:C.bg0, border:`1px solid ${C.line2}`,
                     borderBottom:`1px solid ${password ? C.accent : C.line2}`,
@@ -259,6 +364,38 @@ export default function GovernorLogin() {
                 </button>
               </div>
             </div>
+
+            {/* Confirm password — signup only */}
+            {mode === "signup" && (
+              <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                <label style={{ fontSize:"8px", letterSpacing:2, color:C.p3, textTransform:"uppercase" }}>
+                  Confirm Password
+                </label>
+                <input
+                  type="password" value={confirmPass}
+                  onChange={e => setConfirmPass(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && handleSubmit()}
+                  disabled={isScanning || isSuccess}
+                  placeholder="Re-enter password"
+                  style={{
+                    background:C.bg0, border:`1px solid ${C.line2}`,
+                    borderBottom:`1px solid ${
+                      confirmPass
+                        ? (confirmPass === password ? C.green : C.red)
+                        : C.line2
+                    }`,
+                    color:C.p1, fontFamily:mono, fontSize:11,
+                    padding:"10px 12px", outline:"none", width:"100%", boxSizing:"border-box",
+                    transition:"border-color 0.2s",
+                  }}
+                />
+                {confirmPass && confirmPass !== password && (
+                  <span style={{ fontSize:"8px", color:C.red, letterSpacing:1 }}>
+                    PASSWORDS DO NOT MATCH
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Scan progress */}
@@ -267,7 +404,7 @@ export default function GovernorLogin() {
               marginBottom:14, padding:"10px 12px",
               background:C.bg0, border:`1px solid ${C.line2}`,
             }}>
-              {SCAN_STEPS.map((step, i) => (
+              {scanSteps.map((step, i) => (
                 <div key={i} style={{
                   display:"flex", alignItems:"center", gap:8, padding:"3px 0",
                   opacity: i < scanStep ? 1 : i === scanStep ? 0.5 : 0.15,
@@ -284,28 +421,51 @@ export default function GovernorLogin() {
             </div>
           )}
 
-          {/* Button */}
-          <button onClick={handleAuth}
-            disabled={isScanning || isSuccess || !email || !password}
+          {/* Submit button */}
+          <button onClick={handleSubmit}
+            disabled={isScanning || isSuccess || !canSubmit}
             style={{
               width:"100%", padding:"12px",
               fontFamily:mono, fontSize:11, fontWeight:700,
               letterSpacing:2, textTransform:"uppercase",
-              cursor: isScanning || isSuccess || !email || !password ? "not-allowed" : "pointer",
+              cursor: isScanning || isSuccess || !canSubmit ? "not-allowed" : "pointer",
               border:`1px solid ${isSuccess ? C.green : isError ? C.red : C.accent}`,
               color: isSuccess ? C.green : isError ? C.red : C.accent,
               background: isSuccess ? C.greenDim : isError ? C.redDim : C.accentDim,
               transition:"all 0.2s",
-              opacity: !email || !password ? 0.4 : 1,
+              opacity: !canSubmit ? 0.4 : 1,
             }}>
-            {isScanning ? "VERIFYING…" : isSuccess ? "✓ AUTHORISED" : isError ? "ACCESS DENIED" : "AUTHENTICATE →"}
+            {isScanning
+              ? "PROCESSING…"
+              : isSuccess
+              ? "✓ " + (mode === "signup" ? "ACCOUNT CREATED" : "AUTHORISED")
+              : isError
+              ? "FAILED"
+              : mode === "signup"
+              ? "CREATE ACCOUNT →"
+              : "SIGN IN →"
+            }
           </button>
 
-          {/* Footer */}
-          <div style={{ marginTop:18, textAlign:"center" }}>
-            <div style={{ fontSize:"8px", letterSpacing:2, color:C.p3, textTransform:"uppercase", marginBottom:6 }}>
-              AUTHORISED PERSONNEL ONLY
-            </div>
+          {/* Switch mode link */}
+          <div style={{ marginTop:16, textAlign:"center" }}>
+            <button
+              onClick={switchMode}
+              disabled={isScanning || isSuccess}
+              style={{
+                background:"none", border:"none", cursor:"pointer",
+                fontFamily:mono, fontSize:9, letterSpacing:1, color:C.p2,
+              }}
+            >
+              {mode === "signup"
+                ? "Already have an account? SIGN IN"
+                : "Need an account? CREATE ONE"
+              }
+            </button>
+          </div>
+
+          {/* Footer tags */}
+          <div style={{ marginTop:14, textAlign:"center" }}>
             <div style={{ display:"flex", justifyContent:"center", gap:10 }}>
               {["DEFAULT-DENY","AUDIT-LOGGED","SESSION-BOUND"].map(tag => (
                 <span key={tag} style={{
@@ -319,11 +479,33 @@ export default function GovernorLogin() {
           </div>
         </div>
 
+        {/* Below panel */}
         <div style={{
-          marginTop:14, textAlign:"center",
-          fontSize:"8.5px", letterSpacing:1.5, color:C.p3, textTransform:"uppercase",
+          marginTop:14, textAlign:"center", display:"flex", flexDirection:"column", gap:8,
         }}>
-          All access attempts are recorded in the immutable audit trail
+          <div style={{
+            fontSize:"8.5px", letterSpacing:1.5, color:C.p3, textTransform:"uppercase",
+          }}>
+            {mode === "signup"
+              ? "New accounts are provisioned with operator access"
+              : "All access attempts are recorded in the immutable audit trail"
+            }
+          </div>
+          {onBack && (
+            <button
+              onClick={onBack}
+              style={{
+                background:"none", border:`1px solid ${C.line}`,
+                fontFamily:mono, fontSize:9, letterSpacing:1.5, color:C.p3,
+                padding:"6px 16px", cursor:"pointer", textTransform:"uppercase",
+                transition:"border-color 0.2s, color 0.2s",
+              }}
+              onMouseEnter={e => { (e.target as HTMLElement).style.color = C.p2; (e.target as HTMLElement).style.borderColor = C.line2; }}
+              onMouseLeave={e => { (e.target as HTMLElement).style.color = C.p3; (e.target as HTMLElement).style.borderColor = C.line; }}
+            >
+              ← Back to Landing
+            </button>
+          )}
         </div>
       </div>
 

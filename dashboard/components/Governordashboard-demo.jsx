@@ -80,7 +80,7 @@ function ClawIcon({ size=54, pulse=false }) {
 }
 
 // ── LOGIN PAGE ───────────────────────────────────────────────
-function LoginPage({ onLogin }) {
+function LoginPage({ onLogin, onExit }) {
   const [email, setEmail]       = useState("admin@openclaw.io");
   const [password, setPassword] = useState("govern");
   const [showPass, setShowPass] = useState(false);
@@ -343,9 +343,26 @@ function LoginPage({ onLogin }) {
             </div>
           </div>
         </div>
-        <div style={{marginTop:14,textAlign:"center",fontSize:"8.5px",letterSpacing:1.5,
-          color:C.p3,textTransform:"uppercase"}}>
-          All access attempts are recorded in the immutable audit trail
+        <div style={{marginTop:14,textAlign:"center",display:"flex",flexDirection:"column",gap:8}}>
+          <div style={{fontSize:"8.5px",letterSpacing:1.5,
+            color:C.p3,textTransform:"uppercase"}}>
+            All access attempts are recorded in the immutable audit trail
+          </div>
+          {onExit && (
+            <button
+              onClick={onExit}
+              style={{
+                background:"none", border:`1px solid ${C.line}`,
+                fontFamily:mono, fontSize:9, letterSpacing:1.5, color:C.p3,
+                padding:"6px 16px", cursor:"pointer", textTransform:"uppercase",
+                transition:"border-color 0.2s, color 0.2s", alignSelf:"center",
+              }}
+              onMouseEnter={e => { e.target.style.color = C.p2; e.target.style.borderColor = C.line2; }}
+              onMouseLeave={e => { e.target.style.color = C.p3; e.target.style.borderColor = C.line; }}
+            >
+              ← Back to Landing
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -4034,7 +4051,7 @@ function GovernorDashboard({ userRole="operator", userName="", onLogout=()=>{} }
 // ═══════════════════════════════════════════════════════════
 // ROOT — auth gate: login → dashboard
 // ═══════════════════════════════════════════════════════════
-export default function App() {
+export default function App({ onExit }) {
   const [user, setUser] = useState(null);
   const [transitioning, setTransitioning] = useState(false);
 
@@ -4055,6 +4072,6 @@ export default function App() {
     </div>
   );
 
-  if (!user) return <LoginPage onLogin={handleLogin}/>;
+  if (!user) return <LoginPage onLogin={handleLogin} onExit={onExit}/>;
   return <GovernorDashboard key={user.email} userRole={user.role} userName={user.name} onLogout={handleLogout}/>;
 }

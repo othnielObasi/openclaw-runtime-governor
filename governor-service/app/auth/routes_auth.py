@@ -44,6 +44,12 @@ class UserRead(BaseModel):
         from_attributes = True
 
 
+class SignupRequest(BaseModel):
+    name: str = Field(..., min_length=2, max_length=100)
+    email: str
+    password: str = Field(..., min_length=6)
+
+
 class UserCreate(BaseModel):
     email: str
     name: str
@@ -91,6 +97,44 @@ def login(request: Request, body: LoginRequest) -> TokenResponse:
         email=user.email,
         name=user.name,
     )
+
+
+# ---------------------------------------------------------------------------
+# Public signup — creates an operator account (no admin required)
+# ---------------------------------------------------------------------------
+
+@router.post("/signup", response_model=TokenResponse, status_code=201)
+@limiter.limit("5/minute")
+def signup(request: Request, body: SignupRequest) -> TokenResponse:
+    with db_session() as session:
+        existing = session.execute(
+            select(User).where(User.email == body.email)
+        ).scalar_one_or_none()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An account with this email already exists.",
+            )
+
+        user = User(
+            email=body.email,
+            name=body.name,
+            password_hash=hash_password(body.password),
+            role="operator",
+            api_key=generate_api_key(),
+            is_active=True,
+        )
+        session.add(user)
+        session.flush()
+        session.refresh(user)
+
+        token = create_access_token(subject=user.email, role=user.role)
+        return TokenResponse(
+            access_token=token,
+            role=user.role,
+            email=user.email,
+            name=user.name,
+        )
 
 
 # ---------------------------------------------------------------------------
