@@ -3742,7 +3742,7 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
                 {killSwitch?"ON":"OFF"}
               </div>
             </div>
-            {(userRole==="admin"||userRole==="operator") && (
+            {(userRole==="superadmin"||userRole==="admin"||userRole==="operator") && (
               <div style={{display:"flex", gap:3, marginBottom:10}}>
                 <Btn onClick={()=>handleKS(true)} variant="red" disabled={killSwitch}
                   style={{fontSize:11, padding:"3px 8px", flex:1}}>HALT</Btn>
@@ -3765,7 +3765,7 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
             </div>
 
             {/* Degraded */}
-            {userRole==="admin" && (
+            {(userRole==="superadmin"||userRole==="admin") && (
               <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10}}>
                 <div style={{fontFamily:mono, fontSize:12, color:C.muted, letterSpacing:1}}>DEGRADED</div>
                 <button onClick={()=>handleDegraded(!degraded)} style={{
@@ -3805,8 +3805,8 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
                 <div style={{fontFamily:mono, fontSize:13, color:C.p2}}>{userName}</div>
                 <span style={{fontFamily:mono, fontSize:12, letterSpacing:1.5,
                   padding:"2px 6px", border:`1px solid ${
-                    userRole==="admin"?C.accent:userRole==="operator"?C.amber:C.p3}`,
-                  color:userRole==="admin"?C.accent:userRole==="operator"?C.amber:C.p3,
+                    (userRole==="superadmin"||userRole==="admin")?C.accent:userRole==="operator"?C.amber:C.p3}`,
+                  color:(userRole==="superadmin"||userRole==="admin")?C.accent:userRole==="operator"?C.amber:C.p3,
                   textTransform:"uppercase"}}>{userRole}</span>
               </div>
               <button onClick={onLogout} style={{
@@ -3857,8 +3857,8 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
         {/* Content area — full width, no persistent sidebar */}
         <div style={{flex:1, overflow:"auto", background:C.bg0}}>
           {tab==="dashboard" && <DashboardTab gs={gs}/>}
-          {tab==="tester"    && (userRole==="admin"||userRole==="operator") && <ActionTesterTab killSwitch={killSwitch} extraPolicies={extraPols} sessionMemory={sessionMemory} onResult={onResult}/>}
-          {tab==="policies"  && (userRole==="admin"||userRole==="operator") && <PolicyEditorTab extraPolicies={extraPols} setExtraPolicies={setEPWithAudit} policySnapshots={policySnapshots} onRestore={snap => {
+          {tab==="tester"    && (userRole==="superadmin"||userRole==="admin"||userRole==="operator") && <ActionTesterTab killSwitch={killSwitch} extraPolicies={extraPols} sessionMemory={sessionMemory} onResult={onResult}/>}
+          {tab==="policies"  && (userRole==="superadmin"||userRole==="admin"||userRole==="operator") && <PolicyEditorTab extraPolicies={extraPols} setExtraPolicies={setEPWithAudit} policySnapshots={policySnapshots} onRestore={snap => {
               const rebuilt = snap.policies
                 .filter(p => p.source === "runtime")
                 .map(p => {
