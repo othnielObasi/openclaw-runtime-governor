@@ -1,4 +1,4 @@
-# 🛡️ NOVTIA OpenClaw Governor – Harmonized Build
+nor – Harmonized Build
 
 Track: **Developer Infrastructure & Tools (Track 3)** | Prize: **Compliance-Ready Tokenization**
 

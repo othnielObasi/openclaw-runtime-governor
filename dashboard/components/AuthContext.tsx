@@ -33,7 +33,10 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 const TOKEN_KEY = "ocg_token";
-const API_BASE  = process.env.NEXT_PUBLIC_GOVERNOR_API || "http://localhost:8000";
+const API_BASE  = process.env.NEXT_PUBLIC_GOVERNOR_API;
+if (!API_BASE) {
+  console.warn('NEXT_PUBLIC_GOVERNOR_API is not set; requests may fail');
+}
 
 // ── Provider ─────────────────────────────────────────────────
 export function AuthProvider({ children }: { children: ReactNode }) {

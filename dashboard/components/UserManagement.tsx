@@ -14,7 +14,10 @@ const C = {
 };
 const mono = "'IBM Plex Mono','Courier New',monospace";
 const sans = "'DM Sans',system-ui,sans-serif";
-const API  = process.env.NEXT_PUBLIC_GOVERNOR_API || "http://localhost:8000";
+const API  = process.env.NEXT_PUBLIC_GOVERNOR_API;
+if (!API) {
+  console.warn('NEXT_PUBLIC_GOVERNOR_API is not set; requests may fail');
+}
 
 interface User {
   id: number;

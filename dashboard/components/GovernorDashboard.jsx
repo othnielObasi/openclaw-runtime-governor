@@ -2709,7 +2709,10 @@ function AuditTrailTab({ auditLog, policySnapshots }) {
 // ═══════════════════════════════════════════════════════════
 // Simulated in-memory user store — no backend needed in artifact/demo preview
 function AdminUserManagementTab() {
-  const API_BASE = (typeof process!=="undefined"&&process.env?.NEXT_PUBLIC_GOVERNOR_API) || "http://localhost:8000";
+  const API_BASE = (typeof process!=="undefined" && process.env?.NEXT_PUBLIC_GOVERNOR_API) || null;
+  if (!API_BASE) {
+    console.warn('NEXT_PUBLIC_GOVERNOR_API is not set; requests may fail');
+  }
   const getToken = () => typeof window!=="undefined" ? localStorage.getItem("ocg_token") : null;
 
   const [users, setUsers]   = useState([]);
