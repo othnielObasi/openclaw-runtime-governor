@@ -27,6 +27,7 @@ import json
 import os
 import random
 import re
+import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -325,79 +326,171 @@ class MoltbookLablabPoster:
 
     # ---------- Content generation ----------
 
-    def _summarise_recent_events(self, max_events: int = 3) -> str:
+    @staticmethod
+    def _get_recent_git_activity(max_commits: int = 5) -> List[Dict[str, str]]:
         """
-        Optionally summarise recent runtime events from logs/openclaw-events.jsonl.
+        Fetch recent git commits from the repo. Returns a list of dicts
+        with 'hash', 'date', 'subject', and 'files_changed'.
+        Works in CI where the repo is checked out.
         """
-        if not LOG_FILE.exists():
-            return (
-                "No recent OpenClaw runtime events loaded from logs; "
-                "running in demo/standalone status mode."
-            )
-
+        commits: List[Dict[str, str]] = []
         try:
-            lines = LOG_FILE.read_text(encoding="utf-8").strip().splitlines()
+            log_output = subprocess.run(
+                ["git", "log", f"--max-count={max_commits}",
+                 "--pretty=format:%h|%aI|%s", "--no-merges"],
+                capture_output=True, text=True, timeout=10,
+            )
+            if log_output.returncode != 0:
+                return commits
+
+            for line in log_output.stdout.strip().splitlines():
+                parts = line.split("|", 2)
+                if len(parts) == 3:
+                    short_hash, date, subject = parts
+                    # Get files changed for this commit
+                    diff_output = subprocess.run(
+                        ["git", "diff-tree", "--no-commit-id", "--name-only",
+                         "-r", short_hash],
+                        capture_output=True, text=True, timeout=10,
+                    )
+                    files = [f.strip() for f in diff_output.stdout.strip().splitlines()
+                             if f.strip()] if diff_output.returncode == 0 else []
+                    commits.append({
+                        "hash": short_hash,
+                        "date": date,
+                        "subject": subject,
+                        "files_changed": ", ".join(files[:4]) + (
+                            f" (+{len(files)-4} more)" if len(files) > 4 else ""
+                        ),
+                    })
         except Exception:
-            return "Unable to read runtime log; falling back to generic status."
+            pass
+        return commits
 
-        if not lines:
-            return "No recent runtime events in the log file."
+    @staticmethod
+    def _get_repo_stats() -> Dict[str, Any]:
+        """
+        Get basic repo statistics for richer posts.
+        """
+        stats: Dict[str, Any] = {}
+        try:
+            # Total commits
+            result = subprocess.run(
+                ["git", "rev-list", "--count", "HEAD"],
+                capture_output=True, text=True, timeout=10,
+            )
+            if result.returncode == 0:
+                stats["total_commits"] = result.stdout.strip()
 
-        recent: List[str] = []
-        for line in reversed(lines):
-            if len(recent) >= max_events:
-                break
-            line = line.strip()
-            if not line:
-                continue
+            # Contributors
+            result = subprocess.run(
+                ["git", "shortlog", "-sn", "--no-merges", "HEAD"],
+                capture_output=True, text=True, timeout=10,
+            )
+            if result.returncode == 0:
+                stats["contributors"] = len(result.stdout.strip().splitlines())
+
+            # Last tag if any
+            result = subprocess.run(
+                ["git", "describe", "--tags", "--abbrev=0"],
+                capture_output=True, text=True, timeout=10,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                stats["latest_tag"] = result.stdout.strip()
+        except Exception:
+            pass
+        return stats
+
+    def _summarise_recent_events(self, max_events: int = 5) -> str:
+        """
+        Build a summary from real git activity. Falls back to log file
+        or generic message if git is unavailable.
+        """
+        # Try git commits first (primary source of truth in CI)
+        commits = self._get_recent_git_activity(max_events)
+        if commits:
+            lines = []
+            for c in commits:
+                line = f"- `{c['hash']}` {c['subject']}"
+                if c['files_changed']:
+                    line += f" [{c['files_changed']}]"
+                lines.append(line)
+            return "\n".join(lines)
+
+        # Fallback: try local log file
+        if LOG_FILE.exists():
             try:
-                evt = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            ts = evt.get("timestamp") or evt.get("time") or "unknown-time"
-            etype = evt.get("type") or evt.get("event_type") or "event"
-            desc = evt.get("summary") or evt.get("description") or ""
-            recent.append(f"- [{ts}] {etype}: {desc}")
+                raw_lines = LOG_FILE.read_text(encoding="utf-8").strip().splitlines()
+                recent: List[str] = []
+                for line in reversed(raw_lines):
+                    if len(recent) >= max_events:
+                        break
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        evt = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    ts = evt.get("timestamp") or evt.get("time") or "unknown-time"
+                    etype = evt.get("type") or evt.get("event_type") or "event"
+                    desc = evt.get("summary") or evt.get("description") or ""
+                    recent.append(f"- [{ts}] {etype}: {desc}")
+                if recent:
+                    return "\n".join(recent)
+            except Exception:
+                pass
 
-        if not recent:
-            return "Recent events could not be parsed from logs; using generic status."
-        return "\n".join(recent)
+        return "No recent activity found; runtime governor is idle."
 
     def _build_post_payload(self) -> Dict[str, Any]:
         now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         events_text = self._summarise_recent_events()
+        stats = self._get_repo_stats()
+
+        stats_line = ""
+        if stats:
+            parts = []
+            if "total_commits" in stats:
+                parts.append(f"{stats['total_commits']} commits")
+            if "contributors" in stats:
+                parts.append(f"{stats['contributors']} contributors")
+            if "latest_tag" in stats:
+                parts.append(f"latest: {stats['latest_tag']}")
+            if parts:
+                stats_line = f"Repo stats: {' · '.join(parts)}"
 
         templates = [
             (
-                "OpenClaw runtime governor status update (LabLab)",
+                "OpenClaw governor — recent development activity",
                 (
-                    "{agent} check-in from the LabLab ecosystem at {now}.\n\n"
-                    "Recent runtime governance loop signals:\n"
+                    "{agent} development update from the LabLab ecosystem at {now}.\n\n"
+                    "Recent changes:\n"
                     "{events}\n\n"
-                    "Runtime control-plane is active; policies are being enforced "
-                    "for autonomous agents with observability hooks streaming "
-                    "safety-relevant events."
+                    "{stats}\n\n"
+                    "Runtime governance policies, safety layers, and observability "
+                    "hooks continue to evolve with each commit."
                 ),
             ),
             (
-                "LabLab autonomy safety snapshot",
+                "What's new in OpenClaw runtime governor",
                 (
-                    "{agent} posting a safety snapshot at {now} for the `lablab` submolt.\n\n"
-                    "Selected OpenClaw runtime events:\n"
+                    "Latest activity from {agent} at {now}:\n\n"
                     "{events}\n\n"
-                    "If you are building agentic systems in the LabLab ecosystem, "
-                    "how are you handling runtime governance, policy-as-code, and "
-                    "action-level approval?"
+                    "{stats}\n\n"
+                    "Building policy-as-code governance for autonomous AI agents. "
+                    "What safety patterns are you using in your agentic systems?"
                 ),
             ),
             (
-                "OpenClaw control-plane heartbeat",
+                "OpenClaw governor — commit log update",
                 (
-                    "{agent} heartbeat from the OpenClaw runtime governor at {now}.\n\n"
-                    "Telemetry excerpt:\n"
+                    "{agent} project update at {now} for the `lablab` submolt.\n\n"
+                    "Recent commits:\n"
                     "{events}\n\n"
-                    "The control-plane is focused on policy enforcement, auditability, "
-                    "and safety constraints for autonomous robots and AI agents."
+                    "{stats}\n\n"
+                    "Each commit strengthens the runtime control-plane — policy enforcement, "
+                    "audit trails, and action-level safety constraints for AI agents."
                 ),
             ),
         ]
@@ -407,6 +500,7 @@ class MoltbookLablabPoster:
             agent=self.config.agent_name,
             now=now_utc,
             events=events_text,
+            stats=stats_line,
         )
 
         return {
