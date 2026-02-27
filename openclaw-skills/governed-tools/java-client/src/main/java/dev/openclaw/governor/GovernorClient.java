@@ -45,6 +45,7 @@ public class GovernorClient {
         this.apiKey = apiKey != null ? apiKey : "";
         this.timeout = timeout;
         this.httpClient = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(timeout)
                 .build();
     }
