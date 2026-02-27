@@ -2,7 +2,7 @@ import { describe, it, mock, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 
 // We test the compiled output — run `npm run build` first.
-import { GovernorClient, GovernorBlockedError } from "../dist/index.js";
+import { GovernorClient, GovernorBlockedError } from "../dist/cjs/index.js";
 
 describe("GovernorClient", () => {
   it("constructs with defaults", () => {

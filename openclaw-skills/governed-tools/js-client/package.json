@@ -2,14 +2,22 @@
   "name": "@openclaw/governor-client",
   "version": "0.2.0",
   "description": "TypeScript/JavaScript client for the OpenClaw Governor – runtime governance for AI agents",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/cjs/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "types": "./dist/cjs/index.d.ts"
+    }
+  },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsc",
-    "test": "node --test tests/client.test.mjs",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.esm.json",
+    "test": "npm run build && node --test tests/client.test.mjs",
     "prepublishOnly": "npm run build"
   },
   "keywords": [

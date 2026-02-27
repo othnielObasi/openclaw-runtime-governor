@@ -5,7 +5,7 @@
     "lib": ["ES2020"],
     "declaration": true,
     "strict": true,
-    "outDir": "dist",
+    "outDir": "dist/cjs",
     "rootDir": "src",
     "esModuleInterop": true,
     "skipLibCheck": true,
