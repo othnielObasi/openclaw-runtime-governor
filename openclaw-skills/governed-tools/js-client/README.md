@@ -65,10 +65,50 @@ Fetch the current admin status (kill switch state, etc.).
 
 Fetch the governor summary (total actions, block rate, etc.).
 
+### `client.ingestSpans(spans) → Promise<IngestResult>`
+
+Batch-ingest agent trace spans (up to 500). Idempotent — duplicate `span_id` values are silently skipped.
+
+Valid span kinds: `agent`, `llm`, `tool`, `governance`, `retrieval`, `chain`, `custom`.
+
+Returns `{ inserted, skipped }`.
+
+```ts
+await gov.ingestSpans([
+  { trace_id: "t-123", span_id: "s-1", kind: "agent", name: "main", start_time: new Date().toISOString() },
+  { trace_id: "t-123", span_id: "s-2", kind: "llm", name: "gpt-4", start_time: new Date().toISOString(), parent_span_id: "s-1" },
+]);
+```
+
+### `client.listTraces(options?) → Promise<TraceListItem[]>`
+
+List traces. Optional filters: `agent_id`, `session_id`, `has_blocks`, `limit`, `offset`.
+
+### `client.getTrace(traceId) → Promise<TraceDetail>`
+
+Full trace detail — all spans plus correlated governance decisions.
+
+### `client.deleteTrace(traceId) → Promise<DeleteTraceResult>`
+
+Delete all spans for a trace. Returns `{ trace_id, spans_deleted }`.
+
 ### `GovernorBlockedError`
 
 Error thrown when the Governor blocks a tool invocation. Has a `.decision` property
 with the full `GovernorDecision` object.
+
+## Trace correlation
+
+Pass `trace_id` and `span_id` in the `context` parameter of `evaluate()` to auto-create
+a governance span in the agent's trace tree:
+
+```ts
+const decision = await gov.evaluate("shell_exec", { command: "ls" }, {
+  trace_id: "t-123",
+  span_id: "s-2",   // governance span will be a child of this span
+  agent_id: "my-agent",
+});
+```
 
 ## Requirements
 

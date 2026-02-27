@@ -135,6 +135,76 @@ public class GovernorClient {
         return get("/summary/moltbook");
     }
 
+    // ── Trace observability ───────────────────────────────────
+
+    /**
+     * Batch-ingest agent trace spans.
+     *
+     * <p>Valid span kinds: agent, llm, tool, governance, retrieval, chain, custom.
+     * Duplicate {@code span_id} values are silently skipped (idempotent).</p>
+     *
+     * @param spans list of span maps (each must contain at minimum: trace_id, span_id, kind, name, start_time)
+     * @return map with "inserted" and "skipped" counts
+     * @throws GovernorException on network or parse errors
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> ingestSpans(List<Map<String, Object>> spans) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("spans", spans);
+        return post("/traces/ingest", payload);
+    }
+
+    /**
+     * List traces with optional filters.
+     *
+     * @param filters optional map of query params (agent_id, session_id, has_blocks, limit, offset)
+     * @return list of trace summary maps
+     * @throws GovernorException on network or parse errors
+     */
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> listTraces(Map<String, String> filters) {
+        StringBuilder path = new StringBuilder("/traces");
+        if (filters != null && !filters.isEmpty()) {
+            path.append("?");
+            boolean first = true;
+            for (Map.Entry<String, String> e : filters.entrySet()) {
+                if (!first) path.append("&");
+                path.append(encodeParam(e.getKey())).append("=").append(encodeParam(e.getValue()));
+                first = false;
+            }
+        }
+        return (List<Map<String, Object>>) (Object) getList(path.toString());
+    }
+
+    /**
+     * List traces without filters.
+     */
+    public List<Map<String, Object>> listTraces() {
+        return listTraces(null);
+    }
+
+    /**
+     * Fetch full trace detail — all spans plus correlated governance decisions.
+     *
+     * @param traceId the trace identifier
+     * @return trace detail map with spans, governance_decisions, span_count, etc.
+     * @throws GovernorException on network or parse errors
+     */
+    public Map<String, Object> getTrace(String traceId) {
+        return get("/traces/" + encodeParam(traceId));
+    }
+
+    /**
+     * Delete all spans for a trace (action log entries are preserved).
+     *
+     * @param traceId the trace identifier
+     * @return map with "trace_id" and "spans_deleted"
+     * @throws GovernorException on network or parse errors
+     */
+    public Map<String, Object> deleteTrace(String traceId) {
+        return doDelete("/traces/" + encodeParam(traceId));
+    }
+
     // ── Internal ──────────────────────────────────────────────
 
     private Map<String, Object> post(String path, Map<String, Object> body) {
@@ -155,6 +225,44 @@ public class GovernorClient {
                 .GET();
         addAuth(rb);
         return execute(rb.build());
+    }
+
+    private Map<String, Object> doDelete(String path) {
+        HttpRequest.Builder rb = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + path))
+                .timeout(timeout)
+                .DELETE();
+        addAuth(rb);
+        return execute(rb.build());
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Object> getList(String path) {
+        HttpRequest.Builder rb = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + path))
+                .timeout(timeout)
+                .GET();
+        addAuth(rb);
+        try {
+            HttpResponse<String> response = httpClient.send(rb.build(), HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() >= 400) {
+                throw new GovernorException("Governor API returned " + response.statusCode() + ": " + response.body());
+            }
+            return (List<Object>) SimpleJson.parse(response.body());
+        } catch (IOException e) {
+            throw new GovernorException("Failed to reach Governor at " + baseUrl + ": " + e.getMessage(), e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new GovernorException("Request interrupted", e);
+        }
+    }
+
+    private static String encodeParam(String value) {
+        try {
+            return java.net.URLEncoder.encode(value, "UTF-8");
+        } catch (java.io.UnsupportedEncodingException e) {
+            return value; // UTF-8 is always available
+        }
     }
 
     private void addAuth(HttpRequest.Builder rb) {

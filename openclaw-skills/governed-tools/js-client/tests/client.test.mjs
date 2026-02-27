@@ -119,4 +119,101 @@ describe("GovernorClient", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  // ── Trace observability ─────────────────────────────────────
+
+  it("ingestSpans sends batch to /traces/ingest", async () => {
+    let capturedUrl, capturedBody;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url, opts) => {
+      capturedUrl = url;
+      capturedBody = JSON.parse(opts.body);
+      return new Response(
+        JSON.stringify({ inserted: 2, skipped: 0 }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    };
+
+    try {
+      const c = new GovernorClient({ baseUrl: "http://localhost:9999" });
+      const result = await c.ingestSpans([
+        { trace_id: "t1", span_id: "s1", kind: "agent", name: "root", start_time: "2026-01-01T00:00:00Z" },
+        { trace_id: "t1", span_id: "s2", kind: "llm", name: "call", start_time: "2026-01-01T00:00:01Z", parent_span_id: "s1" },
+      ]);
+      assert.equal(result.inserted, 2);
+      assert.equal(result.skipped, 0);
+      assert.ok(capturedUrl.includes("/traces/ingest"));
+      assert.equal(capturedBody.spans.length, 2);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("listTraces calls /traces with query params", async () => {
+    let capturedUrl;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url) => {
+      capturedUrl = url;
+      return new Response(
+        JSON.stringify([{ trace_id: "t1", span_count: 3, governance_count: 1 }]),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    };
+
+    try {
+      const c = new GovernorClient({ baseUrl: "http://localhost:9999" });
+      const traces = await c.listTraces({ agent_id: "bot-1", has_blocks: true });
+      assert.ok(capturedUrl.includes("agent_id=bot-1"));
+      assert.ok(capturedUrl.includes("has_blocks=true"));
+      assert.equal(traces.length, 1);
+      assert.equal(traces[0].trace_id, "t1");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("getTrace fetches /traces/{id}", async () => {
+    let capturedUrl;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url) => {
+      capturedUrl = url;
+      return new Response(
+        JSON.stringify({ trace_id: "t1", spans: [{}, {}], governance_decisions: [{}], span_count: 2, governance_count: 1 }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    };
+
+    try {
+      const c = new GovernorClient({ baseUrl: "http://localhost:9999" });
+      const detail = await c.getTrace("t1");
+      assert.ok(capturedUrl.endsWith("/traces/t1"));
+      assert.equal(detail.span_count, 2);
+      assert.equal(detail.governance_count, 1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("deleteTrace calls DELETE /traces/{id}", async () => {
+    let capturedUrl, capturedMethod;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url, opts) => {
+      capturedUrl = url;
+      capturedMethod = opts.method;
+      return new Response(
+        JSON.stringify({ trace_id: "t1", spans_deleted: 5 }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    };
+
+    try {
+      const c = new GovernorClient({ baseUrl: "http://localhost:9999" });
+      const result = await c.deleteTrace("t1");
+      assert.ok(capturedUrl.endsWith("/traces/t1"));
+      assert.equal(capturedMethod, "DELETE");
+      assert.equal(result.spans_deleted, 5);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

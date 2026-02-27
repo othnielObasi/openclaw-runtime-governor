@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "openclaw-governor-client"
-version = "0.2.0"
+version = "0.3.0"
 description = "Python client for the OpenClaw Governor – runtime AI-agent governance service"
 readme = "README.md"
 license = "MIT"

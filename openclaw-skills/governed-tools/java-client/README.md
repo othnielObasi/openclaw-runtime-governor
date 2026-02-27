@@ -12,14 +12,14 @@ Uses `java.net.http.HttpClient` (Java 11+) with **zero external dependencies**.
 <dependency>
     <groupId>dev.openclaw</groupId>
     <artifactId>governor-client</artifactId>
-    <version>0.2.0</version>
+    <version>0.3.0</version>
 </dependency>
 ```
 
 ### Gradle
 
 ```groovy
-implementation 'dev.openclaw:governor-client:0.2.0'
+implementation 'dev.openclaw:governor-client:0.3.0'
 ```
 
 ## Quick start
@@ -74,6 +74,48 @@ Returns admin status as `Map<String, Object>`.
 ### `client.getSummary()`
 
 Returns governor summary as `Map<String, Object>`.
+
+### `client.ingestSpans(spans)`
+
+Batch-ingest agent trace spans (up to 500). Idempotent — duplicate `span_id` values are silently skipped.
+
+```java
+List<Map<String, Object>> spans = List.of(
+    Map.of("trace_id", "t-123", "span_id", "s-1", "kind", "agent",
+           "name", "main", "start_time", "2026-01-01T00:00:00Z"),
+    Map.of("trace_id", "t-123", "span_id", "s-2", "kind", "llm",
+           "name", "gpt-4", "start_time", "2026-01-01T00:00:01Z",
+           "parent_span_id", "s-1")
+);
+Map<String, Object> result = gov.ingestSpans(spans);
+// {"inserted": 2, "skipped": 0}
+```
+
+### `client.listTraces()` / `client.listTraces(filters)`
+
+List traces. Optional filters: `agent_id`, `session_id`, `has_blocks`, `limit`, `offset`.
+
+### `client.getTrace(traceId)`
+
+Full trace detail — all spans plus correlated governance decisions.
+
+### `client.deleteTrace(traceId)`
+
+Delete all spans for a trace. Returns `{"trace_id": "…", "spans_deleted": N}`.
+
+### Trace correlation
+
+Pass `trace_id` and `span_id` in the context map of `evaluate()` to auto-create
+a governance span in the agent's trace tree:
+
+```java
+Map<String, Object> ctx = Map.of(
+    "trace_id", "t-123",
+    "span_id", "s-2",       // governance span becomes a child of this span
+    "agent_id", "my-agent"
+);
+GovernorDecision d = gov.evaluate("shell_exec", Map.of("command", "ls"), ctx);
+```
 
 ### Exception hierarchy
 
