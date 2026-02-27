@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import TraceViewer from "./TraceViewer";
+import AgentRunner from "./AgentRunner";
 
 // ═══════════════════════════════════════════════════════════
 // DESIGN TOKENS — SOVEREIGN AI LAB
@@ -3380,13 +3381,14 @@ function SurgeTab({ receipts: localReceipts, stakedPolicies: localStaked, setSta
 // ROLE_TABS + ALL_TABS (SURGE + Topology added)
 // ═══════════════════════════════════════════════════════════
 const ROLE_TABS = {
-  admin:    ["dashboard","tester","policies","surge","audit","traces","topology","apikeys","users"],
-  operator: ["dashboard","tester","policies","surge","audit","traces","topology","apikeys"],
-  auditor:  ["dashboard","surge","audit","traces","topology","apikeys"],
+  admin:    ["dashboard","agent","tester","policies","surge","audit","traces","topology","apikeys","users"],
+  operator: ["dashboard","agent","tester","policies","surge","audit","traces","topology","apikeys"],
+  auditor:  ["dashboard","agent","surge","audit","traces","topology","apikeys"],
 };
 
 const ALL_TABS = [
   { id:"dashboard", label:"Dashboard",        icon:"◈" },
+  { id:"agent",     label:"Agent Demo",        icon:"🤖" },
   { id:"tester",    label:"Action Tester",     icon:"▶" },
   { id:"policies",  label:"Policy Editor",     icon:"◆" },
   { id:"surge",     label:"SURGE",             icon:"⬡" },
@@ -3816,6 +3818,7 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
                 });
               setEPWithAudit(rebuilt, `Rollback to: ${snap.label}`);
             }}/>}
+          {tab==="agent"     && <AgentRunner/>}
           {tab==="surge"     && <SurgeTab receipts={surgeReceipts} stakedPolicies={stakedPolicies} setStaked={setStakedPolicies} userRole={userRole}/>}
           {tab==="audit"     && <AuditTrailTab auditLog={auditLog} policySnapshots={policySnapshots}/>}
           {tab==="traces"    && <TracesTab/>}
