@@ -1756,20 +1756,23 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
     }
   };
 
-  // ── TOGGLE (activate / archive) ─────────────────────────────
+  // ── ARCHIVE / ACTIVATE (explicit endpoints) ─────────────────
   const toggleStatus = async (policyId) => {
+    const p = allPolicies.find(pp=>pp.id===policyId);
+    const isActive = (p?.status||"active")==="active";
+    const endpoint = isActive ? "archive" : "activate";
+
     if (API_BASE) {
       setBusy(true);
       try {
-        const r = await fetch(`${API_BASE}/policies/${encodeURIComponent(policyId)}/toggle`, {method:"PATCH",headers:headers()});
+        const r = await fetch(`${API_BASE}/policies/${encodeURIComponent(policyId)}/${endpoint}`, {method:"PATCH",headers:headers()});
         if (!r.ok) throw new Error(`${r.status}`);
-        addOp(`Toggled policy: ${policyId}`);
+        addOp(`${isActive?"Archived":"Activated"} policy: ${policyId}`);
         await loadPolicies(true);
-      } catch(e) { setApiError(`Toggle failed: ${e.message}`); }
+      } catch(e) { setApiError(`${endpoint} failed: ${e.message}`); }
       finally { setBusy(false); }
     } else {
-      const p = extraPolicies.find(p=>p.id===policyId);
-      const newStatus = (p?.status||"active")==="active" ? "archived" : "active";
+      const newStatus = isActive ? "archived" : "active";
       setExtraPolicies(
         prev=>prev.map(p=> p.id===policyId ? {...p, status:newStatus, version: newStatus==="active" ? (p.version||1)+1 : p.version} : p),
         `${newStatus.toUpperCase()} policy: ${policyId}`
@@ -1861,6 +1864,7 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
     if (selected.size===0) return;
     setBusy(true);
     const ids = [...selected];
+    const endpoint = activate ? "activate" : "archive";
     let ok=0, fail=0;
     for (const id of ids) {
       const p = allPolicies.find(pp=>pp.id===id);
@@ -1869,7 +1873,7 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
       if ((activate && isActive) || (!activate && !isActive)) continue;
       if (API_BASE) {
         try {
-          const r = await fetch(`${API_BASE}/policies/${encodeURIComponent(id)}/toggle`, {method:"PATCH",headers:headers()});
+          const r = await fetch(`${API_BASE}/policies/${encodeURIComponent(id)}/${endpoint}`, {method:"PATCH",headers:headers()});
           if (r.ok) ok++; else fail++;
         } catch { fail++; }
       } else {
@@ -2754,19 +2758,69 @@ function TracesTab() {
 // AUDIT TRAIL TAB
 // ═══════════════════════════════════════════════════════════
 function AuditTrailTab({ auditLog, policySnapshots }) {
+  const API_BASE = (typeof process!=="undefined" && process.env?.NEXT_PUBLIC_GOVERNOR_API) || null;
+  const getToken = () => typeof window!=="undefined" ? localStorage.getItem("ocg_token") : null;
+  const hdrs = () => ({ "Content-Type":"application/json", ...(getToken() ? {"Authorization":`Bearer ${getToken()}`} : {}) });
+
   const [filter, setFilter] = useState("ALL");
   const [search, setSearch] = useState("");
+  const [serverAudit, setServerAudit] = useState([]);
+  const [auditStats, setAuditStats] = useState(null);
+  const [loadingServer, setLoadingServer] = useState(false);
+
+  // Fetch server-side policy audit trail
+  const fetchServerAudit = useCallback(async () => {
+    if (!API_BASE) return;
+    setLoadingServer(true);
+    try {
+      const [auditResp, statsResp] = await Promise.all([
+        fetch(`${API_BASE}/policies/audit/trail?limit=200`, { headers: hdrs() }),
+        fetch(`${API_BASE}/policies/audit/stats`, { headers: hdrs() }),
+      ]);
+      if (auditResp.ok) {
+        const data = await auditResp.json();
+        // Map server audit to client-side format
+        setServerAudit(data.map(e => ({
+          id: `srv-${e.id}`,
+          type: "POLICY_CHANGE",
+          ts: e.created_at,
+          time: new Date(e.created_at).toLocaleTimeString(),
+          label: `${e.action.toUpperCase()}: ${e.policy_id}`,
+          action: e.action,
+          policyId: e.policy_id,
+          agent: e.username,
+          source: `${e.username} (${e.user_role})`,
+          note: e.note,
+          changes: e.changes_json,
+          serverSide: true,
+        })));
+      }
+      if (statsResp.ok) setAuditStats(await statsResp.json());
+    } catch (e) { /* silent */ }
+    finally { setLoadingServer(false); }
+  }, [API_BASE]);
+
+  useEffect(() => { fetchServerAudit(); }, [fetchServerAudit]);
 
   const FILTERS = ["ALL","DECISION","POLICY_CHANGE","KILL_SWITCH","SNAPSHOT"];
 
-  const filtered = auditLog.filter(e => {
+  // Merge client-side and server-side audit events, sorted by timestamp desc
+  const allEvents = [...auditLog, ...serverAudit].sort((a, b) => {
+    const ta = new Date(a.ts).getTime();
+    const tb = new Date(b.ts).getTime();
+    return tb - ta;
+  });
+
+  const filtered = allEvents.filter(e => {
     if (filter !== "ALL" && e.type !== filter) return false;
     if (search) {
       const q = search.toLowerCase();
       return (e.label||"").toLowerCase().includes(q)
           || (e.tool||"").toLowerCase().includes(q)
           || (e.agent||"").toLowerCase().includes(q)
-          || (e.policy||"").toLowerCase().includes(q);
+          || (e.policy||"").toLowerCase().includes(q)
+          || (e.policyId||"").toLowerCase().includes(q)
+          || (e.source||"").toLowerCase().includes(q);
     }
     return true;
   });
@@ -2790,7 +2844,7 @@ function AuditTrailTab({ auditLog, policySnapshots }) {
             <div style={{fontFamily:mono, fontSize:14, fontWeight:600,
               color:C.p1, letterSpacing:1.5}}>AUDIT TRAIL</div>
             <div style={{fontFamily:mono, fontSize:11, color:C.p3, marginTop:2}}>
-              Immutable governance event log · {auditLog.length} events recorded
+              Immutable governance event log · {allEvents.length} events ({serverAudit.length} from server)
             </div>
           </div>
           <div style={{display:"flex", gap:8, alignItems:"center"}}>
@@ -2828,7 +2882,34 @@ function AuditTrailTab({ auditLog, policySnapshots }) {
               fontFamily:mono, fontSize:12, padding:"4px 10px",
               outline:"none", width:220}}
           />
+          <button onClick={fetchServerAudit} disabled={loadingServer}
+            style={{fontFamily:mono, fontSize:11, padding:"4px 10px",
+              cursor:"pointer", border:`1px solid ${C.line2}`, color:C.p2,
+              background:"transparent"}}>
+            {loadingServer ? "..." : "↻ REFRESH"}
+          </button>
         </div>
+
+        {/* Server-side audit stats */}
+        {auditStats && (
+          <div style={{display:"flex", gap:8, marginTop:10, flexWrap:"wrap"}}>
+            {[
+              ["Creates", auditStats.creates, C.green],
+              ["Edits", auditStats.edits, C.p2],
+              ["Archives", auditStats.archives, C.amber],
+              ["Activates", auditStats.activates, C.green],
+              ["Deletes", auditStats.deletes, C.red],
+              ["Imports", auditStats.imports, C.p2],
+              ["Toggles", auditStats.toggles, C.p3],
+            ].filter(([,v])=>v>0).map(([label, val, col])=>(
+              <div key={label} style={{fontFamily:mono, fontSize:11,
+                padding:"2px 8px", border:`1px solid ${col}`,
+                color:col, background:`${col}10`}}>
+                {label}: {val}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Column headers */}
@@ -2843,10 +2924,10 @@ function AuditTrailTab({ auditLog, policySnapshots }) {
 
       {/* Event rows */}
       <div style={{flex:1, overflow:"auto"}}>
-        {auditLog.length === 0 ? (
+        {allEvents.length === 0 ? (
           <div style={{padding:"40px 16px", textAlign:"center",
             fontFamily:mono, fontSize:13, color:C.p3}}>
-            No events yet. Run an evaluation or modify a policy.
+            {loadingServer ? "Loading server audit trail..." : "No events yet. Run an evaluation or modify a policy."}
           </div>
         ) : filtered.length === 0 ? (
           <div style={{padding:"40px 16px", textAlign:"center",
@@ -2921,6 +3002,24 @@ function AuditTrailTab({ auditLog, policySnapshots }) {
                   snapshot: {e.snapshotId} · {e.before}→{e.after} policies
                 </div>
               )}
+              {e.serverSide && (
+                <div style={{display:"flex", gap:5, flexWrap:"wrap", marginTop:3}}>
+                  <span style={{fontFamily:mono, fontSize:9, padding:"1px 5px",
+                    border:`1px solid ${C.p2}`, color:C.p2, background:`${C.p2}10`}}>
+                    SERVER
+                  </span>
+                  {e.note && (
+                    <span style={{fontFamily:mono, fontSize:10, color:C.p3}}>
+                      {e.note}
+                    </span>
+                  )}
+                  {e.changes && e.changes.before && (
+                    <span style={{fontFamily:mono, fontSize:10, color:C.p3}}>
+                      diff: {JSON.stringify(e.changes.before)} → {JSON.stringify(e.changes.after)}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Risk */}
@@ -2943,7 +3042,7 @@ function AuditTrailTab({ auditLog, policySnapshots }) {
         padding:"6px 16px", flexShrink:0,
         display:"flex", justifyContent:"space-between", alignItems:"center"}}>
         <span style={{fontFamily:mono, fontSize:11, color:C.p3}}>
-          Showing {filtered.length} of {auditLog.length} events
+          Showing {filtered.length} of {allEvents.length} events
         </span>
         <span style={{fontFamily:mono, fontSize:11, color:C.green}}>
           🔒 IMMUTABLE · APPEND-ONLY · NON-EDITABLE

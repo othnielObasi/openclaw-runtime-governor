@@ -59,6 +59,39 @@ class PolicyModel(Base):
     )
 
 
+class PolicyAuditLog(Base):
+    """
+    Server-side audit trail for every policy mutation.
+
+    Every create, edit, archive, activate, delete, import, bulk action
+    is recorded here with who did it, when, and what changed.
+    """
+
+    __tablename__ = "policy_audit_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc), index=True
+    )
+
+    # What happened
+    action: Mapped[str] = mapped_column(String(32), index=True)
+    # action: create | edit | archive | activate | delete | import | bulk_archive | bulk_activate | bulk_delete | toggle
+
+    # Which policy
+    policy_id: Mapped[str] = mapped_column(String(64), index=True)
+
+    # Who did it
+    username: Mapped[str] = mapped_column(String(256), index=True)
+    user_role: Mapped[str] = mapped_column(String(32))
+
+    # Change details (JSON): before/after snapshots for edits, or summary for bulk ops
+    changes_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Optional note
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+
 class User(Base):
     """Operator / admin / auditor account with role-based access."""
 

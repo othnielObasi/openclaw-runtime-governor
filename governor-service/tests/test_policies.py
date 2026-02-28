@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.database import db_session
-from app.models import PolicyModel
+from app.models import PolicyModel, PolicyAuditLog
 from app.policies.loader import invalidate_policy_cache, load_db_policies
 
 
@@ -50,7 +50,7 @@ def _inject_token(admin_token):
 
 
 # ---------------------------------------------------------------------------
-# Cleanup fixture — remove test policies after each test
+# Cleanup fixture — remove test policies and audit entries after each test
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(autouse=True)
@@ -58,6 +58,9 @@ def cleanup_test_policies():
     yield
     with db_session() as session:
         from sqlalchemy import delete
+        session.execute(
+            delete(PolicyAuditLog).where(PolicyAuditLog.policy_id.like("test-%"))
+        )
         session.execute(
             delete(PolicyModel).where(PolicyModel.policy_id.like("test-%"))
         )
@@ -540,3 +543,166 @@ class TestImportPolicies:
         data = resp.json()
         assert data["created"] == 0
         assert data["total_in_payload"] == 0
+
+
+# ---------------------------------------------------------------------------
+# ARCHIVE / ACTIVATE (explicit endpoints)
+# ---------------------------------------------------------------------------
+
+class TestArchiveActivate:
+    def _create(self, pid="test-arch-1"):
+        return client.post("/policies", json={
+            "policy_id": pid, "description": "archivable", "severity": 50,
+            "match_json": {"tool": "shell"}, "action": "review",
+        }, headers=_admin_headers())
+
+    def test_archive_policy(self):
+        h = _admin_headers()
+        self._create()
+        resp = client.patch("/policies/test-arch-1/archive", headers=h)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["is_active"] is False
+        assert data["policy_id"] == "test-arch-1"
+
+    def test_archive_idempotent(self):
+        h = _admin_headers()
+        self._create()
+        client.patch("/policies/test-arch-1/archive", headers=h)
+        resp = client.patch("/policies/test-arch-1/archive", headers=h)
+        assert resp.status_code == 200
+        assert resp.json()["is_active"] is False
+
+    def test_activate_policy(self):
+        h = _admin_headers()
+        self._create()
+        client.patch("/policies/test-arch-1/archive", headers=h)
+        resp = client.patch("/policies/test-arch-1/activate", headers=h)
+        assert resp.status_code == 200
+        assert resp.json()["is_active"] is True
+
+    def test_activate_idempotent(self):
+        h = _admin_headers()
+        self._create()
+        resp = client.patch("/policies/test-arch-1/activate", headers=h)
+        assert resp.status_code == 200
+        assert resp.json()["is_active"] is True
+
+    def test_archive_nonexistent_404(self):
+        h = _admin_headers()
+        resp = client.patch("/policies/nonexistent-xyz/archive", headers=h)
+        assert resp.status_code == 404
+
+    def test_activate_nonexistent_404(self):
+        h = _admin_headers()
+        resp = client.patch("/policies/nonexistent-xyz/activate", headers=h)
+        assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# AUDIT TRAIL
+# ---------------------------------------------------------------------------
+
+class TestAuditTrail:
+    def _create(self, pid="test-audit-1"):
+        return client.post("/policies", json={
+            "policy_id": pid, "description": "auditable", "severity": 50,
+            "match_json": {"tool": "shell"}, "action": "review",
+        }, headers=_admin_headers())
+
+    def test_create_generates_audit_entry(self):
+        h = _admin_headers()
+        self._create()
+        resp = client.get("/policies/audit/trail?policy_id=test-audit-1", headers=h)
+        assert resp.status_code == 200
+        entries = resp.json()
+        assert len(entries) >= 1
+        assert entries[0]["action"] == "create"
+        assert entries[0]["policy_id"] == "test-audit-1"
+        assert entries[0]["username"] == "admin"
+
+    def test_edit_generates_audit_with_diff(self):
+        h = _admin_headers()
+        self._create()
+        client.patch("/policies/test-audit-1", json={
+            "severity": 80, "action": "block",
+        }, headers=h)
+        resp = client.get("/policies/audit/trail?policy_id=test-audit-1&action=edit", headers=h)
+        assert resp.status_code == 200
+        entries = resp.json()
+        assert len(entries) >= 1
+        edit = entries[0]
+        assert edit["action"] == "edit"
+        assert "before" in edit["changes_json"]
+        assert "after" in edit["changes_json"]
+
+    def test_archive_generates_audit(self):
+        h = _admin_headers()
+        self._create()
+        client.patch("/policies/test-audit-1/archive", headers=h)
+        resp = client.get("/policies/audit/trail?policy_id=test-audit-1&action=archive", headers=h)
+        assert resp.status_code == 200
+        entries = resp.json()
+        assert len(entries) >= 1
+        assert entries[0]["action"] == "archive"
+
+    def test_activate_generates_audit(self):
+        h = _admin_headers()
+        self._create()
+        client.patch("/policies/test-audit-1/archive", headers=h)
+        client.patch("/policies/test-audit-1/activate", headers=h)
+        resp = client.get("/policies/audit/trail?policy_id=test-audit-1&action=activate", headers=h)
+        assert resp.status_code == 200
+        entries = resp.json()
+        assert len(entries) >= 1
+        assert entries[0]["action"] == "activate"
+
+    def test_delete_generates_audit(self):
+        h = _admin_headers()
+        self._create()
+        client.delete("/policies/test-audit-1", headers=h)
+        resp = client.get("/policies/audit/trail?policy_id=test-audit-1&action=delete", headers=h)
+        assert resp.status_code == 200
+        entries = resp.json()
+        assert len(entries) >= 1
+        assert entries[0]["action"] == "delete"
+        assert entries[0]["note"] == "Permanently deleted"
+
+    def test_audit_stats_endpoint(self):
+        h = _admin_headers()
+        self._create("test-audit-stats-1")
+        self._create("test-audit-stats-2")
+        client.patch("/policies/test-audit-stats-1/archive", headers=h)
+        resp = client.get("/policies/audit/stats", headers=h)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "creates" in data
+        assert "archives" in data
+        assert data["creates"] >= 2
+        assert data["archives"] >= 1
+
+    def test_audit_trail_filters(self):
+        h = _admin_headers()
+        self._create("test-audit-filter-a")
+        self._create("test-audit-filter-b")
+        # Filter by username
+        resp = client.get("/policies/audit/trail?username=admin", headers=h)
+        assert resp.status_code == 200
+        assert all(e["username"] == "admin" for e in resp.json())
+        # Limit/offset
+        resp = client.get("/policies/audit/trail?limit=1&offset=0", headers=h)
+        assert resp.status_code == 200
+        assert len(resp.json()) <= 1
+
+    def test_import_generates_audit(self):
+        h = _admin_headers()
+        payload = {"policies": [
+            {"policy_id": "test-audit-import-1", "description": "imported", "severity": 40,
+             "action": "allow", "match_json": {"tool": "fetch"}},
+        ]}
+        client.post("/policies/import", json=payload, headers=h)
+        resp = client.get("/policies/audit/trail?policy_id=test-audit-import-1&action=import", headers=h)
+        assert resp.status_code == 200
+        entries = resp.json()
+        assert len(entries) >= 1
+        assert entries[0]["action"] == "import"

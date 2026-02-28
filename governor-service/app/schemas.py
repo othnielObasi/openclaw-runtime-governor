@@ -137,6 +137,19 @@ class PolicyRead(PolicyBase):
     updated_at: Optional[datetime] = None
 
 
+class PolicyAuditRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    created_at: datetime
+    action: str
+    policy_id: str
+    username: str
+    user_role: str
+    changes_json: Optional[Dict[str, Any]] = None
+    note: Optional[str] = None
+
+
 # ---------------------------------------------------------------------------
 # Summary / Moltbook
 # ---------------------------------------------------------------------------
