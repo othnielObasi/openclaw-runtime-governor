@@ -20,6 +20,7 @@ The verdict is:
 """
 from __future__ import annotations
 
+import json
 import re
 import time
 import unicodedata
@@ -221,8 +222,11 @@ def check_diff_size(result: Dict[str, Any]) -> Finding:
     """Flag unexpectedly large changes (diffs, file modifications)."""
     t = time.perf_counter()
 
-    diff_text = result.get("diff", "")
-    output_text = result.get("output", "")
+    diff_raw = result.get("diff", "")
+    output_raw = result.get("output", "")
+    # Coerce to string — callers may pass dict/list values
+    diff_text = diff_raw if isinstance(diff_raw, str) else json.dumps(diff_raw)
+    output_text = output_raw if isinstance(output_raw, str) else json.dumps(output_raw)
 
     # Count lines in diff
     diff_lines = len(diff_text.strip().splitlines()) if diff_text else 0

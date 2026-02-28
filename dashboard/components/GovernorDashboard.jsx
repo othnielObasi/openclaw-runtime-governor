@@ -1350,11 +1350,12 @@ function ActionTesterTab({ killSwitch, extraPolicies, sessionMemory, onResult })
         confidenceGap: null,
       };
 
-      // Layer 6 output validation (still local since API doesn't have it)
-      if (r.decision !== "block" && outputText.trim()) {
+      // Layer 6 output validation (runs locally — uses outputText or API explanation as fallback)
+      if (r.decision !== "block") {
+        const textToValidate = outputText.trim() || r.expl || "";
         setPipe(prev => ({...prev, output:"scanning"}));
         await sleep(220);
-        const or = evaluateOutput(outputText, c);
+        const or = evaluateOutput(textToValidate, c);
         setOutputResult(or);
         setPipe(prev => ({...prev, output:or.decision==="block"?"blocked":or.decision==="review"?"review":"passed"}));
       } else {
@@ -1398,15 +1399,14 @@ function ActionTesterTab({ killSwitch, extraPolicies, sessionMemory, onResult })
       await sleep(80);
     }
 
-    // Layer 6 — Output Validator
-    if (r.decision !== "block" && outputText.trim()) {
+    // Layer 6 — Output Validator (uses outputText or explanation as fallback)
+    if (r.decision !== "block") {
+      const textToValidate = outputText.trim() || r.expl || "";
       setPipe(prev => ({...prev, output:"scanning"}));
       await sleep(220);
-      const or = evaluateOutput(outputText, c);
+      const or = evaluateOutput(textToValidate, c);
       setOutputResult(or);
       setPipe(prev => ({...prev, output:or.decision==="block"?"blocked":or.decision==="review"?"review":"passed"}));
-    } else if (r.decision !== "block") {
-      setPipe(prev => ({...prev, output:"skipped"}));
     }
 
     return r;
