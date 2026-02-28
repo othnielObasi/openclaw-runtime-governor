@@ -114,6 +114,8 @@ The Governor doesn't try to make the AI "behave better." It operates at the **ex
 
 ## Quick Start
 
+> **Full guide**: See [Getting Started](docs/GETTING_STARTED.md) for the comprehensive setup, architecture, integration, and deployment walkthrough.
+
 ### 1. Backend
 
 ```bash
@@ -642,7 +644,7 @@ cd openclaw-skills/governed-tools/java-client && mvn test
 
 Both backends run PostgreSQL 16 with 17 tables. Data persists across container restarts and redeployments.
 
-See [`DEPLOY.md`](DEPLOY.md) for full instructions, [`PUBLISHING.md`](PUBLISHING.md) for SDK publishing, [`DEVELOPER.md`](DEVELOPER.md) for contributor guide.
+See [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) for the comprehensive guide, [`DEPLOY.md`](DEPLOY.md) for deployment details, [`PUBLISHING.md`](PUBLISHING.md) for SDK publishing, [`DEVELOPER.md`](DEVELOPER.md) for contributor quick-reference.
 
 ---
 
