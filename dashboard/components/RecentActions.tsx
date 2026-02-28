@@ -13,6 +13,7 @@ interface ActionLog {
   explanation: string;
   policy_ids: string[];
   agent_id?: string;
+  conversation_id?: string;
 }
 
 const DECISION_STYLES: Record<string, string> = {
@@ -52,6 +53,7 @@ function streamToLog(s: StreamAction, idx: number): ActionLog {
     explanation: s.explanation,
     policy_ids: s.policy_ids ?? [],
     agent_id: s.agent_id,
+    conversation_id: (s as any).conversation_id,
   };
 }
 
@@ -167,6 +169,11 @@ export const RecentActions: React.FC = () => {
               {item.agent_id && (
                 <span className="text-slate-500 truncate max-w-[120px]">
                   agent: {item.agent_id}
+                </span>
+              )}
+              {item.conversation_id && (
+                <span className="text-blue-400/70 truncate max-w-[160px]" title={item.conversation_id}>
+                  💬 {item.conversation_id}
                 </span>
               )}
             </div>

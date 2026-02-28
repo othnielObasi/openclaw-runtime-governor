@@ -3203,6 +3203,354 @@ function AuditTrailTab({ auditLog, policySnapshots }) {
 }
 
 // ═══════════════════════════════════════════════════════════
+// TAB: CONVERSATIONS — forensic conversation timeline
+// Shows conversation sessions with user prompts, agent reasoning,
+// tool plans, and interleaved governed actions.
+// ═══════════════════════════════════════════════════════════
+function ConversationsTab() {
+  const API_BASE = (typeof process!=="undefined" && process.env?.NEXT_PUBLIC_GOVERNOR_API) || null;
+  const getToken = () => typeof window!=="undefined" ? localStorage.getItem("ocg_token") : null;
+  const hdrs = () => ({ "Content-Type":"application/json", ...(getToken() ? {"Authorization":`Bearer ${getToken()}`} : {}) });
+
+  const [conversations, setConversations] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedConv, setSelectedConv] = useState(null);
+  const [timeline, setTimeline] = useState([]);
+  const [loadingTimeline, setLoadingTimeline] = useState(false);
+  const [search, setSearch] = useState("");
+
+  // Fetch conversation list
+  const fetchConversations = useCallback(async () => {
+    if (!API_BASE) return;
+    setLoading(true);
+    try {
+      const resp = await fetch(`${API_BASE}/conversations?limit=50`, { headers: hdrs() });
+      if (resp.ok) setConversations(await resp.json());
+    } catch (e) { /* silent */ }
+    finally { setLoading(false); }
+  }, [API_BASE]);
+
+  useEffect(() => { fetchConversations(); }, [fetchConversations]);
+
+  // Fetch timeline for a selected conversation
+  const fetchTimeline = useCallback(async (convId) => {
+    if (!API_BASE) return;
+    setLoadingTimeline(true);
+    try {
+      const resp = await fetch(`${API_BASE}/conversations/${encodeURIComponent(convId)}/timeline`, { headers: hdrs() });
+      if (resp.ok) setTimeline(await resp.json());
+    } catch (e) { /* silent */ }
+    finally { setLoadingTimeline(false); }
+  }, [API_BASE]);
+
+  const selectConv = (conv) => {
+    setSelectedConv(conv);
+    fetchTimeline(conv.conversation_id);
+  };
+
+  const filtered = conversations.filter(c => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (c.conversation_id||"").toLowerCase().includes(q)
+        || (c.agent_id||"").toLowerCase().includes(q);
+  });
+
+  const decisionColor = (d) => d==="block"?C.red:d==="review"?C.amber:C.green;
+
+  return (
+    <div style={{display:"flex", height:"100%", background:C.bg0}}>
+
+      {/* ── Left panel: conversation list ── */}
+      <div style={{width:360, flexShrink:0, borderRight:`1px solid ${C.line}`,
+        display:"flex", flexDirection:"column", background:C.bg1}}>
+
+        {/* Header */}
+        <div style={{padding:"12px 16px", borderBottom:`1px solid ${C.line}`, flexShrink:0}}>
+          <div style={{fontFamily:mono, fontSize:14, fontWeight:600,
+            color:C.p1, letterSpacing:1.5}}>CONVERSATIONS</div>
+          <div style={{fontFamily:mono, fontSize:11, color:C.p3, marginTop:2}}>
+            Interactive sessions · {conversations.length} total
+          </div>
+          <div style={{display:"flex", gap:6, marginTop:8}}>
+            <input value={search} onChange={e=>setSearch(e.target.value)}
+              placeholder="search conversation or agent..."
+              style={{flex:1, background:C.bg2, border:`1px solid ${C.line2}`,
+                color:C.p1, fontFamily:mono, fontSize:12, padding:"4px 10px", outline:"none"}} />
+            <button onClick={fetchConversations} disabled={loading}
+              style={{fontFamily:mono, fontSize:11, padding:"4px 10px", cursor:"pointer",
+                border:`1px solid ${C.line2}`, color:C.p2, background:"transparent"}}>
+              {loading ? "..." : "↻"}
+            </button>
+          </div>
+        </div>
+
+        {/* Conversation list */}
+        <div style={{flex:1, overflow:"auto"}}>
+          {filtered.length === 0 ? (
+            <div style={{padding:"40px 16px", textAlign:"center", fontFamily:mono,
+              fontSize:12, color:C.p3}}>
+              {loading ? "Loading..." : "No conversations yet."}
+            </div>
+          ) : filtered.map((conv, i) => {
+            const isSelected = selectedConv?.conversation_id === conv.conversation_id;
+            return (
+              <div key={conv.conversation_id} onClick={()=>selectConv(conv)}
+                style={{padding:"10px 16px", cursor:"pointer",
+                  borderBottom:`1px solid ${C.line}`,
+                  background: isSelected ? C.bg2 : i%2===0 ? C.bg1 : C.bg0,
+                  borderLeft: isSelected ? `3px solid ${C.accent}` : "3px solid transparent",
+                  transition:"all 0.15s"}}>
+                <div style={{fontFamily:mono, fontSize:12, color:C.p1, fontWeight:600,
+                  whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}>
+                  💬 {conv.conversation_id}
+                </div>
+                <div style={{display:"flex", gap:8, marginTop:4, flexWrap:"wrap"}}>
+                  {conv.agent_id && (
+                    <span style={{fontFamily:mono, fontSize:10, color:C.p2,
+                      padding:"1px 6px", border:`1px solid ${C.line2}`, background:C.bg3}}>
+                      🤖 {conv.agent_id}
+                    </span>
+                  )}
+                  <span style={{fontFamily:mono, fontSize:10, color:C.p3,
+                    padding:"1px 6px", border:`1px solid ${C.line}`, background:C.bg2}}>
+                    {conv.turn_count || 0} turns
+                  </span>
+                  {conv.action_count > 0 && (
+                    <span style={{fontFamily:mono, fontSize:10, color:C.amber,
+                      padding:"1px 6px", border:`1px solid ${C.amber}`, background:C.amberDim}}>
+                      {conv.action_count} actions
+                    </span>
+                  )}
+                </div>
+                {conv.first_seen && (
+                  <div style={{fontFamily:mono, fontSize:10, color:C.p3, marginTop:4}}>
+                    {new Date(conv.first_seen).toLocaleString()}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Right panel: timeline ── */}
+      <div style={{flex:1, display:"flex", flexDirection:"column", background:C.bg0}}>
+
+        {!selectedConv ? (
+          <div style={{flex:1, display:"flex", alignItems:"center", justifyContent:"center"}}>
+            <div style={{textAlign:"center"}}>
+              <div style={{fontSize:48, opacity:0.3, marginBottom:12}}>💬</div>
+              <div style={{fontFamily:mono, fontSize:13, color:C.p3}}>
+                Select a conversation to view its forensic timeline
+              </div>
+              <div style={{fontFamily:mono, fontSize:11, color:C.p3, marginTop:6, opacity:0.6}}>
+                Conversations contain user prompts, agent reasoning, and governed actions
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Timeline header */}
+            <div style={{padding:"12px 16px", borderBottom:`1px solid ${C.line}`,
+              background:C.bg1, flexShrink:0}}>
+              <div style={{display:"flex", alignItems:"center", justifyContent:"space-between"}}>
+                <div>
+                  <div style={{fontFamily:mono, fontSize:14, fontWeight:600,
+                    color:C.p1, letterSpacing:1}}>
+                    TIMELINE · {selectedConv.conversation_id}
+                  </div>
+                  <div style={{fontFamily:mono, fontSize:11, color:C.p3, marginTop:2}}>
+                    Forensic interleave of turns + governed actions
+                  </div>
+                </div>
+                <div style={{display:"flex", gap:6}}>
+                  <span style={{fontFamily:mono, fontSize:11, color:C.green,
+                    padding:"3px 8px", border:`1px solid ${C.green}`, background:C.greenDim}}>
+                    ✓ ENCRYPTED AT REST
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Timeline content */}
+            <div style={{flex:1, overflow:"auto", padding:"12px 16px"}}>
+              {loadingTimeline ? (
+                <div style={{padding:"40px", textAlign:"center", fontFamily:mono,
+                  fontSize:12, color:C.p3}}>Loading timeline...</div>
+              ) : timeline.length === 0 ? (
+                <div style={{padding:"40px", textAlign:"center", fontFamily:mono,
+                  fontSize:12, color:C.p3}}>No timeline events for this conversation.</div>
+              ) : (
+                <div style={{position:"relative", paddingLeft:24}}>
+                  {/* Vertical timeline line */}
+                  <div style={{position:"absolute", left:8, top:0, bottom:0,
+                    width:2, background:C.line2}} />
+
+                  {timeline.map((evt, i) => {
+                    const isTurn = evt.type === "turn";
+                    const isAction = evt.type === "action";
+                    const dotColor = isTurn ? C.p2 : (
+                      evt.decision==="block" ? C.red : evt.decision==="review" ? C.amber : C.green
+                    );
+
+                    return (
+                      <div key={`${evt.type}-${evt.id || i}`}
+                        style={{position:"relative", marginBottom:16}}>
+
+                        {/* Timeline dot */}
+                        <div style={{position:"absolute", left:-20, top:6,
+                          width:12, height:12, borderRadius:"50%",
+                          background:dotColor, border:`2px solid ${C.bg0}`,
+                          boxShadow:`0 0 6px ${dotColor}66`}} />
+
+                        {isTurn ? (
+                          /* ── Conversation Turn ── */
+                          <div style={{background:C.bg1, border:`1px solid ${C.line}`,
+                            padding:"12px 16px"}}>
+                            <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:8}}>
+                              <span style={{fontFamily:mono, fontSize:11, color:C.p2,
+                                padding:"2px 6px", border:`1px solid ${C.p2}`,
+                                background:`${C.p2}14`}}>
+                                TURN {evt.turn_index !== undefined ? evt.turn_index : i}
+                              </span>
+                              {evt.model_id && (
+                                <span style={{fontFamily:mono, fontSize:10, color:C.p3,
+                                  padding:"2px 6px", border:`1px solid ${C.line2}`}}>
+                                  {evt.model_id}
+                                </span>
+                              )}
+                              {evt.timestamp && (
+                                <span style={{fontFamily:mono, fontSize:10, color:C.p3, marginLeft:"auto"}}>
+                                  {new Date(evt.timestamp).toLocaleTimeString()}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* User prompt */}
+                            {evt.prompt && (
+                              <div style={{marginBottom:8}}>
+                                <div style={{fontFamily:mono, fontSize:10, color:C.p3,
+                                  letterSpacing:1, marginBottom:3}}>USER PROMPT</div>
+                                <div style={{fontFamily:sans, fontSize:13, color:C.p1,
+                                  padding:"8px 12px", background:C.bg2,
+                                  borderLeft:`3px solid ${C.accent}`,
+                                  lineHeight:1.5}}>
+                                  {evt.prompt}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Agent reasoning */}
+                            {evt.agent_reasoning && (
+                              <div style={{marginBottom:8}}>
+                                <div style={{fontFamily:mono, fontSize:10, color:C.p3,
+                                  letterSpacing:1, marginBottom:3}}>AGENT REASONING</div>
+                                <div style={{fontFamily:sans, fontSize:12, color:C.p2,
+                                  padding:"8px 12px", background:C.bg0,
+                                  borderLeft:`3px solid ${C.p3}`,
+                                  lineHeight:1.5, fontStyle:"italic"}}>
+                                  {evt.agent_reasoning}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Tool plan */}
+                            {evt.tool_plan && evt.tool_plan.length > 0 && (
+                              <div style={{marginBottom:8}}>
+                                <div style={{fontFamily:mono, fontSize:10, color:C.p3,
+                                  letterSpacing:1, marginBottom:3}}>TOOL PLAN</div>
+                                <div style={{display:"flex", gap:4, flexWrap:"wrap"}}>
+                                  {evt.tool_plan.map((t, ti) => (
+                                    <span key={ti} style={{fontFamily:mono, fontSize:11,
+                                      color:C.amber, padding:"2px 8px",
+                                      border:`1px solid ${C.amber}`, background:C.amberDim}}>
+                                      {t}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Agent response */}
+                            {evt.agent_response && (
+                              <div>
+                                <div style={{fontFamily:mono, fontSize:10, color:C.p3,
+                                  letterSpacing:1, marginBottom:3}}>AGENT RESPONSE</div>
+                                <div style={{fontFamily:sans, fontSize:12, color:C.green,
+                                  padding:"8px 12px", background:C.bg2,
+                                  borderLeft:`3px solid ${C.green}`,
+                                  lineHeight:1.5}}>
+                                  {evt.agent_response}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Token usage */}
+                            {(evt.prompt_tokens || evt.completion_tokens) && (
+                              <div style={{display:"flex", gap:8, marginTop:8}}>
+                                {evt.prompt_tokens > 0 && (
+                                  <span style={{fontFamily:mono, fontSize:10, color:C.p3}}>
+                                    ↑ {evt.prompt_tokens} prompt tok
+                                  </span>
+                                )}
+                                {evt.completion_tokens > 0 && (
+                                  <span style={{fontFamily:mono, fontSize:10, color:C.p3}}>
+                                    ↓ {evt.completion_tokens} completion tok
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ) : isAction ? (
+                          /* ── Governed Action ── */
+                          <div style={{background:C.bg1, border:`1px solid ${decisionColor(evt.decision)}`,
+                            padding:"10px 16px"}}>
+                            <div style={{display:"flex", alignItems:"center", gap:8, flexWrap:"wrap"}}>
+                              <span style={{fontFamily:mono, fontSize:12, fontWeight:600,
+                                color:decisionColor(evt.decision)}}>
+                                {evt.decision==="block"?"⛔":"▶"} {(evt.tool||"unknown").toUpperCase()}
+                              </span>
+                              <span style={{fontFamily:mono, fontSize:11,
+                                color:decisionColor(evt.decision),
+                                padding:"1px 8px",
+                                border:`1px solid ${decisionColor(evt.decision)}`,
+                                background:`${decisionColor(evt.decision)}14`}}>
+                                {(evt.decision||"").toUpperCase()}
+                              </span>
+                              {evt.risk_score !== undefined && (
+                                <span style={{fontFamily:mono, fontSize:10, color:C.p3,
+                                  padding:"1px 6px", border:`1px solid ${C.line2}`}}>
+                                  risk: {typeof evt.risk_score === "number" ? evt.risk_score.toFixed(2) : evt.risk_score}
+                                </span>
+                              )}
+                              {evt.timestamp && (
+                                <span style={{fontFamily:mono, fontSize:10, color:C.p3, marginLeft:"auto"}}>
+                                  {new Date(evt.timestamp).toLocaleTimeString()}
+                                </span>
+                              )}
+                            </div>
+                            {evt.explanation && (
+                              <div style={{fontFamily:sans, fontSize:12, color:C.p2,
+                                marginTop:6, lineHeight:1.4}}>
+                                {evt.explanation}
+                              </div>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
 // TAB: TOPOLOGY — Req 5 Execution Mediation / Stage D proof
 // Proves no direct execution path from agent to tool.
 // All paths must flow through evaluate() — the control plane.
@@ -5466,10 +5814,10 @@ function ReviewQueueTab() {
 // ROLE_TABS + ALL_TABS (SURGE + Topology added)
 // ═══════════════════════════════════════════════════════════
 const ROLE_TABS = {
-  superadmin: ["dashboard","agent","tester","policies","review","surge","audit","traces","topology","apikeys","settings","users"],
-  admin:    ["dashboard","agent","tester","policies","review","surge","audit","traces","topology","apikeys","settings"],
-  operator: ["dashboard","agent","tester","policies","review","surge","audit","traces","topology","apikeys","settings"],
-  auditor:  ["dashboard","agent","surge","audit","traces","topology","apikeys"],
+  superadmin: ["dashboard","agent","tester","policies","review","surge","audit","conversations","traces","topology","apikeys","settings","users"],
+  admin:    ["dashboard","agent","tester","policies","review","surge","audit","conversations","traces","topology","apikeys","settings"],
+  operator: ["dashboard","agent","tester","policies","review","surge","audit","conversations","traces","topology","apikeys","settings"],
+  auditor:  ["dashboard","agent","surge","audit","conversations","traces","topology","apikeys"],
 };
 
 const ALL_TABS = [
@@ -5480,6 +5828,7 @@ const ALL_TABS = [
   { id:"review",    label:"Review Queue",      icon:"◎" },
   { id:"surge",     label:"SURGE",             icon:"⬡" },
   { id:"audit",     label:"Audit Trail",       icon:"☰" },
+  { id:"conversations", label:"Conversations", icon:"💬" },
   { id:"traces",    label:"Traces",            icon:"⧉" },
   { id:"topology",  label:"Topology",          icon:"◎" },
   { id:"apikeys",   label:"API Keys",          icon:"🔑" },
@@ -5943,6 +6292,7 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
           {tab==="review"    && (userRole==="superadmin"||userRole==="admin"||userRole==="operator") && <ReviewQueueTab/>}
           {tab==="surge"     && <SurgeTab receipts={surgeReceipts} stakedPolicies={stakedPolicies} setStaked={setStakedPolicies} userRole={userRole}/>}
           {tab==="audit"     && <AuditTrailTab auditLog={auditLog} policySnapshots={policySnapshots}/>}
+          {tab==="conversations" && <ConversationsTab/>}
           {tab==="traces"    && <TracesTab/>}
           {tab==="topology"  && <TopologyTab gs={gs} killSwitch={killSwitch} degraded={degraded}/>}
           {tab==="apikeys"   && <ApiKeysTab/>}
