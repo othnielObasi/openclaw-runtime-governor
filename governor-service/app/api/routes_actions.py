@@ -188,6 +188,9 @@ def list_actions(
                 channel=r.channel,
                 trace_id=r.trace_id,
                 span_id=r.span_id,
+                conversation_id=r.conversation_id,
+                turn_id=r.turn_id,
+                chain_pattern=r.chain_pattern,
             )
             for r in rows
         ]
