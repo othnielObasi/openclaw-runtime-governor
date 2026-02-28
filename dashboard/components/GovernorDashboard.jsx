@@ -3238,7 +3238,10 @@ function ConversationsTab() {
     setLoadingTimeline(true);
     try {
       const resp = await fetch(`${API_BASE}/conversations/${encodeURIComponent(convId)}/timeline`, { headers: hdrs() });
-      if (resp.ok) setTimeline(await resp.json());
+      if (resp.ok) {
+        const data = await resp.json();
+        setTimeline(Array.isArray(data) ? data : (data.timeline || []));
+      }
     } catch (e) { /* silent */ }
     finally { setLoadingTimeline(false); }
   }, [API_BASE]);
@@ -3377,7 +3380,7 @@ function ConversationsTab() {
               {loadingTimeline ? (
                 <div style={{padding:"40px", textAlign:"center", fontFamily:mono,
                   fontSize:12, color:C.p3}}>Loading timeline...</div>
-              ) : timeline.length === 0 ? (
+              ) : !Array.isArray(timeline) || timeline.length === 0 ? (
                 <div style={{padding:"40px", textAlign:"center", fontFamily:mono,
                   fontSize:12, color:C.p3}}>No timeline events for this conversation.</div>
               ) : (
@@ -3455,7 +3458,7 @@ function ConversationsTab() {
                             )}
 
                             {/* Tool plan */}
-                            {evt.tool_plan && evt.tool_plan.length > 0 && (
+                            {Array.isArray(evt.tool_plan) && evt.tool_plan.length > 0 && (
                               <div style={{marginBottom:8}}>
                                 <div style={{fontFamily:mono, fontSize:10, color:C.p3,
                                   letterSpacing:1, marginBottom:3}}>TOOL PLAN</div>
@@ -3520,7 +3523,7 @@ function ConversationsTab() {
                               {evt.risk_score !== undefined && (
                                 <span style={{fontFamily:mono, fontSize:10, color:C.p3,
                                   padding:"1px 6px", border:`1px solid ${C.line2}`}}>
-                                  risk: {typeof evt.risk_score === "number" ? evt.risk_score.toFixed(2) : evt.risk_score}
+                                  risk: {evt.risk_score}
                                 </span>
                               )}
                               {evt.timestamp && (
