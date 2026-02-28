@@ -1,5 +1,5 @@
 {
-  "name": "@openclaw/governor-client",
+  "name": "sovereign-governor-client",
   "version": "0.3.0",
   "description": "TypeScript/JavaScript client for the OpenClaw Governor – runtime governance for AI agents",
   "main": "dist/cjs/index.js",

@@ -1614,97 +1614,347 @@ const MOLT_TPLS = [
 // TAB: POLICY EDITOR
 // ═══════════════════════════════════════════════════════════
 function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onRestore }) {
-  const [form, setForm]     = useState({id:"",description:"",severity:"50",action:"review",matchTool:"",matchRegex:""});
-  const [err, setErr]       = useState("");
-  const [editId, setEditId] = useState(null);   // which policy row is in edit mode
-  const [editForm, setEditForm] = useState({}); // current edit field values
-  const [editErr, setEditErr]   = useState("");
+  const API_BASE = (typeof process!=="undefined" && process.env?.NEXT_PUBLIC_GOVERNOR_API) || null;
+  const getToken = () => typeof window!=="undefined" ? localStorage.getItem("ocg_token") : null;
+  const headers = () => ({ "Content-Type":"application/json", ...(getToken() ? {"Authorization":`Bearer ${getToken()}`} : {}) });
+  const fileRef = useRef(null);
 
-  const all = [
+  // ── State ────────────────────────────────────────────────────
+  const [serverPolicies, setServerPolicies] = useState([]);
+  const [loading, setLoading]     = useState(!!API_BASE);
+  const [apiError, setApiError]   = useState("");
+  const [search, setSearch]       = useState("");
+  const [selected, setSelected]   = useState(new Set());
+  const [form, setForm]           = useState({id:"",description:"",severity:"50",action:"review",matchTool:"",matchRegex:""});
+  const [err, setErr]             = useState("");
+  const [editId, setEditId]       = useState(null);
+  const [editForm, setEditForm]   = useState({});
+  const [editErr, setEditErr]     = useState("");
+  const [pendingDel, setPendingDel] = useState(null);
+  const [importResult, setImportResult] = useState(null);
+  const [busy, setBusy]           = useState(false);
+  const [opLog, setOpLog]         = useState([]); // lightweight operation history
+
+  const addOp = (msg) => setOpLog(prev => [{ id:Date.now(), msg, time:new Date().toLocaleTimeString() }, ...prev].slice(0,30));
+
+  // ── Server → local mapping helper ───────────────────────────
+  const mapServerToLocal = (sp) => {
+    const mt = sp.match_json?.tool || "";
+    const rx = sp.match_json?.args_regex || "";
+    return {
+      id: sp.policy_id, sev: sp.severity, description: sp.description,
+      action: sp.action, status: sp.is_active ? "active" : "archived",
+      version: 1, source: "runtime", matchTool: mt, matchRegex: rx,
+      created_at: sp.created_at, updated_at: sp.updated_at,
+      fn: (t, a, fl) => {
+        if (mt && t !== mt) return false;
+        if (rx) { try { return new RegExp(rx).test(fl); } catch { return false; } }
+        return true;
+      },
+    };
+  };
+
+  // ── Load policies from server ───────────────────────────────
+  const loadPolicies = async (silent=false) => {
+    if (!API_BASE) return;
+    if (!silent) setLoading(true);
+    setApiError("");
+    try {
+      const r = await fetch(`${API_BASE}/policies`, {headers:headers()});
+      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+      const data = await r.json();
+      setServerPolicies(data);
+      // Sync to parent so tester/sidebar have latest policies
+      const mapped = data.map(mapServerToLocal);
+      setExtraPolicies(mapped, silent ? null : "Loaded from server");
+    } catch (e) {
+      setApiError(`Failed to load policies: ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => { loadPolicies(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Merged list: SYSTEM (read-only) + server/runtime ────────
+  const runtimePols = API_BASE
+    ? serverPolicies.map(sp => ({ ...mapServerToLocal(sp), source:"runtime" }))
+    : extraPolicies.map(p => ({ ...p, source:"runtime" }));
+  const allPolicies = [
     ...BASE_POLICIES.map(p=>({...p, source:"yaml"})),
-    ...extraPolicies.map(p=>({...p, source:"runtime"})),
+    ...runtimePols,
   ];
 
-  // ── CREATE ───────────────────────────────────────────────────
-  const create = () => {
+  // ── Search/filter ───────────────────────────────────────────
+  const lc = search.toLowerCase();
+  const filtered = lc
+    ? allPolicies.filter(p =>
+        p.id.toLowerCase().includes(lc) ||
+        (p.description||"").toLowerCase().includes(lc) ||
+        p.action.toLowerCase().includes(lc) ||
+        (p.matchTool||"").toLowerCase().includes(lc) ||
+        (p.matchRegex||"").toLowerCase().includes(lc) ||
+        (p.status||"active").toLowerCase().includes(lc)
+      )
+    : allPolicies;
+
+  // ── Bulk selection helpers ──────────────────────────────────
+  const runtimeFiltered = filtered.filter(p=>p.source==="runtime");
+  const allRuntimeSelected = runtimeFiltered.length > 0 && runtimeFiltered.every(p=>selected.has(p.id));
+  const toggleSelect = (id) => setSelected(prev => {
+    const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s;
+  });
+  const toggleAll = () => {
+    if (allRuntimeSelected) setSelected(new Set());
+    else setSelected(new Set(runtimeFiltered.map(p=>p.id)));
+  };
+
+  // ── CREATE ──────────────────────────────────────────────────
+  const create = async () => {
     if (!form.id||!form.action){setErr("Policy ID and Action are required.");return;}
     const sev=parseInt(form.severity);
     if (isNaN(sev)||sev<0||sev>100){setErr("Severity must be 0–100.");return;}
     if (!form.matchTool&&!form.matchRegex){setErr("Provide at least a tool name or regex.");return;}
-    const allIds=[...BASE_POLICIES,...extraPolicies].map(p=>p.id);
-    if (allIds.includes(form.id.trim())){setErr(`Policy ID '${form.id.trim()}' already exists. Choose a unique ID.`);return;}
+    const allIds=allPolicies.map(p=>p.id);
+    if (allIds.includes(form.id.trim())){setErr(`Policy ID '${form.id.trim()}' already exists.`);return;}
     const mt=form.matchTool.trim(), rx=form.matchRegex.trim();
-    setExtraPolicies(
-      prev=>[...prev,{
-        id:form.id.trim(), sev, description:form.description||form.id,
-        action:form.action, status:"draft", version:1, source:"runtime",
-        matchTool:mt, matchRegex:rx,
-        fn:(t,a,fl)=>{
-          if(mt&&t!==mt)return false;
-          if(rx){try{return new RegExp(rx).test(fl);}catch{return false;}}
-          return true;
-        },
-      }],
-      `CREATE policy: ${form.id.trim()}`
-    );
-    setForm({id:"",description:"",severity:"50",action:"review",matchTool:"",matchRegex:""});
-    setErr("");
-  };
 
-  // ── STATUS TRANSITIONS ───────────────────────────────────────
-  const setStatus = (id, status) => setExtraPolicies(
-    prev=>prev.map(p=> p.id===id ? {...p, status, version: status==="active" ? (p.version||1)+1 : p.version} : p),
-    `${status.toUpperCase()} policy: ${id}`
-  );
-
-  // ── DELETE WITH CONFIRM ──────────────────────────────────────
-  const [pendingDel, setPendingDel] = useState(null);
-  const del = id => {
-    if (pendingDel === id) {
-      setExtraPolicies(prev=>prev.filter(p=>p.id!==id), `DELETE policy: ${id}`);
-      setPendingDel(null);
+    if (API_BASE) {
+      setBusy(true); setErr("");
+      try {
+        const body = {
+          policy_id: form.id.trim(),
+          description: form.description || form.id.trim(),
+          severity: sev,
+          action: form.action,
+          match_json: { ...(mt ? {tool:mt} : {}), ...(rx ? {args_regex:rx} : {}) },
+        };
+        const r = await fetch(`${API_BASE}/policies`, {method:"POST",headers:headers(),body:JSON.stringify(body)});
+        if (!r.ok) { const d=await r.json().catch(()=>({})); throw new Error(d.detail||`${r.status}`); }
+        addOp(`Created policy: ${form.id.trim()}`);
+        setForm({id:"",description:"",severity:"50",action:"review",matchTool:"",matchRegex:""});
+        setErr("");
+        await loadPolicies(true);
+      } catch(e) { setErr(`Server error: ${e.message}`); }
+      finally { setBusy(false); }
     } else {
-      setPendingDel(id);
-      setTimeout(() => setPendingDel(pid => pid===id ? null : pid), 4000);
+      setExtraPolicies(
+        prev=>[...prev,{
+          id:form.id.trim(), sev, description:form.description||form.id,
+          action:form.action, status:"draft", version:1, source:"runtime",
+          matchTool:mt, matchRegex:rx,
+          fn:(t,a,fl)=>{
+            if(mt&&t!==mt)return false;
+            if(rx){try{return new RegExp(rx).test(fl);}catch{return false;}}
+            return true;
+          },
+        }],
+        `CREATE policy: ${form.id.trim()}`
+      );
+      addOp(`Created policy: ${form.id.trim()}`);
+      setForm({id:"",description:"",severity:"50",action:"review",matchTool:"",matchRegex:""});
+      setErr("");
     }
   };
 
-  // ── INLINE EDIT ──────────────────────────────────────────────
+  // ── TOGGLE (activate / archive) ─────────────────────────────
+  const toggleStatus = async (policyId) => {
+    if (API_BASE) {
+      setBusy(true);
+      try {
+        const r = await fetch(`${API_BASE}/policies/${encodeURIComponent(policyId)}/toggle`, {method:"PATCH",headers:headers()});
+        if (!r.ok) throw new Error(`${r.status}`);
+        addOp(`Toggled policy: ${policyId}`);
+        await loadPolicies(true);
+      } catch(e) { setApiError(`Toggle failed: ${e.message}`); }
+      finally { setBusy(false); }
+    } else {
+      const p = extraPolicies.find(p=>p.id===policyId);
+      const newStatus = (p?.status||"active")==="active" ? "archived" : "active";
+      setExtraPolicies(
+        prev=>prev.map(p=> p.id===policyId ? {...p, status:newStatus, version: newStatus==="active" ? (p.version||1)+1 : p.version} : p),
+        `${newStatus.toUpperCase()} policy: ${policyId}`
+      );
+      addOp(`${newStatus==="active"?"Activated":"Archived"} policy: ${policyId}`);
+    }
+  };
+
+  // ── DELETE ──────────────────────────────────────────────────
+  const del = async (id) => {
+    if (pendingDel !== id) {
+      setPendingDel(id);
+      setTimeout(() => setPendingDel(pid => pid===id ? null : pid), 4000);
+      return;
+    }
+    setPendingDel(null);
+    if (API_BASE) {
+      setBusy(true);
+      try {
+        const r = await fetch(`${API_BASE}/policies/${encodeURIComponent(id)}`, {method:"DELETE",headers:headers()});
+        if (!r.ok) throw new Error(`${r.status}`);
+        addOp(`Deleted policy: ${id}`);
+        setSelected(prev => { const s=new Set(prev); s.delete(id); return s; });
+        await loadPolicies(true);
+      } catch(e) { setApiError(`Delete failed: ${e.message}`); }
+      finally { setBusy(false); }
+    } else {
+      setExtraPolicies(prev=>prev.filter(p=>p.id!==id), `DELETE policy: ${id}`);
+      addOp(`Deleted policy: ${id}`);
+    }
+  };
+
+  // ── INLINE EDIT ─────────────────────────────────────────────
   const startEdit = (p) => {
     setEditId(p.id);
     setEditForm({
       description: p.description||"",
-      severity:    String(p.sev),
-      action:      p.action,
-      matchTool:   p.matchTool||"",
-      matchRegex:  p.matchRegex||"",
+      severity: String(p.sev),
+      action: p.action,
+      matchTool: p.matchTool||"",
+      matchRegex: p.matchRegex||"",
     });
     setEditErr("");
   };
   const cancelEdit = () => { setEditId(null); setEditErr(""); };
-  const saveEdit = (p) => {
+  const saveEdit = async (p) => {
     const sev = parseInt(editForm.severity);
     if (isNaN(sev)||sev<0||sev>100){setEditErr("Severity must be 0–100.");return;}
     if (!editForm.matchTool&&!editForm.matchRegex){setEditErr("Need tool name or regex.");return;}
     const mt = editForm.matchTool.trim();
     const rx = editForm.matchRegex.trim();
-    setExtraPolicies(
-      prev => prev.map(ep => ep.id!==p.id ? ep : {
-        ...ep,
-        description: editForm.description,
-        sev, action: editForm.action,
-        matchTool: mt, matchRegex: rx,
-        version: (ep.version||1) + 1,
-        fn:(t,a,fl)=>{
-          if(mt&&t!==mt)return false;
-          if(rx){try{return new RegExp(rx).test(fl);}catch{return false;}}
-          return true;
-        },
-      }),
-      `EDIT policy: ${p.id} → v${(p.version||1)+1}`
-    );
-    setEditId(null);
-    setEditErr("");
+
+    if (API_BASE) {
+      setBusy(true); setEditErr("");
+      try {
+        const body = {
+          description: editForm.description,
+          severity: sev,
+          action: editForm.action,
+          match_json: { ...(mt ? {tool:mt} : {}), ...(rx ? {args_regex:rx} : {}) },
+        };
+        const r = await fetch(`${API_BASE}/policies/${encodeURIComponent(p.id)}`, {method:"PATCH",headers:headers(),body:JSON.stringify(body)});
+        if (!r.ok) { const d=await r.json().catch(()=>({})); throw new Error(d.detail||`${r.status}`); }
+        addOp(`Edited policy: ${p.id}`);
+        setEditId(null); setEditErr("");
+        await loadPolicies(true);
+      } catch(e) { setEditErr(`Server error: ${e.message}`); }
+      finally { setBusy(false); }
+    } else {
+      setExtraPolicies(
+        prev => prev.map(ep => ep.id!==p.id ? ep : {
+          ...ep, description: editForm.description, sev, action: editForm.action,
+          matchTool: mt, matchRegex: rx, version: (ep.version||1) + 1,
+          fn:(t,a,fl)=>{
+            if(mt&&t!==mt)return false;
+            if(rx){try{return new RegExp(rx).test(fl);}catch{return false;}}
+            return true;
+          },
+        }),
+        `EDIT policy: ${p.id} → v${(p.version||1)+1}`
+      );
+      addOp(`Edited policy: ${p.id}`);
+      setEditId(null); setEditErr("");
+    }
+  };
+
+  // ── BULK ACTIONS ────────────────────────────────────────────
+  const bulkToggle = async (activate) => {
+    if (selected.size===0) return;
+    setBusy(true);
+    const ids = [...selected];
+    let ok=0, fail=0;
+    for (const id of ids) {
+      const p = allPolicies.find(pp=>pp.id===id);
+      if (!p) continue;
+      const isActive = (p.status||"active")==="active";
+      if ((activate && isActive) || (!activate && !isActive)) continue;
+      if (API_BASE) {
+        try {
+          const r = await fetch(`${API_BASE}/policies/${encodeURIComponent(id)}/toggle`, {method:"PATCH",headers:headers()});
+          if (r.ok) ok++; else fail++;
+        } catch { fail++; }
+      } else {
+        const newStatus = activate ? "active" : "archived";
+        setExtraPolicies(
+          prev=>prev.map(pp=> pp.id===id ? {...pp, status:newStatus, version: activate ? (pp.version||1)+1 : pp.version} : pp),
+          `BULK ${newStatus.toUpperCase()}: ${id}`
+        );
+        ok++;
+      }
+    }
+    addOp(`Bulk ${activate?"activate":"archive"}: ${ok} ok, ${fail} failed`);
+    setSelected(new Set());
+    if (API_BASE) await loadPolicies(true);
+    setBusy(false);
+  };
+
+  const bulkDelete = async () => {
+    if (selected.size===0) return;
+    if (!confirm(`Delete ${selected.size} selected policies? This cannot be undone.`)) return;
+    setBusy(true);
+    const ids = [...selected];
+    let ok=0, fail=0;
+    for (const id of ids) {
+      if (API_BASE) {
+        try {
+          const r = await fetch(`${API_BASE}/policies/${encodeURIComponent(id)}`, {method:"DELETE",headers:headers()});
+          if (r.ok) ok++; else fail++;
+        } catch { fail++; }
+      } else {
+        setExtraPolicies(prev=>prev.filter(p=>p.id!==id), `BULK DELETE: ${id}`);
+        ok++;
+      }
+    }
+    addOp(`Bulk delete: ${ok} ok, ${fail} failed`);
+    setSelected(new Set());
+    if (API_BASE) await loadPolicies(true);
+    setBusy(false);
+  };
+
+  // ── IMPORT / EXPORT / TEMPLATE ──────────────────────────────
+  const downloadTemplate = async () => {
+    if (!API_BASE) { setApiError("Server not configured"); return; }
+    try {
+      const r = await fetch(`${API_BASE}/policies/template`, {headers:headers()});
+      if (!r.ok) throw new Error(`${r.status}`);
+      const data = await r.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href=url; a.download="policy-template.json"; a.click();
+      URL.revokeObjectURL(url);
+      addOp("Downloaded policy template");
+    } catch(e) { setApiError(`Template download failed: ${e.message}`); }
+  };
+
+  const exportAll = async () => {
+    if (!API_BASE) { setApiError("Server not configured"); return; }
+    try {
+      const r = await fetch(`${API_BASE}/policies/export/all`, {headers:headers()});
+      if (!r.ok) throw new Error(`${r.status}`);
+      const data = await r.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href=url; a.download=`policies-export-${new Date().toISOString().slice(0,10)}.json`; a.click();
+      URL.revokeObjectURL(url);
+      addOp(`Exported ${data.length} policies`);
+    } catch(e) { setApiError(`Export failed: ${e.message}`); }
+  };
+
+  const handleImport = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !API_BASE) return;
+    setImportResult(null); setBusy(true);
+    try {
+      const text = await file.text();
+      const json = JSON.parse(text);
+      const payload = Array.isArray(json) ? {policies:json} : json;
+      const r = await fetch(`${API_BASE}/policies/import`, {method:"POST",headers:headers(),body:JSON.stringify(payload)});
+      if (!r.ok) { const d=await r.json().catch(()=>({})); throw new Error(d.detail||`${r.status}`); }
+      const result = await r.json();
+      setImportResult(result);
+      addOp(`Imported: ${result.created||0} created, ${result.skipped||0} skipped, ${result.failed||0} failed`);
+      await loadPolicies(true);
+    } catch(e) { setImportResult({error:e.message}); }
+    finally { setBusy(false); if(fileRef.current) fileRef.current.value=""; }
   };
 
   const ac = a => a==="block"?C.red:a==="review"?C.amber:C.green;
@@ -1713,7 +1963,123 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
   return (
     <div style={{display:"flex", flexDirection:"column", background:C.bg0, minHeight:520}}>
 
+      {/* ── TOOLBAR: Search + Bulk Actions + Import/Export ── */}
+      <div style={{display:"flex", alignItems:"center", gap:8, padding:"12px 18px",
+        background:C.bg1, borderBottom:`1px solid ${C.line}`}}>
+        {/* Search */}
+        <div style={{position:"relative", flex:"0 0 280px"}}>
+          <TextInput value={search} onChange={e=>setSearch(e.target.value)}
+            placeholder="Search policies…"
+            style={{paddingLeft:28, width:"100%"}}/>
+          <span style={{position:"absolute", left:8, top:"50%", transform:"translateY(-50%)",
+            fontFamily:mono, fontSize:14, color:C.p3, pointerEvents:"none"}}>⌕</span>
+        </div>
+
+        {/* Bulk buttons */}
+        {selected.size > 0 && (
+          <>
+            <span style={{fontFamily:mono, fontSize:12, color:C.accent, padding:"4px 10px",
+              border:`1px solid ${C.accent}`, background:`${C.accent}14`}}>
+              {selected.size} SELECTED
+            </span>
+            <button onClick={()=>bulkToggle(true)} disabled={busy} style={{
+              fontFamily:mono, fontSize:11, padding:"5px 10px", cursor:"pointer",
+              border:`1px solid ${C.green}`, color:C.green, background:C.greenDim,
+              letterSpacing:0.5, opacity:busy?0.5:1}}>
+              ▶ ACTIVATE ALL
+            </button>
+            <button onClick={()=>bulkToggle(false)} disabled={busy} style={{
+              fontFamily:mono, fontSize:11, padding:"5px 10px", cursor:"pointer",
+              border:`1px solid ${C.p3}`, color:C.p3, background:"transparent",
+              letterSpacing:0.5, opacity:busy?0.5:1}}>
+              ARCHIVE ALL
+            </button>
+            <button onClick={bulkDelete} disabled={busy} style={{
+              fontFamily:mono, fontSize:11, padding:"5px 10px", cursor:"pointer",
+              border:`1px solid ${C.red}`, color:C.red, background:C.redDim,
+              letterSpacing:0.5, opacity:busy?0.5:1}}>
+              DELETE ALL
+            </button>
+          </>
+        )}
+
+        <div style={{flex:1}}/>
+
+        {/* Import / Export / Template */}
+        {API_BASE && (
+          <>
+            <button onClick={downloadTemplate} disabled={busy} style={{
+              fontFamily:mono, fontSize:11, padding:"5px 10px", cursor:"pointer",
+              border:`1px solid ${C.line2}`, color:C.p2, background:"transparent",
+              letterSpacing:0.5, opacity:busy?0.5:1}}>
+              ↓ TEMPLATE
+            </button>
+            <button onClick={exportAll} disabled={busy} style={{
+              fontFamily:mono, fontSize:11, padding:"5px 10px", cursor:"pointer",
+              border:`1px solid ${C.accent}`, color:C.accent, background:`${C.accent}14`,
+              letterSpacing:0.5, opacity:busy?0.5:1}}>
+              ↓ EXPORT ALL
+            </button>
+            <label style={{
+              fontFamily:mono, fontSize:11, padding:"5px 10px", cursor:"pointer",
+              border:`1px solid ${C.amber}`, color:C.amber, background:C.amberDim,
+              letterSpacing:0.5, opacity:busy?0.5:1, display:"inline-block"}}>
+              ↑ IMPORT
+              <input ref={fileRef} type="file" accept=".json" onChange={handleImport}
+                style={{display:"none"}} disabled={busy}/>
+            </label>
+          </>
+        )}
+        {API_BASE && (
+          <button onClick={()=>loadPolicies()} disabled={loading||busy} style={{
+            fontFamily:mono, fontSize:11, padding:"5px 10px", cursor:"pointer",
+            border:`1px solid ${C.line2}`, color:C.p2, background:"transparent",
+            letterSpacing:0.5, opacity:(loading||busy)?0.5:1}}>
+            ↻ REFRESH
+          </button>
+        )}
+      </div>
+
+      {/* ── Import result banner ── */}
+      {importResult && (
+        <div style={{padding:"8px 18px", background:importResult.error?C.redDim:C.greenDim,
+          borderBottom:`1px solid ${importResult.error?C.red:C.green}`,
+          display:"flex", alignItems:"center", gap:12}}>
+          <span style={{fontFamily:mono, fontSize:12,
+            color:importResult.error?C.red:C.green}}>
+            {importResult.error
+              ? `⚠ Import error: ${importResult.error}`
+              : `✓ Import complete — ${importResult.created||0} created · ${importResult.skipped||0} skipped · ${importResult.failed||0} failed`}
+          </span>
+          <button onClick={()=>setImportResult(null)} style={{
+            fontFamily:mono, fontSize:11, padding:"2px 8px", cursor:"pointer",
+            border:`1px solid ${C.line2}`, color:C.p3, background:"transparent",
+            marginLeft:"auto"}}>DISMISS</button>
+        </div>
+      )}
+
+      {/* ── API error banner ── */}
+      {apiError && (
+        <div style={{padding:"8px 18px", background:C.redDim,
+          borderBottom:`1px solid ${C.red}`,
+          display:"flex", alignItems:"center", gap:12}}>
+          <span style={{fontFamily:mono, fontSize:12, color:C.red}}>⚠ {apiError}</span>
+          <button onClick={()=>setApiError("")} style={{
+            fontFamily:mono, fontSize:11, padding:"2px 8px", cursor:"pointer",
+            border:`1px solid ${C.line2}`, color:C.p3, background:"transparent",
+            marginLeft:"auto"}}>DISMISS</button>
+        </div>
+      )}
+
+      {/* ── Loading ── */}
+      {loading && (
+        <div style={{padding:40, textAlign:"center"}}>
+          <span style={{fontFamily:mono, fontSize:14, color:C.p3}}>Loading policies from server…</span>
+        </div>
+      )}
+
       {/* ── TOP ROW: Manifest (left) + Create Form (right) ── */}
+      {!loading && (
       <div style={{display:"grid", gridTemplateColumns:"1fr 400px", gap:1, background:C.line, flex:1}}>
 
         {/* ══ LEFT: POLICY MANIFEST ══════════════════════════════ */}
@@ -1725,20 +2091,25 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
               <div style={{fontFamily:mono, fontSize:14, fontWeight:700,
                 color:C.p1, letterSpacing:1}}>Policy Manifest</div>
               <div style={{fontFamily:mono, fontSize:12, color:C.p3, marginTop:2}}>
-                {all.filter(p=>p.status==="active"||!p.status).length} active ·{" "}
-                {all.filter(p=>p.status==="draft").length} draft ·{" "}
-                {all.filter(p=>p.status==="archived").length} archived
+                {allPolicies.filter(p=>(p.status||"active")==="active").length} active ·{" "}
+                {allPolicies.filter(p=>p.status==="archived").length} archived ·{" "}
+                {filtered.length !== allPolicies.length ? `${filtered.length} matching · ` : ""}
+                {API_BASE ? <span style={{color:C.green}}>● LIVE</span> : <span style={{color:C.amber}}>○ LOCAL</span>}
               </div>
             </div>
             <span style={{fontFamily:mono, fontSize:12, padding:"3px 10px",
               border:`1px solid ${C.accent}`, color:C.accent}}>
-              {all.length} TOTAL
+              {allPolicies.length} TOTAL
             </span>
           </div>
 
-          {/* Column headers */}
-          <div style={{display:"grid", gridTemplateColumns:"1fr 44px 70px 80px 90px",
-            gap:6, padding:"4px 8px", marginBottom:4}}>
+          {/* Column headers with select-all */}
+          <div style={{display:"grid", gridTemplateColumns:"28px 1fr 44px 70px 80px 110px",
+            gap:6, padding:"4px 8px", marginBottom:4, alignItems:"center"}}>
+            <div>
+              <input type="checkbox" checked={allRuntimeSelected} onChange={toggleAll}
+                style={{cursor:"pointer", accentColor:C.accent}}/>
+            </div>
             {["POLICY","SEV","ACTION","STATUS","CONTROLS"].map(h => (
               <div key={h} style={{fontFamily:mono, fontSize:11, color:C.p3,
                 letterSpacing:1.5, textTransform:"uppercase"}}>{h}</div>
@@ -1746,11 +2117,12 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
           </div>
 
           {/* Policy rows */}
-          {all.map(p => {
+          {filtered.map(p => {
             const isRuntime = p.source==="runtime";
             const isEditing = editId === p.id;
             const statusColor = sc(p.status||"active");
             const actionColor = ac(p.action);
+            const isSelected = selected.has(p.id);
 
             // ── EDIT MODE ROW ─────────────────────────────────
             if (isEditing) return (
@@ -1761,7 +2133,7 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
                 borderLeft:`2px solid ${C.accent}`}}>
                 <div style={{fontFamily:mono, fontSize:12, color:C.accent,
                   letterSpacing:2, marginBottom:10}}>
-                  EDITING: {p.id} · v{(p.version||1)+1} on save
+                  EDITING: {p.id}
                 </div>
                 {editErr && (
                   <div style={{fontFamily:sans, fontSize:12, color:C.red,
@@ -1806,12 +2178,12 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
                   </Fld>
                 </div>
                 <div style={{display:"flex", gap:6}}>
-                  <button onClick={()=>saveEdit(p)} style={{
+                  <button onClick={()=>saveEdit(p)} disabled={busy} style={{
                     fontFamily:mono, fontSize:12, fontWeight:700,
                     padding:"5px 16px", cursor:"pointer", letterSpacing:1,
                     border:`1px solid ${C.green}`, color:C.green,
-                    background:C.greenDim}}>
-                    ✓ SAVE v{(p.version||1)+1}
+                    background:C.greenDim, opacity:busy?0.5:1}}>
+                    ✓ SAVE
                   </button>
                   <button onClick={cancelEdit} style={{
                     fontFamily:mono, fontSize:12, padding:"5px 12px",
@@ -1820,10 +2192,12 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
                     background:"transparent"}}>
                     CANCEL
                   </button>
-                  <div style={{fontFamily:sans, fontSize:12, color:C.p3,
-                    alignSelf:"center", marginLeft:4}}>
-                    Snapshot saved before applying. Status preserved.
-                  </div>
+                  {API_BASE && (
+                    <div style={{fontFamily:sans, fontSize:12, color:C.p3,
+                      alignSelf:"center", marginLeft:4}}>
+                      Changes are saved to server immediately.
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -1831,12 +2205,21 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
             // ── NORMAL VIEW ROW ───────────────────────────────
             return (
               <div key={p.id} style={{
-                display:"grid", gridTemplateColumns:"1fr 44px 70px 90px 120px",
+                display:"grid", gridTemplateColumns:"28px 1fr 44px 70px 80px 110px",
                 gap:6, alignItems:"center",
                 padding:"10px 8px",
                 borderBottom:`1px solid ${C.line}`,
-                opacity: p.status==="archived" ? 0.45 : 1,
-                transition:"opacity 0.2s"}}>
+                background: isSelected ? `${C.accent}0a` : "transparent",
+                opacity: p.status==="archived" ? 0.5 : 1,
+                transition:"all 0.15s"}}>
+
+                {/* Checkbox */}
+                <div>
+                  {isRuntime ? (
+                    <input type="checkbox" checked={isSelected} onChange={()=>toggleSelect(p.id)}
+                      style={{cursor:"pointer", accentColor:C.accent}}/>
+                  ) : <span/>}
+                </div>
 
                 {/* Policy name + description */}
                 <div>
@@ -1850,6 +2233,10 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
                     <span style={{fontFamily:mono, fontSize:11, color:C.p3,
                       padding:"1px 5px", border:`1px solid ${C.line2}`,
                       marginTop:3, display:"inline-block"}}>YAML · SYSTEM</span>
+                  )}
+                  {isRuntime && p.matchTool && (
+                    <span style={{fontFamily:mono, fontSize:11, color:C.p3,
+                      marginTop:3, display:"inline-block"}}>tool: {p.matchTool}</span>
                   )}
                 </div>
 
@@ -1872,7 +2259,7 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
                   </span>
                 </div>
 
-                {/* Status + version */}
+                {/* Status */}
                 <div>
                   <span style={{fontFamily:mono, fontSize:12, letterSpacing:1,
                     padding:"3px 8px",
@@ -1882,60 +2269,48 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
                     display:"inline-block"}}>
                     {p.status||"active"}
                   </span>
-                  <div style={{fontFamily:mono, fontSize:11, color:C.p3, marginTop:3}}>
-                    v{p.version||1}
-                  </div>
                 </div>
 
                 {/* Action controls */}
                 <div style={{display:"flex", flexDirection:"column", gap:3}}>
                   {isRuntime && (
-                    <button onClick={()=>startEdit(p)} style={{
+                    <button onClick={()=>startEdit(p)} disabled={busy} style={{
                       fontFamily:mono, fontSize:11, padding:"3px 0",
                       border:`1px solid ${C.line2}`, color:C.p2,
                       background:"transparent", cursor:"pointer",
                       textAlign:"center", letterSpacing:0.5,
-                      transition:"all 0.15s"}}
+                      transition:"all 0.15s", opacity:busy?0.5:1}}
                       onMouseEnter={e=>{e.target.style.borderColor=C.accent;e.target.style.color=C.accent;}}
                       onMouseLeave={e=>{e.target.style.borderColor=C.line2;e.target.style.color=C.p2;}}>
                       ✎ EDIT
                     </button>
                   )}
-                  {isRuntime && p.status==="draft" && (
-                    <button onClick={()=>setStatus(p.id,"active")} style={{
-                      fontFamily:mono, fontSize:11, padding:"3px 0",
-                      border:`1px solid ${C.green}`, color:C.green,
-                      background:C.greenDim, cursor:"pointer",
-                      textAlign:"center", letterSpacing:0.5}}>
-                      ▶ ACTIVATE
-                    </button>
-                  )}
-                  {isRuntime && p.status==="active" && (
-                    <button onClick={()=>setStatus(p.id,"archived")} style={{
+                  {isRuntime && (p.status||"active")==="active" && (
+                    <button onClick={()=>toggleStatus(p.id)} disabled={busy} style={{
                       fontFamily:mono, fontSize:11, padding:"3px 0",
                       border:`1px solid ${C.p3}`, color:C.p3,
                       background:"transparent", cursor:"pointer",
-                      textAlign:"center", letterSpacing:0.5}}>
+                      textAlign:"center", letterSpacing:0.5, opacity:busy?0.5:1}}>
                       ARCHIVE
                     </button>
                   )}
                   {isRuntime && p.status==="archived" && (
-                    <button onClick={()=>setStatus(p.id,"active")} style={{
+                    <button onClick={()=>toggleStatus(p.id)} disabled={busy} style={{
                       fontFamily:mono, fontSize:11, padding:"3px 0",
                       border:`1px solid ${C.amber}`, color:C.amber,
                       background:C.amberDim, cursor:"pointer",
-                      textAlign:"center", letterSpacing:0.5}}>
-                      ↩ RECALL
+                      textAlign:"center", letterSpacing:0.5, opacity:busy?0.5:1}}>
+                      ↩ RESTORE
                     </button>
                   )}
                   {isRuntime && (
-                    <button onClick={()=>del(p.id)} style={{
+                    <button onClick={()=>del(p.id)} disabled={busy} style={{
                       fontFamily:mono, fontSize:11, padding:"3px 0",
                       border:`1px solid ${pendingDel===p.id?C.red:C.line2}`,
                       color:pendingDel===p.id?C.red:C.p3,
                       background:pendingDel===p.id?C.redDim:"transparent",
                       cursor:"pointer", textAlign:"center",
-                      transition:"all 0.15s"}}>
+                      transition:"all 0.15s", opacity:busy?0.5:1}}>
                       {pendingDel===p.id ? "CONFIRM?" : "DEL"}
                     </button>
                   )}
@@ -1943,18 +2318,24 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
               </div>
             );
           })}
+
+          {filtered.length===0 && (
+            <div style={{padding:30, textAlign:"center", fontFamily:sans, fontSize:14, color:C.p3}}>
+              {search ? "No policies match your search." : "No policies found."}
+            </div>
+          )}
         </div>
 
         {/* ══ RIGHT: CREATE FORM ═════════════════════════════════ */}
         <div style={{background:C.bg1, padding:18, display:"flex",
-          flexDirection:"column", gap:0}}>
+          flexDirection:"column", gap:0, overflow:"auto"}}>
 
           <div style={{marginBottom:14, paddingBottom:10,
             borderBottom:`1px solid ${C.line}`}}>
             <div style={{fontFamily:mono, fontSize:14, fontWeight:700,
-              color:C.p1, letterSpacing:1}}>Create Runtime Policy</div>
+              color:C.p1, letterSpacing:1}}>Create Policy</div>
             <div style={{fontFamily:mono, fontSize:12, color:C.p3, marginTop:2}}>
-              Policies start as DRAFT — activate when ready
+              {API_BASE ? "Policy will be created on the server" : "Policies start as DRAFT — activate when ready"}
             </div>
           </div>
 
@@ -2024,14 +2405,14 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
               </div>
             </div>
 
-            <button onClick={create} style={{
+            <button onClick={create} disabled={busy} style={{
               padding:"12px", cursor:"pointer",
               fontFamily:mono, fontSize:14, fontWeight:700,
               letterSpacing:1.5, textTransform:"uppercase",
               border:`1px solid ${C.amber}`,
               color:C.amber, background:C.amberDim,
-              transition:"all 0.15s"}}>
-              + CREATE AS DRAFT
+              transition:"all 0.15s", opacity:busy?0.5:1}}>
+              {busy ? "SAVING…" : "+ CREATE POLICY"}
             </button>
           </div>
 
@@ -2044,10 +2425,10 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
             </div>
             <div style={{display:"flex", flexDirection:"column", gap:8}}>
               {[
-                { state:"DRAFT",   color:C.amber, icon:"○", text:"New policies start here — evaluated by engine but NOT enforced. Safe to inspect before going live." },
-                { state:"ACTIVE",  color:C.green, icon:"●", text:"Click ACTIVATE to enforce. Policy is live — all matching tool calls are evaluated against it immediately." },
-                { state:"ARCHIVE", color:C.p3,    icon:"◌", text:"Disables without deleting. Archived policies stay in the manifest and can be restored at any time." },
-                { state:"RESTORE", color:C.amber, icon:"↩", text:"Rollback panel below snapshots every change automatically. Restore any prior policy state in one click." },
+                { state:"ACTIVE",  color:C.green, icon:"●", text:"Policy is live — matching tool calls are evaluated against it immediately." },
+                { state:"ARCHIVE", color:C.p3,    icon:"◌", text:"Disables without deleting. Archived policies stay in the manifest and can be restored." },
+                { state:"IMPORT",  color:C.amber, icon:"↑", text:"Upload a JSON template to bulk-create policies. Download the template first for the correct format." },
+                { state:"EXPORT",  color:C.accent, icon:"↓", text:"Export all server policies as JSON. Use for backup, migration, or sharing across environments." },
               ].map(({state,color,icon,text}) => (
                 <div key={state} style={{display:"grid", gridTemplateColumns:"70px 1fr",
                   gap:8, alignItems:"start"}}>
@@ -2062,14 +2443,29 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
                 </div>
               ))}
             </div>
-            <div style={{marginTop:12, paddingTop:10, borderTop:`1px solid ${C.line}`,
-              fontFamily:mono, fontSize:11, color:C.p3, lineHeight:1.7}}>
-              Version counter increments on each activation.
-              Every change is snapshot-saved before it applies.
-            </div>
           </div>
+
+          {/* ── OPERATION HISTORY ── */}
+          {opLog.length > 0 && (
+            <div style={{marginTop:16, padding:14, background:C.bg0,
+              border:`1px solid ${C.line2}`}}>
+              <div style={{fontFamily:mono, fontSize:11, color:C.p3,
+                letterSpacing:2, textTransform:"uppercase", marginBottom:10}}>
+                RECENT OPERATIONS
+              </div>
+              <div style={{display:"flex", flexDirection:"column", gap:4, maxHeight:200, overflow:"auto"}}>
+                {opLog.map(op => (
+                  <div key={op.id} style={{display:"flex", gap:8, alignItems:"baseline"}}>
+                    <span style={{fontFamily:mono, fontSize:11, color:C.p3, whiteSpace:"nowrap"}}>{op.time}</span>
+                    <span style={{fontFamily:sans, fontSize:12, color:C.p2}}>{op.msg}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
+      )}
 
       {/* ══ BOTTOM: SNAPSHOT ROLLBACK ══════════════════════════════ */}
       <div style={{background:C.bg0, borderTop:`2px solid ${C.line2}`, padding:18}}>
@@ -3611,6 +4007,477 @@ function SurgeTab({ receipts: localReceipts, stakedPolicies: localStaked, setSta
 }
 
 // ═══════════════════════════════════════════════════════════
+// SETTINGS TAB — Escalation config, auto-KS thresholds, webhooks
+// ═══════════════════════════════════════════════════════════
+
+function SettingsTab({ onConfigSaved }) {
+  const API_BASE = (typeof process!=="undefined" && process.env?.NEXT_PUBLIC_GOVERNOR_API) || null;
+  const getToken = () => typeof window!=="undefined" ? localStorage.getItem("ocg_token") : null;
+  const headers = () => ({ Authorization:`Bearer ${getToken()}`, "Content-Type":"application/json" });
+
+  // ── State ──
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+  const [success, setSuccess] = useState("");
+  const [configs, setConfigs] = useState([]);
+  const [webhooks, setWebhooks] = useState([]);
+  const [activeScope, setActiveScope] = useState("*");
+
+  // Form state for current scope
+  const [form, setForm] = useState({
+    auto_ks_enabled: false,
+    auto_ks_block_threshold: 3,
+    auto_ks_risk_threshold: 82,
+    auto_ks_window_size: 10,
+    review_risk_threshold: 70,
+    notify_on_block: true,
+    notify_on_review: true,
+    notify_on_auto_ks: true,
+  });
+
+  // Webhook form
+  const [whForm, setWhForm] = useState({ url: "", label: "", on_block: true, on_review: true, on_auto_ks: true });
+  const [newAgentScope, setNewAgentScope] = useState("");
+
+  // ── Load ──
+  const loadConfigs = async () => {
+    if (!API_BASE) { setLoading(false); return; }
+    setLoading(true); setErr("");
+    try {
+      const [cfgRes, whRes] = await Promise.all([
+        fetch(`${API_BASE}/escalation/config`, { headers: headers() }),
+        fetch(`${API_BASE}/escalation/webhooks`, { headers: headers() }),
+      ]);
+      if (cfgRes.ok) { const data = await cfgRes.json(); setConfigs(data); }
+      if (whRes.ok)  { const data = await whRes.json();  setWebhooks(data); }
+    } catch (e) { setErr(e.message); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { loadConfigs(); }, []);
+
+  // When configs load or scope changes, populate form
+  useEffect(() => {
+    const cfg = configs.find(c => c.scope === activeScope);
+    if (cfg) {
+      setForm({
+        auto_ks_enabled: cfg.auto_ks_enabled,
+        auto_ks_block_threshold: cfg.auto_ks_block_threshold,
+        auto_ks_risk_threshold: cfg.auto_ks_risk_threshold,
+        auto_ks_window_size: cfg.auto_ks_window_size,
+        review_risk_threshold: cfg.review_risk_threshold,
+        notify_on_block: cfg.notify_on_block,
+        notify_on_review: cfg.notify_on_review,
+        notify_on_auto_ks: cfg.notify_on_auto_ks,
+      });
+    } else {
+      setForm({
+        auto_ks_enabled: false, auto_ks_block_threshold: 3, auto_ks_risk_threshold: 82,
+        auto_ks_window_size: 10, review_risk_threshold: 70,
+        notify_on_block: true, notify_on_review: true, notify_on_auto_ks: true,
+      });
+    }
+  }, [configs, activeScope]);
+
+  // ── Save config ──
+  const saveConfig = async () => {
+    if (!API_BASE) return;
+    setSaving(true); setErr(""); setSuccess("");
+    try {
+      const exists = configs.find(c => c.scope === activeScope);
+      let r;
+      if (exists) {
+        r = await fetch(`${API_BASE}/escalation/config/${encodeURIComponent(activeScope)}`, {
+          method: "PUT", headers: headers(), body: JSON.stringify(form),
+        });
+      } else {
+        r = await fetch(`${API_BASE}/escalation/config`, {
+          method: "POST", headers: headers(), body: JSON.stringify({ scope: activeScope, ...form }),
+        });
+      }
+      if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.detail || "Save failed"); }
+      setSuccess("Configuration saved successfully.");
+      setTimeout(() => setSuccess(""), 4000);
+      await loadConfigs();
+      if (onConfigSaved) onConfigSaved();
+    } catch (e) { setErr(e.message); }
+    finally { setSaving(false); }
+  };
+
+  // ── Delete scope config ──
+  const deleteScope = async (scope) => {
+    if (!API_BASE || scope === "*") return;
+    try {
+      await fetch(`${API_BASE}/escalation/config/${encodeURIComponent(scope)}`, {
+        method: "DELETE", headers: headers(),
+      });
+      if (activeScope === scope) setActiveScope("*");
+      await loadConfigs();
+    } catch (e) { setErr(e.message); }
+  };
+
+  // ── Add agent-specific scope ──
+  const addAgentScope = async () => {
+    if (!newAgentScope.trim()) return;
+    const scope = `agent:${newAgentScope.trim()}`;
+    if (configs.find(c => c.scope === scope)) { setErr("Config for this agent already exists."); return; }
+    try {
+      const r = await fetch(`${API_BASE}/escalation/config`, {
+        method: "POST", headers: headers(),
+        body: JSON.stringify({ scope, ...form }),
+      });
+      if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.detail || "Create failed"); }
+      setNewAgentScope("");
+      await loadConfigs();
+      setActiveScope(scope);
+    } catch (e) { setErr(e.message); }
+  };
+
+  // ── Webhook CRUD ──
+  const addWebhook = async () => {
+    if (!whForm.url.trim()) return;
+    try {
+      const r = await fetch(`${API_BASE}/escalation/webhooks`, {
+        method: "POST", headers: headers(), body: JSON.stringify(whForm),
+      });
+      if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.detail || "Create failed"); }
+      setWhForm({ url: "", label: "", on_block: true, on_review: true, on_auto_ks: true });
+      await loadConfigs();
+    } catch (e) { setErr(e.message); }
+  };
+
+  const deleteWebhook = async (id) => {
+    try {
+      await fetch(`${API_BASE}/escalation/webhooks/${id}`, { method: "DELETE", headers: headers() });
+      await loadConfigs();
+    } catch (e) { setErr(e.message); }
+  };
+
+  const toggleWebhook = async (wh) => {
+    try {
+      await fetch(`${API_BASE}/escalation/webhooks/${wh.id}`, {
+        method: "PUT", headers: headers(),
+        body: JSON.stringify({ is_active: !wh.is_active }),
+      });
+      await loadConfigs();
+    } catch (e) { setErr(e.message); }
+  };
+
+  // ── Style helpers ──
+  const inputStyle = {
+    fontFamily:mono, fontSize:13, background:C.bg1, border:`1px solid ${C.line2}`,
+    color:C.p1, padding:"6px 10px", width:"100%", outline:"none",
+  };
+  const numInput = (field, min, max) => (
+    <input type="number" min={min} max={max} value={form[field]}
+      onChange={e => setForm(f => ({ ...f, [field]: Math.min(max, Math.max(min, parseInt(e.target.value)||min)) }))}
+      style={{...inputStyle, width:80, textAlign:"center"}} />
+  );
+  const toggleBtn = (field, label) => (
+    <button onClick={() => setForm(f => ({ ...f, [field]: !f[field] }))}
+      style={{ fontFamily:mono, fontSize:11, padding:"4px 12px", cursor:"pointer",
+        border:`1px solid ${form[field] ? C.green : C.line2}`,
+        color: form[field] ? C.green : C.muted,
+        background: form[field] ? "rgba(34,197,94,0.08)" : "transparent",
+        letterSpacing:0.5 }}>
+      {label}: {form[field] ? "ON" : "OFF"}
+    </button>
+  );
+
+  if (!API_BASE) {
+    return (
+      <div style={{padding:20, maxWidth:720}}>
+        <div style={{fontFamily:mono, fontSize:14, color:C.amber, padding:16, border:`1px solid ${C.amber}`,
+          background:"rgba(245,158,11,0.06)"}}>
+          Settings require a live API connection. Set <span style={{color:C.p2}}>NEXT_PUBLIC_GOVERNOR_API</span> to enable.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{padding:20, maxWidth:800}}>
+      {/* Header */}
+      <div style={{marginBottom:20, paddingBottom:14, borderBottom:`1px solid ${C.line2}`}}>
+        <div style={{fontFamily:mono, fontSize:16, fontWeight:700, color:C.p1, letterSpacing:1}}>
+          Governor Settings
+        </div>
+        <div style={{fontFamily:mono, fontSize:12, color:C.p3, marginTop:4, lineHeight:1.6}}>
+          Configure auto-kill-switch thresholds, review policies, notification preferences, and webhook endpoints.
+          Settings apply globally (<span style={{color:C.p2}}>*</span>) or per-agent (<span style={{color:C.p2}}>agent:&lt;id&gt;</span>).
+        </div>
+      </div>
+
+      {/* Messages */}
+      {err && <div style={{fontFamily:mono, fontSize:12, color:C.red, padding:"8px 12px", marginBottom:12,
+        border:`1px solid ${C.red}`, background:"rgba(239,68,68,0.06)"}}>{err}
+        <span onClick={()=>setErr("")} style={{cursor:"pointer",marginLeft:8,color:C.muted}}>✕</span></div>}
+      {success && <div style={{fontFamily:mono, fontSize:12, color:C.green, padding:"8px 12px", marginBottom:12,
+        border:`1px solid ${C.green}`, background:"rgba(34,197,94,0.06)"}}>{success}</div>}
+
+      {loading ? <div style={{fontFamily:mono, fontSize:12, color:C.muted, padding:20}}>Loading configuration...</div> : (<>
+
+      {/* ── Scope selector ── */}
+      <div style={{marginBottom:20}}>
+        <div style={{fontFamily:mono, fontSize:11, color:C.muted, letterSpacing:1, marginBottom:8}}>
+          CONFIGURATION SCOPE
+        </div>
+        <div style={{display:"flex", gap:6, flexWrap:"wrap", alignItems:"center"}}>
+          {/* Global scope */}
+          <button onClick={()=>setActiveScope("*")}
+            style={{ fontFamily:mono, fontSize:11, padding:"5px 14px", cursor:"pointer",
+              border:`1px solid ${activeScope==="*" ? C.p2 : C.line2}`,
+              color: activeScope==="*" ? C.p1 : C.p3,
+              background: activeScope==="*" ? "rgba(59,130,246,0.1)" : "transparent" }}>
+            ★ Global (*)
+          </button>
+          {/* Per-agent scopes */}
+          {configs.filter(c=>c.scope!=="*").map(c => (
+            <div key={c.scope} style={{display:"flex", alignItems:"center", gap:2}}>
+              <button onClick={()=>setActiveScope(c.scope)}
+                style={{ fontFamily:mono, fontSize:11, padding:"5px 12px", cursor:"pointer",
+                  border:`1px solid ${activeScope===c.scope ? C.p2 : C.line2}`,
+                  color: activeScope===c.scope ? C.p1 : C.p3,
+                  background: activeScope===c.scope ? "rgba(59,130,246,0.1)" : "transparent" }}>
+                {c.scope}
+              </button>
+              <button onClick={()=>deleteScope(c.scope)}
+                style={{fontFamily:mono, fontSize:10, color:C.red, background:"transparent",
+                  border:"none", cursor:"pointer", padding:"2px 4px"}}>✕</button>
+            </div>
+          ))}
+          {/* Add new agent scope */}
+          <div style={{display:"flex", gap:4, alignItems:"center"}}>
+            <input placeholder="agent-id" value={newAgentScope}
+              onChange={e=>setNewAgentScope(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&addAgentScope()}
+              style={{...inputStyle, width:120, fontSize:11, padding:"4px 8px"}} />
+            <button onClick={addAgentScope}
+              style={{fontFamily:mono, fontSize:10, padding:"4px 10px", cursor:"pointer",
+                border:`1px solid ${C.line2}`, color:C.p3, background:"transparent"}}>
+              + Agent
+            </button>
+          </div>
+        </div>
+        <div style={{fontFamily:mono, fontSize:10, color:C.muted, marginTop:6}}>
+          Agent-specific configs override global defaults. Select a scope to edit its thresholds.
+        </div>
+      </div>
+
+      {/* ═══ Section 1: Auto Kill-Switch ═══ */}
+      <div style={{marginBottom:24, padding:16, border:`1px solid ${C.line2}`, background:C.bg1}}>
+        <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14}}>
+          <div>
+            <div style={{fontFamily:mono, fontSize:13, fontWeight:700, color:C.p1, letterSpacing:1}}>
+              AUTO KILL-SWITCH
+            </div>
+            <div style={{fontFamily:mono, fontSize:11, color:C.p3, marginTop:2}}>
+              Automatically engage kill switch when threat thresholds are breached
+            </div>
+          </div>
+          <button onClick={()=>setForm(f=>({...f, auto_ks_enabled:!f.auto_ks_enabled}))}
+            style={{ fontFamily:mono, fontSize:12, fontWeight:700, padding:"6px 18px", cursor:"pointer",
+              border:`1px solid ${form.auto_ks_enabled ? C.amber : C.line2}`,
+              color: form.auto_ks_enabled ? C.amber : C.muted,
+              background: form.auto_ks_enabled ? "rgba(245,158,11,0.1)" : "transparent",
+              letterSpacing:1 }}>
+            {form.auto_ks_enabled ? "ENABLED" : "DISABLED"}
+          </button>
+        </div>
+
+        <div style={{display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:16}}>
+          <div>
+            <div style={{fontFamily:mono, fontSize:10, color:C.muted, letterSpacing:0.5, marginBottom:4}}>
+              BLOCK THRESHOLD
+            </div>
+            {numInput("auto_ks_block_threshold", 1, 100)}
+            <div style={{fontFamily:mono, fontSize:10, color:C.p3, marginTop:3}}>
+              Blocks in window to trigger KS
+            </div>
+          </div>
+          <div>
+            <div style={{fontFamily:mono, fontSize:10, color:C.muted, letterSpacing:0.5, marginBottom:4}}>
+              RISK THRESHOLD
+            </div>
+            {numInput("auto_ks_risk_threshold", 1, 100)}
+            <div style={{fontFamily:mono, fontSize:10, color:C.p3, marginTop:3}}>
+              Avg risk score to trigger KS
+            </div>
+          </div>
+          <div>
+            <div style={{fontFamily:mono, fontSize:10, color:C.muted, letterSpacing:0.5, marginBottom:4}}>
+              WINDOW SIZE
+            </div>
+            {numInput("auto_ks_window_size", 1, 200)}
+            <div style={{fontFamily:mono, fontSize:10, color:C.p3, marginTop:3}}>
+              Recent actions to evaluate
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ Section 2: Review Queue ═══ */}
+      <div style={{marginBottom:24, padding:16, border:`1px solid ${C.line2}`, background:C.bg1}}>
+        <div style={{fontFamily:mono, fontSize:13, fontWeight:700, color:C.p1, letterSpacing:1, marginBottom:4}}>
+          REVIEW QUEUE
+        </div>
+        <div style={{fontFamily:mono, fontSize:11, color:C.p3, marginBottom:14}}>
+          Actions above the review risk threshold are flagged for human review
+        </div>
+        <div style={{display:"flex", alignItems:"center", gap:12}}>
+          <div>
+            <div style={{fontFamily:mono, fontSize:10, color:C.muted, letterSpacing:0.5, marginBottom:4}}>
+              REVIEW RISK THRESHOLD
+            </div>
+            {numInput("review_risk_threshold", 0, 100)}
+          </div>
+          <div style={{fontFamily:mono, fontSize:10, color:C.p3, marginTop:16}}>
+            Allowed actions with risk ≥ this value will be promoted to "review"
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ Section 3: Notifications ═══ */}
+      <div style={{marginBottom:24, padding:16, border:`1px solid ${C.line2}`, background:C.bg1}}>
+        <div style={{fontFamily:mono, fontSize:13, fontWeight:700, color:C.p1, letterSpacing:1, marginBottom:4}}>
+          NOTIFICATIONS
+        </div>
+        <div style={{fontFamily:mono, fontSize:11, color:C.p3, marginBottom:14}}>
+          Control which events trigger webhook notifications
+        </div>
+        <div style={{display:"flex", gap:10, flexWrap:"wrap"}}>
+          {toggleBtn("notify_on_block", "On Block")}
+          {toggleBtn("notify_on_review", "On Review")}
+          {toggleBtn("notify_on_auto_ks", "On Auto-KS")}
+        </div>
+      </div>
+
+      {/* ═══ Save button ═══ */}
+      <div style={{marginBottom:30, display:"flex", gap:10}}>
+        <button onClick={saveConfig} disabled={saving}
+          style={{ fontFamily:mono, fontSize:12, fontWeight:700, padding:"8px 28px", cursor:"pointer",
+            border:`1px solid ${C.green}`, color:C.bg0, background:C.green, letterSpacing:1,
+            opacity:saving?0.6:1 }}>
+          {saving ? "SAVING..." : `SAVE ${activeScope==="*" ? "GLOBAL" : activeScope.toUpperCase()} CONFIG`}
+        </button>
+        <div style={{fontFamily:mono, fontSize:10, color:C.muted, alignSelf:"center"}}>
+          Editing: <span style={{color:C.p2}}>{activeScope}</span>
+          {activeScope!=="*" && <span> (overrides global defaults)</span>}
+        </div>
+      </div>
+
+      {/* ═══ Section 4: Webhooks ═══ */}
+      <div style={{marginBottom:24, padding:16, border:`1px solid ${C.line2}`, background:C.bg1}}>
+        <div style={{fontFamily:mono, fontSize:13, fontWeight:700, color:C.p1, letterSpacing:1, marginBottom:4}}>
+          WEBHOOKS
+        </div>
+        <div style={{fontFamily:mono, fontSize:11, color:C.p3, marginBottom:14}}>
+          Receive HTTP POST notifications when escalation events occur
+        </div>
+
+        {/* Existing webhooks */}
+        {webhooks.length > 0 && (
+          <div style={{marginBottom:16}}>
+            {webhooks.map(wh => (
+              <div key={wh.id} style={{display:"flex", alignItems:"center", gap:10, padding:"8px 0",
+                borderBottom:`1px solid ${C.line}`}}>
+                <div style={{flex:1}}>
+                  <div style={{fontFamily:mono, fontSize:12, color:C.p1}}>
+                    {wh.label || "Unnamed"} — <span style={{color:C.p3, fontSize:11}}>{wh.url}</span>
+                  </div>
+                  <div style={{fontFamily:mono, fontSize:10, color:C.muted, marginTop:2}}>
+                    {wh.on_block&&"block "}{wh.on_review&&"review "}{wh.on_auto_ks&&"auto-ks"}
+                    {" · "}{wh.is_active ? <span style={{color:C.green}}>active</span> : <span style={{color:C.red}}>paused</span>}
+                  </div>
+                </div>
+                <button onClick={()=>toggleWebhook(wh)}
+                  style={{fontFamily:mono, fontSize:10, padding:"3px 10px", cursor:"pointer",
+                    border:`1px solid ${C.line2}`, color:wh.is_active?C.amber:C.green, background:"transparent"}}>
+                  {wh.is_active ? "PAUSE" : "ENABLE"}
+                </button>
+                <button onClick={()=>deleteWebhook(wh.id)}
+                  style={{fontFamily:mono, fontSize:10, padding:"3px 10px", cursor:"pointer",
+                    border:`1px solid ${C.red}`, color:C.red, background:"transparent"}}>
+                  DELETE
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Add webhook form */}
+        <div style={{display:"flex", gap:6, flexWrap:"wrap", alignItems:"flex-end"}}>
+          <div>
+            <div style={{fontFamily:mono, fontSize:10, color:C.muted, marginBottom:3}}>URL</div>
+            <input placeholder="https://hooks.example.com/governor" value={whForm.url}
+              onChange={e=>setWhForm(f=>({...f, url:e.target.value}))}
+              style={{...inputStyle, width:280, fontSize:11, padding:"5px 8px"}} />
+          </div>
+          <div>
+            <div style={{fontFamily:mono, fontSize:10, color:C.muted, marginBottom:3}}>LABEL</div>
+            <input placeholder="Slack alerts" value={whForm.label}
+              onChange={e=>setWhForm(f=>({...f, label:e.target.value}))}
+              style={{...inputStyle, width:140, fontSize:11, padding:"5px 8px"}} />
+          </div>
+          <div style={{display:"flex", gap:4}}>
+            <button onClick={()=>setWhForm(f=>({...f,on_block:!f.on_block}))}
+              style={{fontFamily:mono, fontSize:9, padding:"4px 8px", cursor:"pointer",
+                border:`1px solid ${whForm.on_block?C.green:C.line2}`,
+                color:whForm.on_block?C.green:C.muted, background:"transparent"}}>
+              BLK
+            </button>
+            <button onClick={()=>setWhForm(f=>({...f,on_review:!f.on_review}))}
+              style={{fontFamily:mono, fontSize:9, padding:"4px 8px", cursor:"pointer",
+                border:`1px solid ${whForm.on_review?C.green:C.line2}`,
+                color:whForm.on_review?C.green:C.muted, background:"transparent"}}>
+              REV
+            </button>
+            <button onClick={()=>setWhForm(f=>({...f,on_auto_ks:!f.on_auto_ks}))}
+              style={{fontFamily:mono, fontSize:9, padding:"4px 8px", cursor:"pointer",
+                border:`1px solid ${whForm.on_auto_ks?C.green:C.line2}`,
+                color:whForm.on_auto_ks?C.green:C.muted, background:"transparent"}}>
+              AKS
+            </button>
+          </div>
+          <button onClick={addWebhook}
+            style={{fontFamily:mono, fontSize:11, padding:"5px 16px", cursor:"pointer",
+              border:`1px solid ${C.p2}`, color:C.p2, background:"transparent"}}>
+            + ADD
+          </button>
+        </div>
+      </div>
+
+      {/* ═══ Config summary (read-only) ═══ */}
+      <div style={{marginBottom:20, padding:16, border:`1px solid ${C.line}`, background:C.bg0}}>
+        <div style={{fontFamily:mono, fontSize:11, color:C.muted, letterSpacing:1, marginBottom:10}}>
+          ALL CONFIGURATIONS
+        </div>
+        {configs.length === 0 ? (
+          <div style={{fontFamily:mono, fontSize:12, color:C.p3}}>
+            No configurations saved yet. Save global config above to get started.
+          </div>
+        ) : configs.map(c => (
+          <div key={c.scope} style={{display:"flex", alignItems:"center", gap:12, padding:"6px 0",
+            borderBottom:`1px solid ${C.line}`}}>
+            <div style={{fontFamily:mono, fontSize:12, color:C.p2, minWidth:140}}>{c.scope}</div>
+            <div style={{fontFamily:mono, fontSize:10, color:C.p3}}>
+              auto-KS: {c.auto_ks_enabled ? <span style={{color:C.amber}}>ON</span> : "off"}
+              {" · "}blocks≥{c.auto_ks_block_threshold}
+              {" · "}risk≥{c.auto_ks_risk_threshold}
+              {" · "}window:{c.auto_ks_window_size}
+              {" · "}review≥{c.review_risk_threshold}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      </>)}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
 // ROOT APP
 // ═══════════════════════════════════════════════════════════
 // Tabs visible per role
@@ -3618,9 +4485,9 @@ function SurgeTab({ receipts: localReceipts, stakedPolicies: localStaked, setSta
 // ROLE_TABS + ALL_TABS (SURGE + Topology added)
 // ═══════════════════════════════════════════════════════════
 const ROLE_TABS = {
-  superadmin: ["dashboard","agent","tester","policies","surge","audit","traces","topology","apikeys","users"],
-  admin:    ["dashboard","agent","tester","policies","surge","audit","traces","topology","apikeys"],
-  operator: ["dashboard","agent","tester","policies","surge","audit","traces","topology","apikeys"],
+  superadmin: ["dashboard","agent","tester","policies","surge","audit","traces","topology","apikeys","settings","users"],
+  admin:    ["dashboard","agent","tester","policies","surge","audit","traces","topology","apikeys","settings"],
+  operator: ["dashboard","agent","tester","policies","surge","audit","traces","topology","apikeys","settings"],
   auditor:  ["dashboard","agent","surge","audit","traces","topology","apikeys"],
 };
 
@@ -3634,7 +4501,8 @@ const ALL_TABS = [
   { id:"traces",    label:"Traces",            icon:"⧉" },
   { id:"topology",  label:"Topology",          icon:"◎" },
   { id:"apikeys",   label:"API Keys",          icon:"🔑" },
-  { id:"users",     label:"User Management",   icon:"⚙", superadminOnly:true },
+  { id:"settings",  label:"Settings",          icon:"⚙" },
+  { id:"users",     label:"User Management",   icon:"👥", superadminOnly:true },
 ];
 
 export default function GovernorDashboard({ userRole="operator", userName="", onLogout=()=>{} }) {
@@ -3746,22 +4614,26 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
   const autoKsCooldown = useRef(false);
   const handleKSResume = () => { autoKsCooldown.current = true; handleKS(false); };
 
-  // Fetch escalation config from server when auto-KS is toggled ON
+  // Fetch escalation config from server when auto-KS is toggled ON or settings are saved
+  const refreshEscalationConfig = useCallback(async () => {
+    if (!API_BASE_ROOT) return;
+    try {
+      const r = await fetch(`${API_BASE_ROOT}/escalation/config/*`, { headers: headersRoot() });
+      if (r.ok) {
+        const cfg = await r.json();
+        setEscalationConfig(prev => ({
+          auto_ks_block_threshold: cfg.auto_ks_block_threshold ?? prev.auto_ks_block_threshold,
+          auto_ks_risk_threshold: cfg.auto_ks_risk_threshold ?? prev.auto_ks_risk_threshold,
+          auto_ks_window_size: cfg.auto_ks_window_size ?? prev.auto_ks_window_size,
+        }));
+        setAutoKs(cfg.auto_ks_enabled ?? false);
+      }
+    } catch (e) { /* fall back to defaults */ }
+  }, [API_BASE_ROOT]);
+
   useEffect(() => {
     if (!autoKsEnabled || !API_BASE_ROOT) return;
-    (async () => {
-      try {
-        const r = await fetch(`${API_BASE_ROOT}/escalation/config/*`, { headers: headersRoot() });
-        if (r.ok) {
-          const cfg = await r.json();
-          setEscalationConfig(prev => ({
-            auto_ks_block_threshold: cfg.auto_ks_block_threshold ?? prev.auto_ks_block_threshold,
-            auto_ks_risk_threshold: cfg.auto_ks_risk_threshold ?? prev.auto_ks_risk_threshold,
-            auto_ks_window_size: cfg.auto_ks_window_size ?? prev.auto_ks_window_size,
-          }));
-        }
-      } catch (e) { /* fall back to defaults */ }
-    })();
+    refreshEscalationConfig();
   }, [autoKsEnabled]);
 
   useEffect(()=>{
@@ -4091,6 +4963,7 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
           {tab==="traces"    && <TracesTab/>}
           {tab==="topology"  && <TopologyTab gs={gs} killSwitch={killSwitch} degraded={degraded}/>}
           {tab==="apikeys"   && <ApiKeysTab/>}
+          {tab==="settings"  && (userRole==="superadmin"||userRole==="admin"||userRole==="operator") && <SettingsTab onConfigSaved={refreshEscalationConfig}/>}
           {tab==="users"     && userRole==="superadmin" && <AdminUserManagementTab/>}
         </div>
       </div>

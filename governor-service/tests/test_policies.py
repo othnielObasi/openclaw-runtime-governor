@@ -358,3 +358,185 @@ class TestDeletePolicy:
         h = _admin_headers()
         resp = client.delete("/policies/nonexistent-xyz", headers=h)
         assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# EXPORT
+# ---------------------------------------------------------------------------
+
+class TestExportPolicies:
+    def test_export_returns_list(self):
+        h = _admin_headers()
+        # Create a policy first
+        client.post("/policies", json={
+            "policy_id": "test-export-1",
+            "description": "export me",
+            "severity": 40,
+            "match_json": {"tool": "shell"},
+            "action": "review",
+        }, headers=h)
+
+        resp = client.get("/policies/export/all", headers=h)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert isinstance(data, list)
+        ids = [p["policy_id"] for p in data]
+        assert "test-export-1" in ids
+
+    def test_export_empty_database(self):
+        h = _admin_headers()
+        # Clean first
+        with db_session() as session:
+            from sqlalchemy import delete
+            session.execute(delete(PolicyModel))
+        invalidate_policy_cache()
+
+        resp = client.get("/policies/export/all", headers=h)
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+
+# ---------------------------------------------------------------------------
+# TEMPLATE
+# ---------------------------------------------------------------------------
+
+class TestDownloadTemplate:
+    def test_template_has_correct_structure(self):
+        h = _admin_headers()
+        resp = client.get("/policies/template", headers=h)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "description" in data
+        assert "instructions" in data
+        assert "policies" in data
+        assert isinstance(data["policies"], list)
+        assert len(data["policies"]) >= 2
+        # Each example should have required fields
+        for p in data["policies"]:
+            assert "policy_id" in p
+            assert "severity" in p
+            assert "action" in p
+            assert "match_json" in p
+
+
+# ---------------------------------------------------------------------------
+# IMPORT
+# ---------------------------------------------------------------------------
+
+class TestImportPolicies:
+    def test_import_creates_policies(self):
+        h = _admin_headers()
+        payload = {
+            "policies": [
+                {
+                    "policy_id": "test-import-1",
+                    "description": "Imported policy 1",
+                    "severity": 55,
+                    "action": "review",
+                    "match_json": {"tool": "http_request"},
+                },
+                {
+                    "policy_id": "test-import-2",
+                    "description": "Imported policy 2",
+                    "severity": 90,
+                    "action": "block",
+                    "match_json": {"tool": "shell", "args_regex": "rm -rf"},
+                },
+            ]
+        }
+        resp = client.post("/policies/import", json=payload, headers=h)
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["created"] == 2
+        assert data["skipped"] == 0
+        assert data["failed"] == []
+        assert data["total_in_payload"] == 2
+
+        # Verify they exist
+        resp2 = client.get("/policies/test-import-1", headers=h)
+        assert resp2.status_code == 200
+        assert resp2.json()["severity"] == 55
+
+    def test_import_skips_duplicates(self):
+        h = _admin_headers()
+        # Create one first
+        client.post("/policies", json={
+            "policy_id": "test-import-dup",
+            "description": "already here",
+            "severity": 30,
+            "match_json": {},
+            "action": "allow",
+        }, headers=h)
+
+        payload = {
+            "policies": [
+                {"policy_id": "test-import-dup", "description": "dup", "severity": 30, "action": "allow", "match_json": {}},
+                {"policy_id": "test-import-new", "description": "new one", "severity": 60, "action": "review", "match_json": {"tool": "shell"}},
+            ]
+        }
+        resp = client.post("/policies/import", json=payload, headers=h)
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["created"] == 1
+        assert data["skipped"] == 1
+
+    def test_import_validates_action(self):
+        h = _admin_headers()
+        payload = {"policies": [
+            {"policy_id": "test-import-bad", "description": "bad", "severity": 50, "action": "nuke", "match_json": {}},
+        ]}
+        resp = client.post("/policies/import", json=payload, headers=h)
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["created"] == 0
+        assert len(data["failed"]) == 1
+        assert "Invalid action" in data["failed"][0]["reason"]
+
+    def test_import_validates_severity(self):
+        h = _admin_headers()
+        payload = {"policies": [
+            {"policy_id": "test-import-sev", "description": "bad sev", "severity": 999, "action": "block", "match_json": {}},
+        ]}
+        resp = client.post("/policies/import", json=payload, headers=h)
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["created"] == 0
+        assert len(data["failed"]) == 1
+        assert "Severity" in data["failed"][0]["reason"]
+
+    def test_import_validates_missing_policy_id(self):
+        h = _admin_headers()
+        payload = {"policies": [
+            {"description": "no id", "severity": 50, "action": "review", "match_json": {}},
+        ]}
+        resp = client.post("/policies/import", json=payload, headers=h)
+        assert resp.status_code == 201
+        assert len(resp.json()["failed"]) == 1
+
+    def test_import_validates_bad_regex(self):
+        h = _admin_headers()
+        payload = {"policies": [
+            {"policy_id": "test-import-regex", "description": "bad regex", "severity": 50, "action": "review",
+             "match_json": {"args_regex": "(unclosed"}},
+        ]}
+        resp = client.post("/policies/import", json=payload, headers=h)
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["created"] == 0
+        assert len(data["failed"]) == 1
+        assert "regex" in data["failed"][0]["reason"].lower()
+
+    def test_import_rejects_non_list(self):
+        h = _admin_headers()
+        payload = {"policies": "not a list"}
+        resp = client.post("/policies/import", json=payload, headers=h)
+        assert resp.status_code == 422
+
+    def test_import_empty_list(self):
+        h = _admin_headers()
+        payload = {"policies": []}
+        resp = client.post("/policies/import", json=payload, headers=h)
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["created"] == 0
+        assert data["total_in_payload"] == 0

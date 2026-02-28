@@ -66,6 +66,150 @@ def list_policies(
         return [_row_to_read(r) for r in rows]
 
 
+# ---------------------------------------------------------------------------
+# Bulk import / export / template — MUST come before /{policy_id} routes
+# ---------------------------------------------------------------------------
+
+@router.get("/export/all", response_model=List[PolicyRead])
+def export_policies(
+    _user: User = Depends(require_any),
+) -> List[PolicyRead]:
+    """Export all dynamic policies as JSON (for backup / transfer)."""
+    with db_session() as session:
+        rows = session.execute(select(PolicyModel)).scalars().all()
+        return [_row_to_read(r) for r in rows]
+
+
+@router.get("/template")
+def download_template(
+    _user: User = Depends(require_any),
+) -> dict:
+    """Return a policy template that users can fill in and upload."""
+    return {
+        "description": "OpenClaw Governor — Policy Import Template",
+        "instructions": (
+            "Fill in the 'policies' array below. Each policy needs: "
+            "policy_id (unique string), description, severity (0-100), "
+            "action ('allow'|'block'|'review'), and match_json (matching rules). "
+            "Upload this file via POST /policies/import."
+        ),
+        "policies": [
+            {
+                "policy_id": "example-block-curl",
+                "description": "Block shell commands containing curl to external hosts",
+                "severity": 80,
+                "action": "block",
+                "match_json": {
+                    "tool": "shell",
+                    "args_regex": "(curl|wget)\\s+https?://(?!localhost)"
+                },
+            },
+            {
+                "policy_id": "example-review-file-write",
+                "description": "Review file write operations to sensitive paths",
+                "severity": 60,
+                "action": "review",
+                "match_json": {
+                    "tool": "file_write",
+                    "args_regex": "(/etc/|/var/|~/.ssh/)"
+                },
+            },
+        ],
+    }
+
+
+@router.post("/import", response_model=dict, status_code=201)
+def import_policies(
+    payload: dict,
+    _user: User = Depends(require_operator),
+) -> dict:
+    """
+    Bulk import policies from a JSON template.
+
+    Expects {"policies": [{ policy_id, description, severity, action, match_json }, ...]}.
+    Skips policies whose ID already exists. Returns counts of created/skipped/failed.
+    """
+    policies = payload.get("policies", [])
+    if not isinstance(policies, list):
+        raise HTTPException(status_code=422, detail="Expected 'policies' array in body.")
+
+    created = 0
+    skipped = 0
+    failed = []
+
+    with db_session() as session:
+        for i, p in enumerate(policies):
+            pid = p.get("policy_id", "").strip()
+            if not pid:
+                failed.append({"index": i, "reason": "Missing policy_id"})
+                continue
+
+            # Check for duplicates
+            existing = session.execute(
+                select(PolicyModel).where(PolicyModel.policy_id == pid)
+            ).scalar_one_or_none()
+            if existing:
+                skipped += 1
+                continue
+
+            # Validate required fields
+            action = p.get("action", "").strip()
+            if action not in ("allow", "block", "review"):
+                failed.append({"index": i, "policy_id": pid, "reason": f"Invalid action: '{action}'"})
+                continue
+
+            severity = p.get("severity")
+            try:
+                severity = int(severity)
+                if not (0 <= severity <= 100):
+                    raise ValueError()
+            except (ValueError, TypeError):
+                failed.append({"index": i, "policy_id": pid, "reason": "Severity must be 0-100"})
+                continue
+
+            match_json = p.get("match_json", {})
+            if isinstance(match_json, dict):
+                # Validate regex fields
+                for key in ("url_regex", "args_regex"):
+                    pattern = match_json.get(key)
+                    if pattern:
+                        try:
+                            re.compile(pattern)
+                        except re.error as exc:
+                            failed.append({"index": i, "policy_id": pid, "reason": f"Bad regex in {key}: {exc}"})
+                            match_json = None
+                            break
+                if match_json is None:
+                    continue
+            else:
+                match_json = {}
+
+            row = PolicyModel(
+                policy_id=pid,
+                description=p.get("description", pid),
+                severity=severity,
+                match_json=json.dumps(match_json),
+                action=action,
+                is_active=p.get("is_active", True),
+            )
+            session.add(row)
+            created += 1
+
+        if created > 0:
+            invalidate_policy_cache()
+
+    return {
+        "created": created,
+        "skipped": skipped,
+        "failed": failed,
+        "total_in_payload": len(policies),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Single policy CRUD — /{policy_id} routes
+# ---------------------------------------------------------------------------
+
 @router.get("/{policy_id}", response_model=PolicyRead)
 def get_policy(
     policy_id: str,
