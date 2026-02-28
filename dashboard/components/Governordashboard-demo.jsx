@@ -2142,11 +2142,29 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
   const [editId, setEditId] = useState(null);   // which policy row is in edit mode
   const [editForm, setEditForm] = useState({}); // current edit field values
   const [editErr, setEditErr]   = useState("");
+  const [statusFilter, setStatusFilter] = useState("all"); // all | active | draft | archived
+  const [selected, setSelected] = useState(new Set());
 
   const all = [
     ...BASE_POLICIES.map(p=>({...p, source:"yaml"})),
     ...extraPolicies.map(p=>({...p, source:"runtime"})),
   ];
+
+  const filtered = statusFilter === "all" ? all : all.filter(p => {
+    const s = p.status || "active";
+    return s === statusFilter;
+  });
+
+  // Bulk selection helpers
+  const runtimeFiltered = filtered.filter(p=>p.source==="runtime");
+  const allRuntimeSelected = runtimeFiltered.length > 0 && runtimeFiltered.every(p=>selected.has(p.id));
+  const toggleSelect = (id) => setSelected(prev => {
+    const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s;
+  });
+  const toggleAll = () => {
+    if (allRuntimeSelected) setSelected(new Set());
+    else setSelected(new Set(runtimeFiltered.map(p=>p.id)));
+  };
 
   // ── CREATE ───────────────────────────────────────────────────
   const create = () => {
@@ -2190,6 +2208,33 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
       setPendingDel(id);
       setTimeout(() => setPendingDel(pid => pid===id ? null : pid), 4000);
     }
+  };
+
+  // ── BULK ACTIONS ──────────────────────────────────────────────
+  const bulkToggle = (activate) => {
+    if (selected.size===0) return;
+    const ids = [...selected];
+    const newStatus = activate ? "active" : "archived";
+    let count = 0;
+    ids.forEach(id => {
+      const p = extraPolicies.find(pp=>pp.id===id);
+      if (!p) return;
+      const isActive = (p.status||"active")==="active";
+      if ((activate && isActive) || (!activate && !isActive)) return;
+      count++;
+    });
+    setExtraPolicies(
+      prev => prev.map(p => selected.has(p.id) ? {...p, status:newStatus, version: activate ? (p.version||1)+1 : p.version} : p),
+      `BULK ${newStatus.toUpperCase()}: ${count} policies`
+    );
+    setSelected(new Set());
+  };
+
+  const bulkDelete = () => {
+    if (selected.size===0) return;
+    const ids = [...selected];
+    setExtraPolicies(prev=>prev.filter(p=>!ids.includes(p.id)), `BULK DELETE: ${ids.length} policies`);
+    setSelected(new Set());
   };
 
   // ── INLINE EDIT ──────────────────────────────────────────────
@@ -2259,9 +2304,50 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
             </span>
           </div>
 
+          {/* Filter bar */}
+          <div style={{display:"flex", gap:4, marginBottom:10, flexWrap:"wrap", alignItems:"center"}}>
+            {["all","active","draft","archived"].map(f => (
+              <button key={f} onClick={()=>setStatusFilter(f)} style={{
+                fontFamily:mono, fontSize:9, padding:"3px 10px", cursor:"pointer",
+                letterSpacing:1, textTransform:"uppercase",
+                border:`1px solid ${statusFilter===f?C.accent:C.line2}`,
+                color:statusFilter===f?C.accent:C.p3,
+                background:statusFilter===f?C.accentDim:"transparent"}}>
+                {f}
+              </button>
+            ))}
+            {/* Bulk actions */}
+            {selected.size > 0 && (
+              <div style={{marginLeft:"auto", display:"flex", gap:4, alignItems:"center"}}>
+                <span style={{fontFamily:mono, fontSize:9, color:C.p3}}>{selected.size} selected</span>
+                <button onClick={()=>bulkToggle(true)} style={{
+                  fontFamily:mono, fontSize:8, padding:"3px 8px", cursor:"pointer",
+                  border:`1px solid ${C.green}`, color:C.green, background:C.greenDim}}>
+                  ACTIVATE
+                </button>
+                <button onClick={()=>bulkToggle(false)} style={{
+                  fontFamily:mono, fontSize:8, padding:"3px 8px", cursor:"pointer",
+                  border:`1px solid ${C.p3}`, color:C.p3, background:"transparent"}}>
+                  ARCHIVE
+                </button>
+                <button onClick={bulkDelete} style={{
+                  fontFamily:mono, fontSize:8, padding:"3px 8px", cursor:"pointer",
+                  border:`1px solid ${C.red}`, color:C.red, background:"transparent"}}>
+                  DELETE
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Column headers */}
-          <div style={{display:"grid", gridTemplateColumns:"1fr 44px 70px 80px 90px",
+          <div style={{display:"grid", gridTemplateColumns:"24px 1fr 44px 70px 80px 90px",
             gap:6, padding:"4px 8px", marginBottom:4}}>
+            <div>
+              {runtimeFiltered.length > 0 && (
+                <input type="checkbox" checked={allRuntimeSelected} onChange={toggleAll}
+                  style={{cursor:"pointer", accentColor:C.accent}} />
+              )}
+            </div>
             {["POLICY","SEV","ACTION","STATUS","CONTROLS"].map(h => (
               <div key={h} style={{fontFamily:mono, fontSize:8.5, color:C.p3,
                 letterSpacing:1.5, textTransform:"uppercase"}}>{h}</div>
@@ -2269,7 +2355,7 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
           </div>
 
           {/* Policy rows */}
-          {all.map(p => {
+          {filtered.map(p => {
             const isRuntime = p.source==="runtime";
             const isEditing = editId === p.id;
             const statusColor = sc(p.status||"active");
@@ -2354,12 +2440,21 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
             // ── NORMAL VIEW ROW ───────────────────────────────
             return (
               <div key={p.id} style={{
-                display:"grid", gridTemplateColumns:"1fr 44px 70px 90px 120px",
+                display:"grid", gridTemplateColumns:"24px 1fr 44px 70px 90px 120px",
                 gap:6, alignItems:"center",
                 padding:"10px 8px",
                 borderBottom:`1px solid ${C.line}`,
+                background: selected.has(p.id) ? C.accentDim : "transparent",
                 opacity: p.status==="archived" ? 0.45 : 1,
                 transition:"opacity 0.2s"}}>
+
+                {/* Checkbox */}
+                <div>
+                  {isRuntime && (
+                    <input type="checkbox" checked={selected.has(p.id)} onChange={()=>toggleSelect(p.id)}
+                      style={{cursor:"pointer", accentColor:C.accent}} />
+                  )}
+                </div>
 
                 {/* Policy name + description */}
                 <div>
@@ -3652,15 +3747,198 @@ function AdminUserManagementTab() {
 
 
 // ═══════════════════════════════════════════════════════════
+// TAB: SETTINGS — client-side governor configuration
+// Configure auto-kill-switch thresholds, review policies,
+// notification preferences, and webhook simulation.
+// ═══════════════════════════════════════════════════════════
+function SettingsTab({ config, onConfigChange }) {
+  const [saved, setSaved] = useState("");
+
+  const numInput = (field, min, max) => (
+    <input type="number" min={min} max={max} value={config[field]}
+      onChange={e => onConfigChange({ ...config, [field]: Math.min(max, Math.max(min, parseInt(e.target.value)||min)) })}
+      style={{ fontFamily:mono, fontSize:13, background:C.bg1, border:`1px solid ${C.line2}`,
+        color:C.p1, padding:"6px 10px", width:80, textAlign:"center", outline:"none" }} />
+  );
+  const toggleBtn = (field, label) => (
+    <button onClick={() => onConfigChange({ ...config, [field]: !config[field] })}
+      style={{ fontFamily:mono, fontSize:11, padding:"4px 12px", cursor:"pointer",
+        border:`1px solid ${config[field] ? C.green : C.line2}`,
+        color: config[field] ? C.green : C.muted,
+        background: config[field] ? "rgba(34,197,94,0.08)" : "transparent",
+        letterSpacing:0.5 }}>
+      {label}: {config[field] ? "ON" : "OFF"}
+    </button>
+  );
+
+  const handleSave = () => {
+    setSaved("Configuration saved (local demo — values applied immediately).");
+    setTimeout(() => setSaved(""), 3500);
+  };
+
+  return (
+    <div style={{padding:20, maxWidth:800}}>
+      {/* Header */}
+      <div style={{marginBottom:20, paddingBottom:14, borderBottom:`1px solid ${C.line2}`}}>
+        <div style={{fontFamily:mono, fontSize:16, fontWeight:700, color:C.p1, letterSpacing:1}}>
+          Governor Settings
+        </div>
+        <div style={{fontFamily:mono, fontSize:12, color:C.p3, marginTop:4, lineHeight:1.6}}>
+          Configure auto-kill-switch thresholds, review policies, and notification preferences.
+          Changes apply immediately in this demo session.
+        </div>
+      </div>
+
+      {saved && <div style={{fontFamily:mono, fontSize:12, color:C.green, padding:"8px 12px", marginBottom:12,
+        border:`1px solid ${C.green}`, background:"rgba(34,197,94,0.06)"}}>{saved}</div>}
+
+      {/* ═══ Section 1: Auto Kill-Switch ═══ */}
+      <div style={{marginBottom:24, padding:16, border:`1px solid ${C.line2}`, background:C.bg1}}>
+        <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14}}>
+          <div>
+            <div style={{fontFamily:mono, fontSize:13, fontWeight:700, color:C.p1, letterSpacing:1}}>
+              AUTO KILL-SWITCH
+            </div>
+            <div style={{fontFamily:mono, fontSize:11, color:C.p3, marginTop:2}}>
+              Automatically engage kill switch when threat thresholds are breached
+            </div>
+          </div>
+          <button onClick={() => onConfigChange({ ...config, auto_ks_enabled: !config.auto_ks_enabled })}
+            style={{ fontFamily:mono, fontSize:12, fontWeight:700, padding:"6px 18px", cursor:"pointer",
+              border:`1px solid ${config.auto_ks_enabled ? C.amber : C.line2}`,
+              color: config.auto_ks_enabled ? C.amber : C.muted,
+              background: config.auto_ks_enabled ? "rgba(245,158,11,0.1)" : "transparent",
+              letterSpacing:1 }}>
+            {config.auto_ks_enabled ? "ENABLED" : "DISABLED"}
+          </button>
+        </div>
+
+        <div style={{display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:16}}>
+          <div>
+            <div style={{fontFamily:mono, fontSize:10, color:C.muted, letterSpacing:0.5, marginBottom:4}}>
+              BLOCK THRESHOLD
+            </div>
+            {numInput("auto_ks_block_threshold", 1, 100)}
+            <div style={{fontFamily:mono, fontSize:10, color:C.p3, marginTop:3}}>
+              Blocks in window to trigger KS
+            </div>
+          </div>
+          <div>
+            <div style={{fontFamily:mono, fontSize:10, color:C.muted, letterSpacing:0.5, marginBottom:4}}>
+              RISK THRESHOLD
+            </div>
+            {numInput("auto_ks_risk_threshold", 1, 100)}
+            <div style={{fontFamily:mono, fontSize:10, color:C.p3, marginTop:3}}>
+              Avg risk score to trigger KS
+            </div>
+          </div>
+          <div>
+            <div style={{fontFamily:mono, fontSize:10, color:C.muted, letterSpacing:0.5, marginBottom:4}}>
+              WINDOW SIZE
+            </div>
+            {numInput("auto_ks_window_size", 1, 200)}
+            <div style={{fontFamily:mono, fontSize:10, color:C.p3, marginTop:3}}>
+              Recent actions to evaluate
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ Section 2: Review Queue ═══ */}
+      <div style={{marginBottom:24, padding:16, border:`1px solid ${C.line2}`, background:C.bg1}}>
+        <div style={{fontFamily:mono, fontSize:13, fontWeight:700, color:C.p1, letterSpacing:1, marginBottom:4}}>
+          REVIEW QUEUE
+        </div>
+        <div style={{fontFamily:mono, fontSize:11, color:C.p3, marginBottom:14}}>
+          Actions above the review risk threshold are flagged for human review
+        </div>
+        <div style={{display:"flex", alignItems:"center", gap:12}}>
+          <div>
+            <div style={{fontFamily:mono, fontSize:10, color:C.muted, letterSpacing:0.5, marginBottom:4}}>
+              REVIEW RISK THRESHOLD
+            </div>
+            {numInput("review_risk_threshold", 0, 100)}
+          </div>
+          <div style={{fontFamily:mono, fontSize:10, color:C.p3, marginTop:16}}>
+            Allowed actions with risk ≥ this value will be promoted to "review"
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ Section 3: Notifications ═══ */}
+      <div style={{marginBottom:24, padding:16, border:`1px solid ${C.line2}`, background:C.bg1}}>
+        <div style={{fontFamily:mono, fontSize:13, fontWeight:700, color:C.p1, letterSpacing:1, marginBottom:4}}>
+          NOTIFICATIONS
+        </div>
+        <div style={{fontFamily:mono, fontSize:11, color:C.p3, marginBottom:14}}>
+          Control which events trigger notifications (simulated in demo)
+        </div>
+        <div style={{display:"flex", gap:10, flexWrap:"wrap"}}>
+          {toggleBtn("notify_on_block", "On Block")}
+          {toggleBtn("notify_on_review", "On Review")}
+          {toggleBtn("notify_on_auto_ks", "On Auto-KS")}
+        </div>
+      </div>
+
+      {/* ═══ Save button ═══ */}
+      <div style={{marginBottom:30, display:"flex", gap:10}}>
+        <button onClick={handleSave}
+          style={{ fontFamily:mono, fontSize:12, fontWeight:700, padding:"8px 28px", cursor:"pointer",
+            border:`1px solid ${C.green}`, color:C.bg0, background:C.green, letterSpacing:1 }}>
+          SAVE CONFIGURATION
+        </button>
+        <div style={{fontFamily:mono, fontSize:10, color:C.muted, alignSelf:"center"}}>
+          Editing: <span style={{color:C.p2}}>* (global)</span>
+        </div>
+      </div>
+
+      {/* ═══ Section 4: Webhooks (simulated) ═══ */}
+      <div style={{marginBottom:24, padding:16, border:`1px solid ${C.line2}`, background:C.bg1}}>
+        <div style={{fontFamily:mono, fontSize:13, fontWeight:700, color:C.p1, letterSpacing:1, marginBottom:4}}>
+          WEBHOOKS
+        </div>
+        <div style={{fontFamily:mono, fontSize:11, color:C.p3, marginBottom:14}}>
+          HTTP POST notifications on escalation events (simulated in demo — requires live API for persistence)
+        </div>
+        <div style={{fontFamily:mono, fontSize:11, color:C.p3, padding:"16px 0", textAlign:"center",
+          border:`1px dashed ${C.line2}`, background:C.bg0}}>
+          Connect to a live Governor API to manage webhooks.
+          <br/>Set <span style={{color:C.p2}}>NEXT_PUBLIC_GOVERNOR_API</span> to enable.
+        </div>
+      </div>
+
+      {/* ═══ Current config summary ═══ */}
+      <div style={{marginBottom:20, padding:16, border:`1px solid ${C.line}`, background:C.bg0}}>
+        <div style={{fontFamily:mono, fontSize:11, color:C.muted, letterSpacing:1, marginBottom:10}}>
+          ACTIVE CONFIGURATION
+        </div>
+        <div style={{fontFamily:mono, fontSize:11, color:C.p3, lineHeight:2}}>
+          auto-KS: {config.auto_ks_enabled ? <span style={{color:C.amber}}>ON</span> : "off"}
+          {" · "}blocks≥{config.auto_ks_block_threshold}
+          {" · "}risk≥{config.auto_ks_risk_threshold}
+          {" · "}window:{config.auto_ks_window_size}
+          {" · "}review≥{config.review_risk_threshold}
+          <br/>
+          notify: block={config.notify_on_block?"on":"off"}
+          {" · "}review={config.notify_on_review?"on":"off"}
+          {" · "}auto-ks={config.notify_on_auto_ks?"on":"off"}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ═══════════════════════════════════════════════════════════
 // ROOT APP
 // ═══════════════════════════════════════════════════════════
 // Tabs visible per role
 // ═══════════════════════════════════════════════════════════
-// REDESIGNED — ROLE_TABS + ALL_TABS (SURGE added)
+// REDESIGNED — ROLE_TABS + ALL_TABS (SURGE + SETTINGS added)
 // ═══════════════════════════════════════════════════════════
 const ROLE_TABS = {
-  admin:    ["dashboard","tester","simulator","policies","surge","audit","topology","apikeys","users"],
-  operator: ["dashboard","tester","simulator","policies","surge","audit","topology","apikeys"],
+  admin:    ["dashboard","tester","simulator","policies","surge","audit","topology","settings","apikeys","users"],
+  operator: ["dashboard","tester","simulator","policies","surge","audit","topology","settings","apikeys"],
   auditor:  ["dashboard","surge","audit","topology","apikeys"],
 };
 
@@ -3672,8 +3950,9 @@ const ALL_TABS = [
   { id:"surge",     label:"SURGE",             icon:"⬡" },
   { id:"audit",     label:"Audit Trail",       icon:"☰" },
   { id:"topology",  label:"Topology",          icon:"◎" },
+  { id:"settings",  label:"Settings",          icon:"⚙" },
   { id:"apikeys",   label:"API Keys",          icon:"🔑" },
-  { id:"users",     label:"User Management",   icon:"⚙", adminOnly:true },
+  { id:"users",     label:"User Management",   icon:"👥", adminOnly:true },
 ];
 
 // ═══════════════════════════════════════════════════════════
@@ -3853,6 +4132,18 @@ function GovernorDashboard({ userRole="operator", userName="", onLogout=()=>{} }
   const [surgeReceipts, setSurgeReceipts] = useState([]);
   const [stakedPolicies, setStakedPolicies] = useState([]);
 
+  // Settings config (client-side, drives auto-KS thresholds)
+  const [govConfig, setGovConfig] = useState({
+    auto_ks_enabled: false,
+    auto_ks_block_threshold: 3,
+    auto_ks_risk_threshold: 82,
+    auto_ks_window_size: 10,
+    review_risk_threshold: 70,
+    notify_on_block: true,
+    notify_on_review: true,
+    notify_on_auto_ks: true,
+  });
+
   useEffect(()=>{
     const t = setInterval(()=>{
       setClock(new Date().toISOString().replace("T"," ").slice(0,19)+" UTC");
@@ -3861,35 +4152,36 @@ function GovernorDashboard({ userRole="operator", userName="", onLogout=()=>{} }
     return ()=>clearInterval(t);
   },[]);
 
-  // Auto kill switch
-  const AUTO_KS_BLOCK_THRESHOLD = 3;
-  const AUTO_KS_RISK_THRESHOLD  = 82;
+  // Auto kill switch — uses govConfig thresholds
   const autoKsCooldown = useRef(false);
   const handleKSResume = () => { autoKsCooldown.current = true; handleKS(false); };
 
   useEffect(()=>{
-    if (!autoKsEnabled) return;
+    if (!govConfig.auto_ks_enabled && !autoKsEnabled) return;
     if (killSwitch) return;
-    const recentBlocks = gs.log.slice(0,10).filter(e=>e.decision==="block").length;
+    const windowSize = govConfig.auto_ks_window_size || 10;
+    const recentBlocks = gs.log.slice(0,windowSize).filter(e=>e.decision==="block").length;
     const avgRisk = gs.total ? gs.riskSum / gs.total : 0;
-    const threatActive = recentBlocks >= AUTO_KS_BLOCK_THRESHOLD || avgRisk >= AUTO_KS_RISK_THRESHOLD;
+    const blockThreshold = govConfig.auto_ks_block_threshold || 3;
+    const riskThreshold = govConfig.auto_ks_risk_threshold || 82;
+    const threatActive = recentBlocks >= blockThreshold || avgRisk >= riskThreshold;
     if (autoKsCooldown.current) { if (!threatActive) autoKsCooldown.current = false; return; }
     if (threatActive) {
       handleKS(true);
       addAudit("AUTONOMOUS_HALT", {
-        label:`AUTO KILL SWITCH — ${recentBlocks >= AUTO_KS_BLOCK_THRESHOLD
-          ? `${recentBlocks} blocks in last 10 actions`
+        label:`AUTO KILL SWITCH — ${recentBlocks >= blockThreshold
+          ? `${recentBlocks} blocks in last ${windowSize} actions`
           : `avg risk ${Math.round(avgRisk)}/100 exceeded threshold`}`,
-        trigger: recentBlocks >= AUTO_KS_BLOCK_THRESHOLD ? "block-count" : "avg-risk",
+        trigger: recentBlocks >= blockThreshold ? "block-count" : "avg-risk",
         recentBlocks, avgRisk: Math.round(avgRisk),
       });
       showNarr(`⚡ AUTONOMOUS HALT — Governor self-engaged kill switch: ${
-        recentBlocks >= AUTO_KS_BLOCK_THRESHOLD
-          ? `${recentBlocks} blocks detected in last 10 actions`
-          : `avg risk ${Math.round(avgRisk)}/100 exceeded threshold ${AUTO_KS_RISK_THRESHOLD}`
+        recentBlocks >= blockThreshold
+          ? `${recentBlocks} blocks detected in last ${windowSize} actions`
+          : `avg risk ${Math.round(avgRisk)}/100 exceeded threshold ${riskThreshold}`
       }. No human instruction required.`);
     }
-  }, [gs.log, gs.riskSum, gs.total, killSwitch, autoKsEnabled]);
+  }, [gs.log, gs.riskSum, gs.total, killSwitch, autoKsEnabled, govConfig]);
 
   // No auto-seed — each user starts with a clean slate.
   // Use Agent Simulator "Run Demo Sequence" or individual scenarios to populate.
@@ -4059,7 +4351,7 @@ function GovernorDashboard({ userRole="operator", userName="", onLogout=()=>{} }
             {/* Auto KS */}
             <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8}}>
               <div style={{fontFamily:mono, fontSize:8, color:C.muted, letterSpacing:1}}>AUTO-KS</div>
-              <button onClick={()=>setAutoKs(v=>!v)} style={{
+              <button onClick={()=>{setAutoKs(v=>!v); setGovConfig(c=>({...c, auto_ks_enabled:!c.auto_ks_enabled}));}} style={{
                 fontFamily:mono, fontSize:7.5, letterSpacing:1, padding:"2px 8px",
                 border:`1px solid ${autoKsEnabled?C.amber:C.line2}`,
                 color:autoKsEnabled?C.amber:C.p3,
@@ -4184,6 +4476,7 @@ function GovernorDashboard({ userRole="operator", userName="", onLogout=()=>{} }
           {tab==="surge"     && <SurgeTab receipts={surgeReceipts} stakedPolicies={stakedPolicies} setStaked={setStakedPolicies} userRole={userRole}/>}
           {tab==="audit"     && <AuditTrailTab auditLog={auditLog} policySnapshots={policySnapshots}/>}
           {tab==="topology"  && <TopologyTab gs={gs} killSwitch={killSwitch} degraded={degraded}/>}
+          {tab==="settings"  && (userRole==="admin"||userRole==="operator") && <SettingsTab config={govConfig} onConfigChange={c=>{setGovConfig(c); setAutoKs(c.auto_ks_enabled);}}/>}
           {tab==="apikeys"   && <ApiKeysTab/>}
           {tab==="users"     && userRole==="admin" && <AdminUserManagementTab/>}
         </div>
