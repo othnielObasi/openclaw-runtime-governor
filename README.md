@@ -47,6 +47,7 @@ Your AI Agent                          The Real World
  │  ③ Scope Enforcer ── tool allowed?    │   │
  │  ④ Policy Engine ── rule match?       │   │
  │  ⑤ Neuro Risk + Chain Analysis        │   │
+ │  ⑥ Post-Execution Verification        │   │
  │                                       │   │
  │  Verdict: BLOCK (risk 95/100)         │   │
  │  "Destructive filesystem operation"   │   │
@@ -54,6 +55,7 @@ Your AI Agent                          The Real World
  │  ──► Audit log persisted              │   │
  │  ──► SSE event pushed to dashboard    │   │
  │  ──► SURGE receipt generated          │   │
+ │  ──► Escalation queue + notifications │   │
  └───────────────────────────────────────┘   │
      │                                       │
      ✗  Agent receives block — tool          │
@@ -72,7 +74,7 @@ The pipeline **short-circuits**: a kill switch fires before the injection scan e
 | Output filtering | After LLM response | ❌ Post-hoc | Partially | ❌ | ❌ |
 | Fine-tuning / RLHF | Model weights | ❌ Static | ❌ Probabilistic | ❌ | ❌ |
 | API rate limiting | HTTP layer | ✅ | ✅ | ❌ | Partially |
-| **OpenClaw Governor** | **Tool call interception** | **✅ Real-time** | **✅ 100%** | **✅ 6 patterns** | **✅ Full trace + attestation** |
+| **OpenClaw Governor** | **Tool call interception** | **✅ Real-time** | **✅ 100%** | **✅ 11 patterns** | **✅ Full trace + attestation** |
 
 The Governor doesn't try to make the AI "behave better." It operates at the **execution boundary** — the moment an agent's decision becomes a real-world action — with deterministic, auditable, policy-driven rules that no prompt injection can bypass.
 
@@ -82,7 +84,9 @@ The Governor doesn't try to make the AI "behave better." It operates at the **ex
 - **🔥 Prompt injection firewall.** 11 injection patterns scanned on every tool-call payload — catches jailbreaks that survive the LLM layer and reach the tool execution boundary.
 - **📜 Full policy engine.** YAML base policies + dynamic DB policies with CRUD, partial updates (PATCH), active/inactive toggle, and regex validation. Not just alerts — enforceable rules.
 - **🚨 Kill switch.** One API call halts every agent globally. DB-persisted, survives restarts. When things go wrong at 3 AM, you have an instant off switch.
-- **🔗 Multi-step attack detection.** 6 chain patterns evaluated in real-time across a 60-minute session window. Catches credential-then-exfiltration, read-write-execute chains, and scope probing that look innocent one step at a time.
+- **🔗 Multi-step attack detection.** 11 chain patterns evaluated in real-time across a 60-minute session window. Catches credential-then-exfiltration, read-write-execute chains, scope probing, privilege escalation, and data staging that look innocent one step at a time.
+- **🔍 Post-execution verification.** 8-check verification engine inspects tool *results* after execution — credential leak scan, destructive output detection, intent-alignment, diff size anomaly, output injection scan, independent re-verification against policies, and cross-session drift detection. Catches agents that execute blocked actions or produce unsafe output.
+- **💬 Conversation logging.** Opt-in capture of agent prompts and reasoning with encrypted-at-rest storage, conversation timelines, and correlation to governance decisions. See what the agent was *thinking* when it made each tool call.
 - **⚡ Real-time streaming.** Server-Sent Events push every governance decision to dashboards within milliseconds. You don't poll for safety — you *watch* it happen.
 - **🔍 Agent trace observability.** Full agent lifecycle tracing: LLM calls, tool invocations, and retrieval steps captured as spans in an OpenTelemetry-inspired trace tree. Governance decisions are auto-injected as child spans — see *exactly* where in the agent's reasoning chain each policy fired.
 - **🔬 Post-mortem reconstruction.** When an agent misbehaves, pull the full trace, expand each span, see the governance pipeline results, and trace root cause from the agent's first thought to its last blocked action.
@@ -96,8 +100,8 @@ The Governor doesn't try to make the AI "behave better." It operates at the **ex
 
 | Directory | What | Version |
 |-----------|------|---------|
-| [`governor-service/`](governor-service/) | FastAPI backend — 5-layer pipeline, auth, SSE streaming, SURGE, audit | 0.3.0 |
-| [`dashboard/`](dashboard/) | Next.js control panel — real-time monitoring, policy editor, admin | 0.2.0 |
+| [`governor-service/`](governor-service/) | FastAPI backend — 6-layer pipeline, auth, SSE streaming, SURGE, verification, conversations | 0.4.0 |
+| [`dashboard/`](dashboard/) | Next.js control panel — 16 tabs, real-time monitoring, policy editor, verification, traces | 0.3.0 |
 | [`openclaw-skills/governed-tools/`](openclaw-skills/governed-tools/) | Python SDK (`openclaw-governor-client` on PyPI) | 0.3.0 |
 | [`openclaw-skills/governed-tools/js-client/`](openclaw-skills/governed-tools/js-client/) | TypeScript/JS SDK (`@openclaw/governor-client` on npm) — dual CJS + ESM | 0.3.0 |
 | [`openclaw-skills/governed-tools/java-client/`](openclaw-skills/governed-tools/java-client/) | Java SDK (`dev.openclaw:governor-client` on Maven Central) — zero deps, Java 11+ | 0.3.0 |
@@ -279,7 +283,7 @@ Matches against two policy sources:
 - **Dynamic policies** — created at runtime via API, stored in the database. Each policy has an `is_active` toggle — disable policies without deleting them. Regex patterns (`url_regex`, `args_regex`) are validated at creation and update time. Partial updates via PATCH.
 
 ### Layer 5 — Neuro Risk Estimator + Chain Analysis
-Heuristic risk scorer (0–100) based on tool type, sensitive keywords, and bulk-recipient detection. **Chain analysis** examines session history across a 60-minute window to detect 6 multi-step attack patterns:
+Heuristic risk scorer (0–100) based on tool type, sensitive keywords, and bulk-recipient detection. **Chain analysis** examines session history across a 60-minute window to detect 11 multi-step attack patterns:
 
 | Pattern | Risk Boost | What it catches |
 |---------|------------|-----------------|
@@ -289,6 +293,79 @@ Heuristic risk scorer (0–100) based on tool type, sensitive keywords, and bulk
 | `credential-then-http` | +55 | Credential access then network request |
 | `rapid-tool-switching` | +30 | 5+ distinct tools in quick succession |
 | `block-bypass-retry` | +40 | Retrying a blocked action with variations |
+| `privilege-escalation` | +50 | Sudo/admin access followed by system changes |
+| `data-staging` | +40 | Multiple file reads before a network send |
+| `env-recon` | +35 | Environment/config probing before writes |
+| `multi-cred-harvest` | +60 | Multiple credential-related tool calls |
+| `delayed-exfil` | +45 | Long gap between data access and exfiltration |
+
+---
+
+## Post-Execution Verification
+
+The Governor doesn't just gate *intent* — it verifies *results*. After a tool executes, submit the output for an 8-check verification scan:
+
+```
+Agent executes tool → POST /actions/verify { action_id, result, diff }
+                                    │
+                    ┌───────────────┼───────────────────┐
+                    │  8 verification checks:            │
+                    │  ① Credential leak scan            │
+                    │  ② Destructive output detection    │
+                    │  ③ Scope compliance                │
+                    │  ④ Diff size anomaly               │
+                    │  ⑤ Intent-alignment (block bypass) │
+                    │  ⑥ Output injection scan           │
+                    │  ⑦ Independent re-verification     │
+                    │  ⑧ Cross-session drift detection   │
+                    └────────────────────────────────────┘
+                                    │
+                    Verdict: compliant | suspicious | violation
+                    + escalation if violation detected
+```
+
+Each check runs independently and contributes to a risk delta. The intent-alignment check catches agents that **execute actions that were blocked** — a critical policy bypass detection. The drift detector compares per-agent behavior baselines across sessions.
+
+---
+
+## Conversation Logging
+
+Opt-in capture of the agent's reasoning and prompts — encrypted at rest with Fernet symmetric encryption.
+
+```python
+# Agents include conversation_id + prompt in evaluate calls:
+decision = evaluate_action("shell", {"command": "ls"}, context={
+    "agent_id": "my-agent",
+    "conversation_id": "conv-abc-123",
+    "prompt": "User asked me to list directory contents"
+})
+
+# Batch ingest conversation turns:
+POST /conversations/turns/batch
+[{ "conversation_id": "conv-abc-123", "role": "user", "content": "List the files", ... }]
+```
+
+The **Conversations** tab in the dashboard shows:
+- All conversations with turn counts and timeline
+- Each turn linked to its corresponding governance action
+- Full unified timeline: turns + actions interleaved chronologically
+- Encrypted storage — prompts are only visible to authenticated admin/operator users
+
+---
+
+## Escalation & Alerting
+
+Automated escalation engine with configurable thresholds and 5 notification channels:
+
+| Channel | Integration |
+|---------|-------------|
+| Email | SMTP (any provider) |
+| Slack | Webhook URL or Bot API token |
+| WhatsApp | Meta Cloud API |
+| Jira | Issue creation via REST API |
+| Webhook | Generic HTTP POST to any URL |
+
+**Auto-kill-switch**: 3+ blocks OR average risk ≥ 82 in last 10 actions → automatic global shutdown. Per-agent thresholds supported.
 
 ---
 
@@ -353,11 +430,12 @@ All protected endpoints accept:
 
 ### Role-Based Access Control
 
-| Role | Evaluate | Logs | Policies | Kill Switch | Users | Stream |
-|------|----------|------|----------|-------------|-------|--------|
-| `admin` | ✅ | ✅ | ✅ CRUD | ✅ | ✅ CRUD | ✅ |
-| `operator` | ✅ | ✅ | ✅ CRUD | ❌ | ❌ | ✅ |
-| `auditor` | ❌ | ✅ | Read | ❌ | ❌ | ✅ |
+| Role | Evaluate | Logs | Policies | Kill Switch | Users | Stream | Verify |
+|------|----------|------|----------|-------------|-------|--------|--------|
+| `superadmin` | ✅ | ✅ | ✅ CRUD | ✅ | ✅ CRUD | ✅ | ✅ |
+| `admin` | ✅ | ✅ | ✅ CRUD | ✅ | ✅ CRUD | ✅ | ✅ |
+| `operator` | ✅ | ✅ | ✅ CRUD | ❌ | ❌ | ✅ | ✅ |
+| `auditor` | ❌ | ✅ | Read | ❌ | ❌ | ✅ | ❌ |
 
 ### Production Safeguards
 - JWT secret **must** be changed from default — startup fails otherwise
@@ -410,7 +488,7 @@ python governor_agent.py --demo   # Single observation cycle
 
 ## DeFi Research Agent Demo
 
-[`demo_agent.py`](demo_agent.py) is an end-to-end live governance demo — an autonomous DeFi research agent that makes real tool calls through the Governor, progressing from safe research to dangerous operations.
+[`demo_agent.py`](demo_agent.py) is an end-to-end live governance demo — an autonomous DeFi research agent that makes real tool calls through the Governor, progressing from safe research to dangerous operations, with full verification and conversation logging.
 
 | Phase | Tools | Expected Outcome |
 |-------|-------|------------------|
@@ -419,8 +497,9 @@ python governor_agent.py --demo   # Single observation cycle
 | 3. Trade Execution | `execute_swap`, `http_request`, `messaging_send` | ⚠️ REVIEW |
 | 4. Dangerous Ops | `shell rm -rf`, `surge_transfer_ownership`, credential exfil | 🚫 BLOCK |
 | 5. Attack Chain | scope violation, injection attempt, `base64_decode` | 🚫 BLOCK + chain detection |
+| 6. Verification | 8 scenarios (compliant + violation) | ✅ 8/8 verified |
 
-Every evaluation includes `trace_id`/`span_id`, so the full session appears in the **Trace Viewer** with governance decisions inline.
+Every evaluation includes `trace_id`/`span_id` and `conversation_id`, so the full session appears in the **Trace Viewer** and **Conversations** tab with governance decisions inline.
 
 ```bash
 # Run against local server
@@ -436,7 +515,7 @@ python demo_agent.py --verbose
 python demo_agent.py --fee-gating
 ```
 
-Sample output: **17 evaluations** → 9 allowed, 2 reviewed, 6 blocked, avg risk 45.9. Chain analysis detects `browse-then-exfil` and `credential-then-http` patterns.
+Sample output: **17 evaluations** → 9 allowed, 2 reviewed, 6 blocked, avg risk 45.9. **8/8 verification scenarios** pass. Chain analysis detects `browse-then-exfil` and `credential-then-http` patterns. 5 conversation turns and 22+ trace spans persisted.
 
 ---
 
@@ -499,13 +578,48 @@ Sample output: **17 evaluations** → 9 allowed, 2 reviewed, 6 blocked, avg risk
 | `GET` | `/traces/{trace_id}` | Any | Full trace: all spans + correlated governance decisions |
 | `DELETE` | `/traces/{trace_id}` | Operator+ | Delete all spans for a trace |
 
+### Verification — Post-Execution Checks
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `POST` | `/actions/verify` | Operator+ | Run 8-check verification on tool execution result |
+| `GET` | `/actions/verifications` | Any | List verification logs (`?verdict=`, `?agent_id=`) |
+
+### Conversations — Agent Reasoning Capture
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/conversations` | Any | List all conversations with turn counts |
+| `GET` | `/conversations/{id}/turns` | Any | Get turns for a conversation |
+| `GET` | `/conversations/{id}/timeline` | Any | Unified timeline: turns + actions interleaved |
+| `POST` | `/conversations/turns/batch` | Operator+ | Batch ingest conversation turns (encrypted at rest) |
+| `POST` | `/conversations/turns` | Operator+ | Ingest single conversation turn |
+| `GET` | `/conversations/stats` | Any | Conversation statistics |
+
+### Escalation
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/escalation/events` | Any | List escalation events (`?status=`, `?severity=`) |
+| `PUT` | `/escalation/events/{id}/approve` | Admin | Approve a pending escalation |
+| `PUT` | `/escalation/events/{id}/reject` | Admin | Reject a pending escalation |
+| `GET` | `/escalation/config` | Admin | Get escalation thresholds |
+| `PUT` | `/escalation/config` | Admin | Update escalation thresholds |
+
+### Notifications
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/notifications/channels` | Any | List notification channels |
+| `POST` | `/notifications/channels` | Admin | Create notification channel (email/slack/whatsapp/jira/webhook) |
+| `PUT` | `/notifications/channels/{id}` | Admin | Update channel config |
+| `DELETE` | `/notifications/channels/{id}` | Admin | Delete a channel |
+
 ---
 
 ## Testing
 
 ```bash
-# Backend — 79 tests (24 governance + 11 SURGE + 18 policy + 16 traces + 10 SSE streaming)
+# Backend — 246 tests across 8 test files
 cd governor-service && pytest tests/ -v
+# Includes: governance pipeline, conversations, verification, escalation,
+#           policies+versioning, SSE streaming, traces, and notification channels
 
 # TypeScript/JS SDK — 10 tests
 cd openclaw-skills/governed-tools/js-client && npm test
@@ -518,10 +632,15 @@ cd openclaw-skills/governed-tools/java-client && mvn test
 
 ## Deployment
 
-| Component | Platform | Config |
-|-----------|----------|--------|
-| Governor Service | Fly.io | [`fly.toml`](governor-service/fly.toml), [`Dockerfile`](governor-service/Dockerfile) |
-| Dashboard | Vercel | [`vercel.json`](dashboard/vercel.json) |
+| Component | Platform | URL | Config |
+|-----------|----------|-----|--------|
+| Governor Service (primary) | Fly.io | `https://openclaw-governor.fly.dev` | [`fly.toml`](governor-service/fly.toml), [`Dockerfile`](governor-service/Dockerfile) |
+| Governor Service (standby) | Vultr VPS | `http://45.76.141.204:8000` | [`vultr/docker-compose.yml`](governor-service/vultr/docker-compose.yml) |
+| Dashboard (primary) | Vercel | `https://openclaw-runtime-governor.vercel.app` | [`vercel.json`](dashboard/vercel.json) |
+| Dashboard (mirror) | Vercel | `https://openclaw-runtime-governor-j9py.vercel.app` | Same source |
+| Dashboard (standby) | Vultr VPS | `http://45.76.141.204:3000` | Docker (Next.js standalone) |
+
+Both backends run PostgreSQL 16 with 17 tables. Data persists across container restarts and redeployments.
 
 See [`DEPLOY.md`](DEPLOY.md) for full instructions, [`PUBLISHING.md`](PUBLISHING.md) for SDK publishing, [`DEVELOPER.md`](DEVELOPER.md) for contributor guide.
 
@@ -533,11 +652,13 @@ See [`DEPLOY.md`](DEPLOY.md) for full instructions, [`PUBLISHING.md`](PUBLISHING
 |-------|-----------|
 | Backend | Python 3.12, FastAPI 0.115, SQLAlchemy 2.0, Pydantic 2.8 |
 | Real-time | Server-Sent Events (SSE), asyncio event bus |
-| Auth | bcrypt, python-jose (JWT HS256), slowapi rate limiting |
-| Database | SQLite (dev) / PostgreSQL (prod) |
-| Dashboard | Next.js 14.2, React 18.3, TypeScript |
+| Auth | bcrypt, python-jose (JWT HS256), slowapi rate limiting, RBAC (4 roles) |
+| Database | SQLite (dev) / PostgreSQL 16 (prod) — 17 tables |
+| Encryption | Fernet symmetric (conversation prompts at rest) |
+| Dashboard | Next.js 14.2, React 18.3, TypeScript — 16 tabs |
 | SDKs | Python (httpx), TypeScript/JS (fetch), Java (HttpClient) |
-| Deployment | Fly.io (backend), Vercel (dashboard) |
+| Deployment | Fly.io + Vultr VPS (backend), Vercel × 2 + Vultr (dashboard) |
+| CI/CD | GitHub Actions (dashboard), Docker Compose (Vultr) |
 
 ---
 

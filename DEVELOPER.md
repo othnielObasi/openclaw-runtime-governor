@@ -26,7 +26,8 @@ openclaw-runtime-governor/
 │   │   ├── main.py          # FastAPI app, CORS, router registration
 │   │   ├── config.py        # All env vars via pydantic-settings
 │   │   ├── database.py      # SQLAlchemy engine, session factory
-│   │   ├── models.py        # ORM: ActionLog, PolicyModel, User, GovernorState
+│   ├── models.py          # ORM: 17 models (ActionLog, PolicyModel, User, GovernorState,
+│   │   │                     #   ConversationTurn, VerificationLog, EscalationEvent, etc.)
 │   │   ├── schemas.py       # Pydantic v2 request/response schemas
 │   │   ├── state.py         # Kill switch — DB-persisted, thread-safe
 │   │   ├── session_store.py # Session history reconstruction for chain analysis
@@ -40,7 +41,11 @@ openclaw-runtime-governor/
 │   │   │   ├── routes_policies.py  # CRUD /policies
 │   │   │   ├── routes_admin.py     # Kill switch control
 │   │   │   ├── routes_summary.py   # GET /summary/moltbook
-│   │   │   └── routes_surge.py     # SURGE receipts, staking
+│   │   │   ├── routes_surge.py   # SURGE receipts, staking
+│   │   │   ├── routes_verify.py  # POST /actions/verify, GET /actions/verifications
+│   │   │   ├── routes_conversations.py  # 6 conversation endpoints
+│   │   │   ├── routes_notifications.py  # Notification channel CRUD
+│   │   │   └── routes_escalation.py     # Escalation events/config
 │   │   │
 │   │   ├── auth/
 │   │   │   ├── core.py         # bcrypt hashing, JWT encode/decode, API key gen
@@ -48,6 +53,11 @@ openclaw-runtime-governor/
 │   │   │   ├── routes_auth.py  # Login, user CRUD, key rotation
 │   │   │   └── seed.py         # Default admin seeding on startup
 │   │   │
+│   │   ├── escalation/
+│   │   │   ├── engine.py          # Escalation engine — review queue, auto-kill-switch
+│   │   │   └── notifier.py        # 5-channel notification dispatch
+│   │   ├── verification/
+│   │   │   └── engine.py          # 8-check post-execution verification
 │   │   ├── neuro/
 │   │   │   └── risk_estimator.py  # Heuristic risk scoring (0-100)
 │   │   │
@@ -60,8 +70,14 @@ openclaw-runtime-governor/
 │   │       └── logger.py       # Writes action logs to DB
 │   │
 │   ├── tests/
-│   │   ├── test_governor.py    # 24 governance pipeline tests
-│   │   └── test_stream.py     # 10 SSE streaming tests
+│   │   ├── test_governor.py       # Governance pipeline tests
+│   │   ├── test_conversations.py  # Conversation logging tests
+│   │   ├── test_escalation.py     # Escalation engine tests
+│   │   ├── test_policies.py       # Policy CRUD + versioning tests
+│   │   ├── test_stream.py         # SSE streaming tests
+│   │   ├── test_traces.py         # Trace observability tests
+│   │   ├── test_verification.py   # Post-execution verification tests
+│   │   └── test_versioning.py     # Policy versioning + notification channel tests
 │   ├── conftest.py             # Session-scoped DB fixtures
 │   ├── requirements.txt
 │   ├── Dockerfile
@@ -76,8 +92,8 @@ openclaw-runtime-governor/
 │   │   ├── AuthContext.tsx        # Auth React context
 │   │   ├── GovernorLogin.tsx      # Login page (TypeScript)
 │   │   ├── GovernorLogin.jsx      # Login page (JSX variant)
-│   │   ├── GovernorDashboard.jsx  # Live dashboard (3453 lines)
-│   │   ├── Governordashboard-demo.jsx  # Demo dashboard (4061 lines)
+│   │   ├── GovernorDashboard.jsx  # Live dashboard (~7011 lines, 16 tabs)
+│   │   ├── Governordashboard-demo.jsx  # Demo dashboard (self-contained)
 │   │   ├── ActionTester.tsx       # Tool evaluation form
 │   │   ├── AdminStatus.tsx        # Kill switch toggle
 │   │   ├── PolicyEditor.tsx       # Policy CRUD
@@ -195,7 +211,7 @@ NEXT_PUBLIC_GOVERNOR_API=http://localhost:8000 npm run dev
 The heart of the system is `governor-service/app/policies/engine.py`. When a tool call arrives at `POST /actions/evaluate`, it passes through 5 layers in order:
 
 ```
-Kill Switch → Injection Firewall → Scope Enforcer → Policy Engine → Neuro + Chain
+Kill Switch → Injection Firewall → Scope Enforcer → Policy Engine → Neuro + Chain → Verification
 ```
 
 Each layer can:
@@ -265,8 +281,8 @@ Session-based multi-step attack detection (`chain_analysis.py`):
 
 - Reconstructs session history from `action_logs` table (60-minute window, max 50 entries)
 - Scoped by `agent_id` and optional `session_id`
-- Evaluates 6 known attack patterns in descending risk-boost order
-- Returns first matching pattern with risk boost
+- Evaluates 11 known attack patterns in descending risk-boost order
+- Returns first matching pattern with risk boost (stored in `chain_pattern` field)
 
 ### Real-Time Streaming (SSE)
 
@@ -298,14 +314,27 @@ SURGE governance features are in `api/routes_surge.py`:
 
 ## Database
 
-### Models (4 tables)
+### Models (17 tables)
 
 | Table | Model | Purpose |
 |-------|-------|---------|
-| `action_logs` | `ActionLog` | Audit trail of every evaluation |
+| `action_logs` | `ActionLog` | Audit trail of every evaluation (incl. conversation_id, turn_id, chain_pattern) |
 | `policy_models` | `PolicyModel` | Dynamic policies created via API |
-| `users` | `User` | RBAC accounts (admin/operator/auditor) |
+| `users` | `User` | RBAC accounts (superadmin/admin/operator/auditor) |
 | `governor_state` | `GovernorState` | Key-value store (kill switch state) |
+| `conversation_turns` | `ConversationTurn` | Agent conversation turns (encrypted at rest) |
+| `verification_logs` | `VerificationLog` | Post-execution verification results (8 checks) |
+| `trace_spans` | `TraceSpan` | Agent lifecycle trace spans |
+| `surge_receipts` | `SurgeReceipt` | SHA-256 governance attestation receipts |
+| `surge_wallets` | `SurgeWallet` | Virtual $SURGE agent wallets |
+| `surge_staked_policies` | `SurgeStakedPolicy` | $SURGE staked on policies |
+| `escalation_events` | `EscalationEvent` | Review queue entries (pending/approve/reject) |
+| `escalation_config` | `EscalationConfig` | Per-agent escalation thresholds |
+| `escalation_webhooks` | `EscalationWebhook` | Webhook URLs for escalation notifications |
+| `notification_channels` | `NotificationChannel` | Multi-channel notification config |
+| `policy_versions` | `PolicyVersion` | Immutable policy version snapshots |
+| `policy_audit_log` | `PolicyAuditLog` | Before/after diffs for policy changes |
+| `login_history` | `LoginHistory` | Auth events with IP + user-agent |
 
 ### Connections
 
@@ -316,7 +345,7 @@ SURGE governance features are in `api/routes_surge.py`:
 
 ### Migrations
 
-There is currently no migration tool (Alembic etc.). Tables are created via `Base.metadata.create_all()` on startup. For schema changes in development, delete `governor.db` and restart. For production, manual SQL or Alembic integration is recommended.
+Tables are created via `Base.metadata.create_all()` on startup. The `_run_migrations()` function in `main.py` handles column additions for production databases (adds `conversation_id`, `turn_id`, `chain_pattern` to existing `action_logs` tables). For development, delete `governor.db` and restart. For production, new columns are added automatically on startup.
 
 ---
 
@@ -329,29 +358,18 @@ cd governor-service
 pytest tests/ -v
 ```
 
-The test suite (**34 tests** across two files) covers:
+The test suite (**246 tests** across 8 files) covers:
 
-**`tests/test_governor.py`** (24 tests) — Governance pipeline:
-
-| Category | Tests |
-|----------|-------|
-| Basic decisions | Valid decision types, risk scoring |
-| Injection firewall | Jailbreak, override, disable-safety detection |
-| Scope enforcement | Out-of-scope block, in-scope allow, no-constraint pass |
-| Kill switch | Global block behavior |
-| Neuro estimator | Credential keywords, bulk recipients, tool type risk |
-| Execution trace | Trace presence, short-circuit on kill |
-| Chain analysis | No-history baseline, browse-then-exfil, read-write-exec, scope probing |
-| Policy cache | Invalidation behavior |
-| SURGE | Token launch review, ownership transfer block, receipt SHA-256 |
-
-**`tests/test_stream.py`** (10 tests) — SSE streaming:
-
-| Category | Tests |
-|----------|-------|
-| Event bus | Subscribe/unsubscribe, publish/receive, multiple subscribers, queue isolation, cleanup |
-| Action event | Dataclass construction and field validation |
-| SSE endpoint | Auth required, status endpoint, query param auth, evaluate→publish integration |
+| File | Tests | Coverage |
+|------|-------|----------|
+| `test_governor.py` | Governance pipeline | Decisions, firewall, scope, kill switch, neuro, chain, SURGE |
+| `test_conversations.py` | Conversation logging | Turns, batch ingest, timeline, encryption, stats |
+| `test_escalation.py` | Escalation engine | Review queue, auto-kill-switch, thresholds |
+| `test_policies.py` | Policy CRUD | Create, update, toggle, regex validation, dynamic policies |
+| `test_stream.py` | SSE streaming | Event bus, subscribers, auth, heartbeat |
+| `test_traces.py` | Trace observability | Ingest, tree reconstruction, governance correlation |
+| `test_verification.py` | Post-execution verify | 8 checks, intent-alignment, drift detection |
+| `test_versioning.py` | Versioning + notifications | Policy versions, audit log, 5 channel types |
 
 **Fixtures** (`conftest.py`): Session-scoped autouse fixture creates all tables before the suite and drops them after.
 

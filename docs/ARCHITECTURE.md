@@ -12,24 +12,36 @@ OpenClaw Agent / SDK
      │
      ├─1─ Kill Switch          ← instant block if globally halted
      │
-     ├─2─ Injection Firewall   ← scans payload for 11 prompt-injection patterns
+     ├─2─ Injection Firewall   ← scans payload for 20 prompt-injection patterns
+     │                            (Unicode NFKC normalization + zero-width stripping)
      │
      ├─3─ Scope Enforcer       ← enforces allowed_tools from context
      │
      ├─4─ Policy Engine        ← YAML base policies + DB dynamic policies
      │        ├─ base_policies.yml  (loaded at startup, cached with TTL)
-     │        └─ PolicyModel (DB)   (created at runtime via API)
+     │        └─ PolicyModel (DB)   (created at runtime via API, versioned)
      │
      ├─5─ Neuro Risk Estimator ← heuristic scoring (tool type, keywords,
      │        │                   bulk-recipients) → elevates risk_score
-     │        └─ Chain Analysis ← detects 6 multi-step attack patterns
+     │        └─ Chain Analysis ← detects 11 multi-step attack patterns
      │                            across 60-min session window
      │
-     └─► ActionDecision { decision, risk_score, explanation, policy_ids, trace }
+     └─► ActionDecision { decision, risk_score, explanation, policy_ids, trace, chain_pattern }
               │
-              ├─► Audit Logger  →  action_logs table (SQLite / Postgres)
-              ├─► Event Bus     →  broadcasts to SSE subscribers (real-time)
-              └─► SURGE Receipt →  SHA-256 governance attestation
+              ├─► Audit Logger      →  action_logs table (SQLite / Postgres)
+              ├─► Event Bus         →  broadcasts to SSE subscribers (real-time)
+              ├─► SURGE Receipt     →  SHA-256 governance attestation
+              ├─► Escalation Engine →  review queue + auto-kill-switch + notifications
+              └─► Conversation Link →  correlates with conversation_id/turn_id if provided
+
+ Post-Execution Verification (POST /actions/verify)
+     │
+     ├─ 8 checks: credential-scan, destructive-output, scope-compliance,
+     │  diff-size, intent-alignment, output-injection, independent-reverify,
+     │  drift-detection
+     ├─ Persists to verification_logs table
+     ├─ Auto-escalates violations
+     └─ Creates governance trace span
 
  SSE Streaming (GET /actions/stream)
      │
@@ -53,11 +65,12 @@ Both methods are supported simultaneously on every protected endpoint. API keys 
 
 ### RBAC
 
-| Role | Evaluate | View Logs | Policies | Kill Switch | Users | Stream | API Keys |
-|------|----------|-----------|----------|-------------|-------|--------|----------|
-| `admin` | ✅ | ✅ | ✅ CRUD | ✅ | ✅ CRUD | ✅ | ✅ own + any |
-| `operator` | ✅ | ✅ | ✅ CRUD | ❌ | ❌ | ✅ | ✅ own |
-| `auditor` | ❌ | ✅ | Read only | ❌ | ❌ | ✅ | ✅ own |
+| Role | Evaluate | View Logs | Policies | Kill Switch | Users | Stream | Verify | API Keys |
+|------|----------|-----------|----------|-------------|-------|--------|--------|----------|
+| `superadmin` | ✅ | ✅ | ✅ CRUD | ✅ | ✅ CRUD | ✅ | ✅ | ✅ own + any |
+| `admin` | ✅ | ✅ | ✅ CRUD | ✅ | ✅ CRUD | ✅ | ✅ | ✅ own + any |
+| `operator` | ✅ | ✅ | ✅ CRUD | ❌ | ❌ | ✅ | ✅ | ✅ own |
+| `auditor` | ❌ | ✅ | Read only | ❌ | ❌ | ✅ | ❌ | ✅ own |
 
 ## File Map
 
@@ -67,11 +80,14 @@ governor-service/
 │   ├── main.py               ← FastAPI app init, CORS, route registration
 │   ├── config.py             ← Settings (pydantic-settings, env vars)
 │   ├── database.py           ← SQLAlchemy engine, SessionLocal, db_session()
-│   ├── models.py             ← ActionLog, PolicyModel, User, GovernorState, SurgeReceipt, SurgeStakedPolicy, SurgeWallet
+│   ├── models.py             ← ActionLog, PolicyModel, User, GovernorState, SurgeReceipt,
+│   │                           SurgeStakedPolicy, SurgeWallet, TraceSpan, ConversationTurn,
+│   │                           VerificationLog, EscalationEvent, EscalationConfig,
+│   │                           NotificationChannel, PolicyVersion, PolicyAuditLog, LoginHistory
 │   ├── schemas.py            ← Pydantic schemas (ActionInput, ActionDecision, etc.)
 │   ├── state.py              ← Kill switch — DB-persisted, thread-safe
 │   ├── session_store.py      ← Session history reconstruction for chain analysis
-│   ├── chain_analysis.py     ← 6 multi-step attack pattern detector
+│   ├── chain_analysis.py     ← 11 multi-step attack pattern detector
 │   ├── event_bus.py          ← In-memory pub/sub — asyncio.Queue per SSE subscriber
 │   ├── rate_limit.py         ← slowapi rate limiter singleton
 │   ├── api/
@@ -79,14 +95,23 @@ governor-service/
 │   │   ├── routes_stream.py  ← GET /actions/stream (SSE), GET /actions/stream/status
 │   │   ├── routes_policies.py← GET/POST/PATCH/DELETE /policies (+ toggle, regex validation)
 │   │   ├── routes_traces.py  ← POST /traces/ingest, GET /traces, GET /traces/{id}, DELETE
+│   │   ├── routes_verify.py  ← POST /actions/verify, GET /actions/verifications
+│   │   ├── routes_conversations.py ← 6 endpoints: list, turns, timeline, batch, single, stats
 │   │   ├── routes_summary.py ← GET /summary/moltbook
 │   │   ├── routes_admin.py   ← GET /admin/status, POST /admin/kill|resume
-│   │   └── routes_surge.py   ← SURGE receipts (DB), tiered fees, virtual wallets, policy staking
+│   │   ├── routes_surge.py   ← SURGE receipts (DB), tiered fees, virtual wallets, policy staking
+│   │   ├── routes_notifications.py ← Notification channel CRUD (5 channel types)
+│   │   └── routes_escalation.py    ← Escalation events, config, approve/reject
 │   ├── auth/
 │   │   ├── core.py           ← bcrypt hashing, JWT encode/decode, API key generation
 │   │   ├── dependencies.py   ← FastAPI deps: JWT/API key extraction, role guards
 │   │   ├── routes_auth.py    ← Login, signup, user CRUD, key rotation (self-service + admin)
 │   │   └── seed.py           ← Default admin seeding on startup
+│   ├── escalation/
+│   │   ├── engine.py         ← Escalation engine — auto-kill-switch, review queue
+│   │   └── notifier.py       ← 5-channel notification dispatch (email/slack/whatsapp/jira/webhook)
+│   ├── verification/
+│   │   └── engine.py         ← 8-check post-execution verification engine
 │   ├── policies/
 │   │   ├── engine.py         ← evaluate_action() – full 5-layer pipeline
 │   │   ├── loader.py         ← Policy dataclass, load_base_policies(), load_db_policies(), cache
