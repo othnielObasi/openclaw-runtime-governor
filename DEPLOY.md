@@ -18,6 +18,74 @@ fly secrets set GOVERNOR_ENVIRONMENT="production"
 
 > **Important**: The backend refuses to start in `production` if `GOVERNOR_JWT_SECRET` is still the default.
 
+## Governor Service → Vultr (Standby)
+
+An alternative / standby backend deployment using Docker Compose on a Vultr VPS.
+Includes PostgreSQL 16 and Caddy for automatic HTTPS.
+
+### Quick start
+
+```bash
+# 1. Provision a Vultr Cloud Compute instance (Ubuntu 24.04, ≥ 1 vCPU / 1 GB)
+# 2. SSH in and run the bootstrap script:
+curl -sSL https://raw.githubusercontent.com/othnielObasi/openclaw-runtime-governor/main/governor-service/vultr/bootstrap.sh | sudo bash
+
+# 3. Switch to the deploy user and configure:
+su - deploy
+cd openclaw-runtime-governor/governor-service/vultr
+cp .env.vultr.example .env
+nano .env                              # fill in real secrets
+
+# 4. (Optional) Set your domain for automatic HTTPS:
+export DOMAIN=governor-standby.yourdomain.com
+
+# 5. Start:
+docker compose up -d
+
+# 6. Verify:
+curl http://localhost:8000/healthz     # → {"status":"ok"}
+```
+
+### Manual deploy (existing server)
+
+```bash
+git clone https://github.com/othnielObasi/openclaw-runtime-governor.git
+cd openclaw-runtime-governor/governor-service/vultr
+cp .env.vultr.example .env
+nano .env                              # fill in real secrets
+docker compose up -d
+```
+
+### Failover monitoring
+
+A cron-based health checker watches the primary (Fly.io) and alerts when it's down:
+
+```bash
+# Install the cron job (runs every minute):
+crontab -l 2>/dev/null | {
+  cat
+  echo "* * * * * /home/deploy/openclaw-runtime-governor/governor-service/vultr/failover-check.sh >> /var/log/governor-failover.log 2>&1"
+} | crontab -
+
+# Check logs:
+tail -f /var/log/governor-failover.log
+```
+
+To switch traffic to Vultr during a Fly.io outage:
+1. Update the Vercel env var: `NEXT_PUBLIC_GOVERNOR_API=https://governor-standby.yourdomain.com`
+2. Or update your DNS CNAME to point the API hostname to the Vultr IP
+3. Redeploy the dashboard on Vercel for the change to take effect
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `vultr/docker-compose.yml` | Governor + Postgres + Caddy stack |
+| `vultr/.env.vultr.example` | Template environment variables |
+| `vultr/Caddyfile` | Reverse proxy with auto-HTTPS |
+| `vultr/bootstrap.sh` | First-boot provisioning script |
+| `vultr/failover-check.sh` | Health-check & failover alerting |
+
 ## Dashboard → Vercel
 
 ```bash

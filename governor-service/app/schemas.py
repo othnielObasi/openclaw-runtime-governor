@@ -222,6 +222,75 @@ class NotificationChannelRead(BaseModel):
 # Summary / Moltbook
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Verification — post-execution compliance
+# ---------------------------------------------------------------------------
+
+class VerificationInput(BaseModel):
+    """Agent submits this after executing a tool call."""
+    action_id: int = Field(..., description="ID returned from the /actions/evaluate response log.")
+    tool: str = Field(..., description="Tool that was executed.")
+    result: Dict[str, Any] = Field(
+        ...,
+        description=(
+            "Execution result. Recognised keys: status, output, diff, error. "
+            "All values are scanned by the verification pipeline."
+        ),
+    )
+    context: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Same context as the original evaluate call (agent_id, session_id, trace_id, etc.).",
+    )
+
+
+class VerificationFinding(BaseModel):
+    """Result of one verification check."""
+    check: str = Field(..., description="Check identifier: credential-scan, scope-compliance, etc.")
+    result: str = Field(..., description="pass | fail | warn")
+    detail: str = Field(..., description="Human-readable explanation.")
+    risk_contribution: int = Field(default=0)
+    duration_ms: float = Field(default=0.0)
+
+
+class DriftSignalRead(BaseModel):
+    """One dimension of drift analysis."""
+    name: str
+    description: str
+    weight: float
+    triggered: bool = False
+    value: float = 0.0
+    detail: str = ""
+
+
+class VerificationResult(BaseModel):
+    """Governor's post-execution verdict."""
+    verification: str = Field(..., description="compliant | violation | suspicious")
+    risk_delta: int = Field(default=0, description="Risk score adjustment from verification.")
+    findings: List[VerificationFinding] = Field(default_factory=list)
+    escalated: bool = Field(default=False, description="True if the violation was escalated.")
+    escalation_id: Optional[int] = Field(default=None)
+    drift_score: Optional[float] = Field(default=None, description="Cross-session drift score 0.0–1.0.")
+    drift_signals: List[DriftSignalRead] = Field(default_factory=list)
+
+
+class VerificationLogRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    created_at: datetime
+    action_id: int
+    tool: str
+    agent_id: Optional[str] = None
+    session_id: Optional[str] = None
+    trace_id: Optional[str] = None
+    verdict: str
+    risk_delta: int = 0
+    findings_json: Optional[List[Dict[str, Any]]] = None
+    drift_score: Optional[float] = None
+    escalated: bool = False
+    escalation_id: Optional[int] = None
+
+
 class SummaryOut(BaseModel):
     total_actions: int
     blocked: int

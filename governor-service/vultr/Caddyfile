@@ -1,0 +1,81 @@
+# --------------------------------------------------------------------------
+# Caddyfile — automatic HTTPS reverse-proxy for Governor API + Dashboard
+#
+# Replace {$DOMAIN} with your actual domain, or set the DOMAIN env var.
+# If you don't have a domain yet, Caddy listens on :80 (plain HTTP).
+#
+# Routes:
+#   /healthz     → Governor backend  (port 8000)
+#   /docs, /redoc, /openapi.json → Governor backend
+#   /auth/*      → Governor backend
+#   /actions/*   → Governor backend
+#   /policies/*  → Governor backend
+#   /admin/*     → Governor backend
+#   /surge/*     → Governor backend
+#   /traces/*    → Governor backend
+#   /notifications/* → Governor backend
+#   /summary/*   → Governor backend
+#   /escalations/* → Governor backend
+#   /*           → Dashboard          (port 3000)
+# --------------------------------------------------------------------------
+
+{$DOMAIN::80} {
+    # API routes → Governor backend
+    handle /healthz {
+        reverse_proxy governor:8000
+    }
+    handle /docs* {
+        reverse_proxy governor:8000
+    }
+    handle /redoc* {
+        reverse_proxy governor:8000
+    }
+    handle /openapi.json {
+        reverse_proxy governor:8000
+    }
+    handle /auth/* {
+        reverse_proxy governor:8000
+    }
+    handle /actions/* {
+        reverse_proxy governor:8000
+    }
+    handle /policies/* {
+        reverse_proxy governor:8000
+    }
+    handle /admin/* {
+        reverse_proxy governor:8000
+    }
+    handle /surge/* {
+        reverse_proxy governor:8000
+    }
+    handle /traces/* {
+        reverse_proxy governor:8000
+    }
+    handle /notifications/* {
+        reverse_proxy governor:8000
+    }
+    handle /summary/* {
+        reverse_proxy governor:8000
+    }
+    handle /escalations/* {
+        reverse_proxy governor:8000
+    }
+
+    # Everything else → Next.js dashboard
+    handle {
+        reverse_proxy dashboard:3000
+    }
+
+    # Security headers
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy strict-origin-when-cross-origin
+        -Server
+    }
+
+    log {
+        output stdout
+        format json
+    }
+}

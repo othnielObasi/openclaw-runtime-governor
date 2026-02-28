@@ -190,6 +190,39 @@ class GovernorState(Base):
 # SURGE Token Governance — DB-persisted models
 # ---------------------------------------------------------------------------
 
+class VerificationLog(Base):
+    """Post-execution verification record — tracks compliance of actual tool results."""
+
+    __tablename__ = "verification_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+    # Link to the original pre-execution evaluation
+    action_id: Mapped[int] = mapped_column(Integer, index=True)
+
+    # Tool and context
+    tool: Mapped[str] = mapped_column(String(128), index=True)
+    agent_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
+    session_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
+    trace_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
+
+    # Result data (JSON)
+    result_json: Mapped[str] = mapped_column(Text)
+
+    # Verdict
+    verdict: Mapped[str] = mapped_column(String(32), index=True)  # compliant | violation | suspicious
+    risk_delta: Mapped[int] = mapped_column(Integer, default=0)
+    findings_json: Mapped[str] = mapped_column(Text)  # JSON array of findings
+
+    # Drift
+    drift_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
+    # Escalation
+    escalated: Mapped[bool] = mapped_column(Boolean, default=False)
+    escalation_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+
 class SurgeReceipt(Base):
     """DB-persisted governance receipt — every evaluation is recorded for on-chain attestation."""
 

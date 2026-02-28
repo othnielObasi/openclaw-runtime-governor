@@ -61,7 +61,82 @@ def _recent_policies(history: List[HistoryEntry], n: int = 10) -> List[str]:
     return policies
 
 
+def _decisions(history: List[HistoryEntry], n: int = 10) -> List[str]:
+    return [h.decision for h in history[-n:]]
+
+
+def _match_escalating_risk(history: List[HistoryEntry]) -> bool:
+    """Detect monotonically escalating risk across the session.
+
+    If the last 5+ actions show a clear upward trend in severity
+    (measured by increasingly restrictive decisions or accumulating
+    policies), the agent may be probing for boundaries.
+    """
+    recent = history[-6:]
+    if len(recent) < 5:
+        return False
+    severity_map = {"allow": 0, "review": 1, "block": 2}
+    scores = [severity_map.get(h.decision, 0) + len(h.policy_ids) for h in recent]
+    # Check if each score is >= previous (monotonic non-decrease with at least one increase)
+    increasing = all(scores[i] >= scores[i - 1] for i in range(1, len(scores)))
+    has_increase = scores[-1] > scores[0]
+    return increasing and has_increase
+
+
+def _match_argument_mutation(history: List[HistoryEntry]) -> bool:
+    """Detect the same tool being called repeatedly — possible argument
+    mutation attack where the agent varies arguments to find one that passes.
+    """
+    recent = history[-8:]
+    if len(recent) < 4:
+        return False
+    tool_counts: dict[str, int] = {}
+    for h in recent:
+        tool_counts[h.tool] = tool_counts.get(h.tool, 0) + 1
+    # If any single tool appears 4+ times in last 8, it's being hammered
+    return any(count >= 4 for count in tool_counts.values())
+
+
+def _match_privilege_chain(history: List[HistoryEntry]) -> bool:
+    """Detect privilege escalation chains: reading credentials → using them."""
+    recent = history[-8:]
+    # Look for credential-related policies followed by elevated tool use
+    cred_phase = False
+    for h in recent:
+        if any("credential" in p for p in h.policy_ids):
+            cred_phase = True
+        elif cred_phase and h.tool in {"shell", "exec", "run_code", "file_write", "http_request"}:
+            return True
+    return False
+
+
+def _match_verification_evasion(history: List[HistoryEntry]) -> bool:
+    """Detect when an agent gets blocked, then tries a different tool
+    to achieve the same goal — lateral evasion rather than retry.
+    """
+    recent = history[-10:]
+    blocked_tools = {h.tool for h in recent if h.decision == "block"}
+    if not blocked_tools:
+        return False
+    # After a block, did the agent switch to a related high-risk tool?
+    TOOL_FAMILIES = {
+        "shell": {"exec", "run_code", "subprocess", "system"},
+        "exec": {"shell", "run_code", "subprocess", "system"},
+        "file_write": {"file_append", "file_create", "file_modify"},
+        "http_request": {"browser_open", "fetch", "curl", "wget"},
+        "messaging_send": {"email_send", "slack_post", "notify"},
+    }
+    for h in recent:
+        if h.decision != "block":
+            for blocked in blocked_tools:
+                family = TOOL_FAMILIES.get(blocked, set())
+                if h.tool in family and h.tool != blocked:
+                    return True
+    return False
+
+
 CHAIN_PATTERNS: List[ChainPattern] = [
+    # ── Original patterns (maintained) ────────────────────────────────
     ChainPattern(
         name="browse-then-exfil",
         description="External HTTP browsing followed by outbound messaging — possible data exfiltration chain",
@@ -123,6 +198,45 @@ CHAIN_PATTERNS: List[ChainPattern] = [
         ),
         boost=40,
         min_actions=2,
+    ),
+    # ── New patterns — improved coverage ──────────────────────────────
+    ChainPattern(
+        name="escalating-risk",
+        description="Monotonically increasing risk severity across session — systematic boundary testing",
+        match=_match_escalating_risk,
+        boost=50,
+        min_actions=5,
+    ),
+    ChainPattern(
+        name="argument-mutation",
+        description="Same tool invoked 4+ times in 8 actions — possible argument mutation to evade policies",
+        match=_match_argument_mutation,
+        boost=45,
+        min_actions=4,
+    ),
+    ChainPattern(
+        name="privilege-chain",
+        description="Credential access followed by elevated tool use — privilege escalation chain",
+        match=_match_privilege_chain,
+        boost=65,
+        min_actions=2,
+    ),
+    ChainPattern(
+        name="verification-evasion",
+        description="Agent switching to related tools after block — lateral evasion of governance",
+        match=_match_verification_evasion,
+        boost=55,
+        min_actions=3,
+    ),
+    ChainPattern(
+        name="high-block-rate",
+        description="Over 50% of recent actions blocked — agent persistently violating governance",
+        match=lambda h: (
+            len(h) >= 4 and
+            sum(1 for e in h[-8:] if e.decision == "block") / min(8, len(h)) > 0.5
+        ),
+        boost=50,
+        min_actions=4,
     ),
 ]
 

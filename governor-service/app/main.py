@@ -11,11 +11,12 @@ from slowapi.errors import RateLimitExceeded
 from .config import settings
 from .database import Base, engine
 from .rate_limit import limiter
-from .api import routes_actions, routes_policies, routes_summary, routes_admin, routes_surge, routes_stream, routes_traces, routes_notifications
+from .api import routes_actions, routes_policies, routes_summary, routes_admin, routes_surge, routes_stream, routes_traces, routes_notifications, routes_verify
 from .auth.routes_auth import router as auth_router
 from .auth.seed import seed_admin
 from .escalation.routes import router as escalation_router
 from .escalation import models as _escalation_models  # noqa: F401 — register tables
+from . import verification as _verification_models  # noqa: F401 — register VerificationLog table
 
 # ---------------------------------------------------------------------------
 # Structured logging
@@ -82,6 +83,7 @@ app.include_router(routes_stream.router)
 app.include_router(routes_traces.router)
 app.include_router(escalation_router)
 app.include_router(routes_notifications.router)
+app.include_router(routes_verify.router)
 
 
 @app.get("/", tags=["meta"])
