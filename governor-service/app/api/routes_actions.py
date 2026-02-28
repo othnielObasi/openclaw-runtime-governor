@@ -10,6 +10,7 @@ from sqlalchemy import select
 
 from ..auth.dependencies import require_any, require_operator
 from ..database import db_session
+from ..escalation.engine import handle_post_evaluation
 from ..event_bus import ActionEvent, action_bus
 from ..models import ActionLog, TraceSpan, User
 from ..policies.engine import evaluate_action
@@ -132,6 +133,21 @@ def evaluate_action_route(
         chain_pattern=decision.chain_pattern,
         agent_id=ctx.get("agent_id"),
     )
+
+    # ── Escalation: review queue + auto-kill-switch + webhooks ──
+    escalation = handle_post_evaluation(
+        tool=action.tool,
+        decision=decision.decision,
+        risk_score=decision.risk_score,
+        explanation=decision.explanation,
+        policy_ids=decision.policy_ids,
+        chain_pattern=decision.chain_pattern,
+        agent_id=ctx.get("agent_id"),
+        session_id=ctx.get("session_id"),
+    )
+    decision.escalation_id = escalation.get("escalation_id")
+    decision.auto_ks_triggered = escalation.get("auto_ks_triggered", False)
+    decision.escalation_severity = escalation.get("severity")
 
     return decision
 

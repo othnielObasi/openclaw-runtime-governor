@@ -3638,6 +3638,11 @@ const ALL_TABS = [
 ];
 
 export default function GovernorDashboard({ userRole="operator", userName="", onLogout=()=>{} }) {
+  // API access for fetching server-side escalation config
+  const API_BASE_ROOT = (typeof process!=="undefined" && process.env?.NEXT_PUBLIC_GOVERNOR_API) || null;
+  const getTokenRoot = () => typeof window!=="undefined" ? localStorage.getItem("ocg_token") : null;
+  const headersRoot = () => ({ "Content-Type":"application/json", ...(getTokenRoot() ? {"Authorization":`Bearer ${getTokenRoot()}`} : {}) });
+
   const [tab, setTab]       = useState("dashboard");
   const [killSwitch, setKS]       = useState(false);
   const [degraded,   setDegraded] = useState(false);
@@ -3732,34 +3737,58 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
   },[]);
 
   // ── AUTO KILL SWITCH — Req 7 Failure Safety ─────────────────
-  const AUTO_KS_BLOCK_THRESHOLD = 3;
-  const AUTO_KS_RISK_THRESHOLD  = 82;
+  // Server-fetched thresholds with hardcoded fallbacks
+  const [escalationConfig, setEscalationConfig] = useState({
+    auto_ks_block_threshold: 3,
+    auto_ks_risk_threshold: 82,
+    auto_ks_window_size: 10,
+  });
   const autoKsCooldown = useRef(false);
   const handleKSResume = () => { autoKsCooldown.current = true; handleKS(false); };
+
+  // Fetch escalation config from server when auto-KS is toggled ON
+  useEffect(() => {
+    if (!autoKsEnabled || !API_BASE_ROOT) return;
+    (async () => {
+      try {
+        const r = await fetch(`${API_BASE_ROOT}/escalation/config/*`, { headers: headersRoot() });
+        if (r.ok) {
+          const cfg = await r.json();
+          setEscalationConfig(prev => ({
+            auto_ks_block_threshold: cfg.auto_ks_block_threshold ?? prev.auto_ks_block_threshold,
+            auto_ks_risk_threshold: cfg.auto_ks_risk_threshold ?? prev.auto_ks_risk_threshold,
+            auto_ks_window_size: cfg.auto_ks_window_size ?? prev.auto_ks_window_size,
+          }));
+        }
+      } catch (e) { /* fall back to defaults */ }
+    })();
+  }, [autoKsEnabled]);
 
   useEffect(()=>{
     if (!autoKsEnabled) return;
     if (killSwitch) return;
-    const recentBlocks = gs.log.slice(0,10).filter(e=>e.decision==="block").length;
+    const windowSize = escalationConfig.auto_ks_window_size;
+    const recentBlocks = gs.log.slice(0, windowSize).filter(e=>e.decision==="block").length;
     const avgRiskCalc = gs.total ? gs.riskSum / gs.total : 0;
-    const threatActive = recentBlocks >= AUTO_KS_BLOCK_THRESHOLD || avgRiskCalc >= AUTO_KS_RISK_THRESHOLD;
+    const threatActive = recentBlocks >= escalationConfig.auto_ks_block_threshold || avgRiskCalc >= escalationConfig.auto_ks_risk_threshold;
     if (autoKsCooldown.current) { if (!threatActive) autoKsCooldown.current = false; return; }
     if (threatActive) {
       handleKS(true);
       addAudit("AUTONOMOUS_HALT", {
-        label:`AUTO KILL SWITCH — ${recentBlocks >= AUTO_KS_BLOCK_THRESHOLD
-          ? `${recentBlocks} blocks in last 10 actions`
+        label:`AUTO KILL SWITCH — ${recentBlocks >= escalationConfig.auto_ks_block_threshold
+          ? `${recentBlocks} blocks in last ${windowSize} actions`
           : `avg risk ${Math.round(avgRiskCalc)}/100 exceeded threshold`}`,
-        trigger: recentBlocks >= AUTO_KS_BLOCK_THRESHOLD ? "block-count" : "avg-risk",
+        trigger: recentBlocks >= escalationConfig.auto_ks_block_threshold ? "block-count" : "avg-risk",
         recentBlocks, avgRisk: Math.round(avgRiskCalc),
+        config: escalationConfig,
       });
       showNarr(`⚡ AUTONOMOUS HALT — Governor self-engaged kill switch: ${
-        recentBlocks >= AUTO_KS_BLOCK_THRESHOLD
-          ? `${recentBlocks} blocks detected in last 10 actions`
-          : `avg risk ${Math.round(avgRiskCalc)}/100 exceeded threshold ${AUTO_KS_RISK_THRESHOLD}`
+        recentBlocks >= escalationConfig.auto_ks_block_threshold
+          ? `${recentBlocks} blocks detected in last ${windowSize} actions`
+          : `avg risk ${Math.round(avgRiskCalc)}/100 exceeded threshold ${escalationConfig.auto_ks_risk_threshold}`
       }. No human instruction required.`);
     }
-  }, [gs.log, gs.riskSum, gs.total, killSwitch, autoKsEnabled]);
+  }, [gs.log, gs.riskSum, gs.total, killSwitch, autoKsEnabled, escalationConfig]);
 
   // No auto-seed — production starts with a clean slate.
   // Data populates as real agents connect and call POST /actions/evaluate.

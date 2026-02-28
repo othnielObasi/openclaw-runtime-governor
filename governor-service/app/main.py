@@ -11,6 +11,8 @@ from .rate_limit import limiter
 from .api import routes_actions, routes_policies, routes_summary, routes_admin, routes_surge, routes_stream, routes_traces
 from .auth.routes_auth import router as auth_router
 from .auth.seed import seed_admin
+from .escalation.routes import router as escalation_router
+from .escalation import models as _escalation_models  # noqa: F401 — register tables
 
 # Initialise database tables on startup
 Base.metadata.create_all(bind=engine)
@@ -50,6 +52,7 @@ app.include_router(routes_admin.router)
 app.include_router(routes_surge.router)
 app.include_router(routes_stream.router)
 app.include_router(routes_traces.router)
+app.include_router(escalation_router)
 
 
 @app.get("/", tags=["meta"])

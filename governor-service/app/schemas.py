@@ -66,6 +66,19 @@ class ActionDecision(BaseModel):
         default=0,
         description="Number of prior actions in this agent's session history.",
     )
+    # Escalation fields — populated by post-evaluation escalation engine
+    escalation_id: Optional[int] = Field(
+        default=None,
+        description="ID of the escalation event in the review queue, if created.",
+    )
+    auto_ks_triggered: bool = Field(
+        default=False,
+        description="True if this evaluation caused the auto-kill-switch to engage.",
+    )
+    escalation_severity: Optional[str] = Field(
+        default=None,
+        description="Escalation severity: critical | high | medium | low (if escalated).",
+    )
 
 
 # ---------------------------------------------------------------------------
