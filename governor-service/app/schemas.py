@@ -19,7 +19,16 @@ class ActionInput(BaseModel):
         default=None,
         description=(
             "Optional opaque context (e.g. user, session, agent_id, scopes, allowed_tools). "
-            "Recognised keys: agent_id, session_id, user_id, channel, allowed_tools."
+            "Recognised keys: agent_id, session_id, user_id, channel, allowed_tools, "
+            "conversation_id, turn_id."
+        ),
+    )
+    prompt: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional: the user prompt / message that triggered this tool call. "
+            "Stored encrypted at rest for forensic audit trails. "
+            "Omit if your SDK sends conversation turns via POST /conversations/turns instead."
         ),
     )
 
@@ -101,6 +110,8 @@ class ActionLogRead(BaseModel):
     channel: Optional[str] = None
     trace_id: Optional[str] = None
     span_id: Optional[str] = None
+    conversation_id: Optional[str] = None
+    turn_id: Optional[int] = None
 
 
 # ---------------------------------------------------------------------------
@@ -289,6 +300,66 @@ class VerificationLogRead(BaseModel):
     drift_score: Optional[float] = None
     escalated: bool = False
     escalation_id: Optional[int] = None
+
+
+# ---------------------------------------------------------------------------
+# Conversation logging
+# ---------------------------------------------------------------------------
+
+class ConversationTurnCreate(BaseModel):
+    """Payload for ingesting a conversation turn."""
+    model_config = ConfigDict(protected_namespaces=())
+
+    conversation_id: str = Field(..., min_length=1, max_length=128, description="Groups turns into one thread.")
+    turn_index: Optional[int] = Field(default=0, ge=0, description="0-based position in conversation.")
+    agent_id: Optional[str] = Field(default=None, max_length=128)
+    session_id: Optional[str] = Field(default=None, max_length=128)
+    user_id: Optional[str] = Field(default=None, max_length=128)
+    channel: Optional[str] = Field(default=None, max_length=64)
+    prompt: Optional[str] = Field(default=None, description="User message / prompt. Encrypted at rest.")
+    agent_reasoning: Optional[str] = Field(default=None, description="Agent's chain-of-thought / plan. Encrypted at rest.")
+    agent_response: Optional[str] = Field(default=None, description="Final response shown to user. Encrypted at rest.")
+    tool_plan: Optional[List[str]] = Field(default=None, description="Ordered list of tools the agent plans to call.")
+    model_id: Optional[str] = Field(default=None, max_length=128, description="LLM model identifier.")
+    prompt_tokens: Optional[int] = Field(default=None, ge=0)
+    completion_tokens: Optional[int] = Field(default=None, ge=0)
+
+
+class ConversationTurnBatch(BaseModel):
+    """Batch ingest multiple turns."""
+    turns: List[ConversationTurnCreate] = Field(..., min_length=1, max_length=100)
+
+
+class ConversationTurnRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True, protected_namespaces=())
+
+    id: int
+    conversation_id: str
+    turn_index: int = 0
+    agent_id: Optional[str] = None
+    session_id: Optional[str] = None
+    user_id: Optional[str] = None
+    channel: Optional[str] = None
+    prompt: Optional[str] = None
+    agent_reasoning: Optional[str] = None
+    agent_response: Optional[str] = None
+    tool_plan: Optional[List[str]] = None
+    model_id: Optional[str] = None
+    prompt_tokens: Optional[int] = None
+    completion_tokens: Optional[int] = None
+    created_at: Optional[datetime] = None
+
+
+class ConversationSummary(BaseModel):
+    """High-level view of a conversation thread."""
+    conversation_id: str
+    agent_id: Optional[str] = None
+    user_id: Optional[str] = None
+    session_id: Optional[str] = None
+    turn_count: int = 0
+    action_count: int = 0
+    first_turn_at: Optional[datetime] = None
+    last_turn_at: Optional[datetime] = None
 
 
 class SummaryOut(BaseModel):

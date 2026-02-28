@@ -17,11 +17,17 @@ def log_action(action: ActionInput, decision: ActionDecision) -> None:
     """
     ctx = action.context or {}
 
+    # If the SDK sent prompt inline, encrypt it into the context blob for storage
+    stored_ctx = dict(ctx)
+    if action.prompt:
+        from ..encryption import encrypt_value
+        stored_ctx["_prompt_encrypted"] = encrypt_value(action.prompt)
+
     with db_session() as session:
         row = ActionLog(
             tool=action.tool,
             args=json.dumps(action.args),
-            context=json.dumps(ctx),
+            context=json.dumps(stored_ctx),
             # Context metadata
             agent_id=ctx.get("agent_id"),
             session_id=ctx.get("session_id"),
@@ -30,6 +36,9 @@ def log_action(action: ActionInput, decision: ActionDecision) -> None:
             # Trace correlation
             trace_id=ctx.get("trace_id"),
             span_id=ctx.get("span_id"),
+            # Conversation correlation
+            conversation_id=ctx.get("conversation_id"),
+            turn_id=ctx.get("turn_id"),
             # Decision
             decision=decision.decision,
             risk_score=decision.risk_score,

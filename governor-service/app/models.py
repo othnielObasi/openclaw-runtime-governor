@@ -32,6 +32,10 @@ class ActionLog(Base):
     trace_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
     span_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
 
+    # Conversation correlation (links action to the conversation that triggered it)
+    conversation_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
+    turn_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+
     # Decision
     decision: Mapped[str] = mapped_column(String(32), index=True)
     risk_score: Mapped[int] = mapped_column(Integer)
@@ -189,6 +193,42 @@ class GovernorState(Base):
 # ---------------------------------------------------------------------------
 # SURGE Token Governance — DB-persisted models
 # ---------------------------------------------------------------------------
+
+class ConversationTurn(Base):
+    """Opt-in conversation turn — user prompt, agent reasoning, agent response.
+
+    Text fields are stored encrypted at rest when GOVERNOR_ENCRYPTION_KEY is set.
+    This table is supplementary to ActionLog — it provides the *why* behind tool calls.
+    """
+
+    __tablename__ = "conversation_turns"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+    # Conversation grouping — links multiple turns and actions into one thread
+    conversation_id: Mapped[str] = mapped_column(String(128), index=True)
+    turn_index: Mapped[int] = mapped_column(Integer, default=0)  # 0-based position in conversation
+
+    # Context (same identifiers used across the platform)
+    agent_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
+    session_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
+    user_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
+    channel: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
+    # Content — encrypted at rest
+    prompt_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    agent_reasoning_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    agent_response_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Structured plan — JSON list of tools the agent planned to use
+    tool_plan_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # LLM metadata
+    model_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)  # e.g. gpt-4o, claude-3.5-sonnet
+    prompt_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    completion_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
 
 class VerificationLog(Base):
     """Post-execution verification record — tracks compliance of actual tool results."""
