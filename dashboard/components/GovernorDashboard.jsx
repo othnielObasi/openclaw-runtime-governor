@@ -4478,6 +4478,479 @@ function SettingsTab({ onConfigSaved }) {
 }
 
 // ═══════════════════════════════════════════════════════════
+// REVIEW QUEUE TAB
+// ═══════════════════════════════════════════════════════════
+function ReviewQueueTab() {
+  const API_BASE = (typeof process!=="undefined" && process.env?.NEXT_PUBLIC_GOVERNOR_API) || null;
+  const getToken = () => typeof window!=="undefined" ? localStorage.getItem("ocg_token") : null;
+  const headers = () => ({ "Content-Type":"application/json", ...(getToken() ? {"Authorization":`Bearer ${getToken()}`} : {}) });
+
+  const [events, setEvents] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Filters
+  const [filterStatus, setFilterStatus] = useState("pending");
+  const [filterSeverity, setFilterSeverity] = useState("");
+  const [filterAgent, setFilterAgent] = useState("");
+  const [filterTrigger, setFilterTrigger] = useState("");
+  const [limit, setLimit] = useState(50);
+
+  // Bulk selection
+  const [selected, setSelected] = useState(new Set());
+  const [bulkAction, setBulkAction] = useState("approved");
+
+  // Resolution modal
+  const [resolveTarget, setResolveTarget] = useState(null);
+  const [resolveStatus, setResolveStatus] = useState("approved");
+  const [resolveNote, setResolveNote] = useState("");
+
+  // Auto-refresh
+  const [autoRefresh, setAutoRefresh] = useState(true);
+
+  const fetchAll = useCallback(async () => {
+    if (!API_BASE) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams();
+      if (filterStatus) params.append("status", filterStatus);
+      if (filterSeverity) params.append("severity", filterSeverity);
+      if (filterAgent) params.append("agent_id", filterAgent);
+      if (filterTrigger) params.append("trigger", filterTrigger);
+      params.append("limit", String(limit));
+
+      const [evResp, stResp] = await Promise.all([
+        fetch(`${API_BASE}/escalation/queue?${params}`, { headers: headers() }),
+        fetch(`${API_BASE}/escalation/queue/stats`, { headers: headers() }),
+      ]);
+      if (evResp.ok) setEvents(await evResp.json());
+      else setError(`Failed to load queue: ${evResp.status}`);
+      if (stResp.ok) setStats(await stResp.json());
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [API_BASE, filterStatus, filterSeverity, filterAgent, filterTrigger, limit]);
+
+  useEffect(() => { fetchAll(); }, [fetchAll]);
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const iv = setInterval(fetchAll, 5000);
+    return () => clearInterval(iv);
+  }, [autoRefresh, fetchAll]);
+
+  const resolveEvent = async (eventId, status, note) => {
+    if (!API_BASE) return;
+    try {
+      const resp = await fetch(`${API_BASE}/escalation/queue/${eventId}/resolve`, {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({ status, note }),
+      });
+      if (!resp.ok) {
+        const d = await resp.json().catch(() => ({}));
+        setError(d.detail || `Resolve failed: ${resp.status}`);
+      }
+    } catch (e) {
+      setError(e.message);
+    }
+    fetchAll();
+  };
+
+  const bulkResolve = async () => {
+    if (!API_BASE || selected.size === 0) return;
+    try {
+      const resp = await fetch(`${API_BASE}/escalation/queue/bulk-resolve?${
+        [...selected].map(id => `event_ids=${id}`).join("&")
+      }`, {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({ status: bulkAction, note: "Bulk resolved from dashboard" }),
+      });
+      if (resp.ok) {
+        const d = await resp.json();
+        setSelected(new Set());
+        setError(null);
+      } else {
+        const d = await resp.json().catch(() => ({}));
+        setError(d.detail || `Bulk resolve failed: ${resp.status}`);
+      }
+    } catch (e) {
+      setError(e.message);
+    }
+    fetchAll();
+  };
+
+  const toggleSelect = (id) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selected.size === events.length) setSelected(new Set());
+    else setSelected(new Set(events.map(e => e.id)));
+  };
+
+  const severityColor = (s) => ({ critical: C.red, high: C.amber, medium: C.p2, low: C.p3 }[s] || C.p3);
+  const statusColor = (s) => ({ pending: C.amber, approved: C.green, rejected: C.red, expired: C.p3, auto_resolved: C.p2 }[s] || C.p3);
+  const statusIcon = (s) => ({ pending: "⏳", approved: "✓", rejected: "✗", expired: "⌛", auto_resolved: "⚡" }[s] || "?");
+
+  const chipStyle = (color) => ({
+    display: "inline-block", padding: "2px 8px", borderRadius: 4,
+    background: color + "18", color, fontSize: 11, fontFamily: mono,
+    fontWeight: 600, letterSpacing: 0.5,
+  });
+
+  const btnStyle = (color, small) => ({
+    padding: small ? "3px 10px" : "6px 14px",
+    background: color + "20",
+    color,
+    border: `1px solid ${color}40`,
+    borderRadius: 6,
+    cursor: "pointer",
+    fontFamily: mono,
+    fontSize: small ? 10 : 11,
+    fontWeight: 600,
+    transition: "all .15s",
+  });
+
+  const inputStyle = {
+    background: C.bg0, color: C.p1, border: `1px solid ${C.line2}`,
+    borderRadius: 6, padding: "5px 10px", fontFamily: mono, fontSize: 11, outline: "none",
+  };
+
+  return (
+    <div style={{ padding: 24, fontFamily: sans }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+        <div>
+          <h2 style={{ color: C.p1, fontFamily: mono, fontSize: 18, margin: 0, letterSpacing: 1 }}>
+            ◎ REVIEW QUEUE
+          </h2>
+          <span style={{ color: C.p3, fontSize: 12, fontFamily: mono }}>
+            Human-in-the-loop escalation review
+          </span>
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <label style={{ color: C.p3, fontSize: 11, fontFamily: mono, display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
+            <input type="checkbox" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)} style={{ accentColor: C.accent }} />
+            Auto-refresh
+          </label>
+          <button onClick={fetchAll} style={btnStyle(C.p2)}>↻ Refresh</button>
+        </div>
+      </div>
+
+      {/* Stats cards */}
+      {stats && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10, marginBottom: 20 }}>
+          {[
+            { label: "Total", value: stats.total, color: C.p1 },
+            { label: "Pending", value: stats.pending, color: C.amber },
+            { label: "Approved", value: stats.approved, color: C.green },
+            { label: "Rejected", value: stats.rejected, color: C.red },
+            { label: "Expired", value: stats.expired, color: C.p3 },
+            { label: "Auto-resolved", value: stats.auto_resolved, color: C.p2 },
+          ].map(s => (
+            <div key={s.label} style={{
+              background: C.bg1, borderRadius: 8, padding: "12px 14px",
+              border: `1px solid ${C.line}`, textAlign: "center",
+            }}>
+              <div style={{ color: s.color, fontSize: 24, fontWeight: 700, fontFamily: mono }}>{s.value}</div>
+              <div style={{ color: C.p3, fontSize: 10, fontFamily: mono, letterSpacing: 0.5, marginTop: 2 }}>{s.label.toUpperCase()}</div>
+            </div>
+          ))}
+          <div style={{
+            background: C.bg1, borderRadius: 8, padding: "12px 14px",
+            border: `1px solid ${C.line}`, textAlign: "center",
+          }}>
+            <div style={{ display: "flex", justifyContent: "center", gap: 8, marginTop: 2 }}>
+              {[
+                { label: "CRIT", value: stats.critical, color: C.red },
+                { label: "HIGH", value: stats.high, color: C.amber },
+                { label: "MED", value: stats.medium, color: C.p2 },
+                { label: "LOW", value: stats.low, color: C.p3 },
+              ].map(sv => (
+                <div key={sv.label} style={{ textAlign: "center" }}>
+                  <div style={{ color: sv.color, fontSize: 16, fontWeight: 700, fontFamily: mono }}>{sv.value}</div>
+                  <div style={{ color: C.p3, fontSize: 8, fontFamily: mono }}>{sv.label}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ color: C.p3, fontSize: 10, fontFamily: mono, letterSpacing: 0.5, marginTop: 4 }}>BY SEVERITY</div>
+          </div>
+        </div>
+      )}
+
+      {/* Filters */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16, alignItems: "center" }}>
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={inputStyle}>
+          <option value="">All statuses</option>
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+          <option value="expired">Expired</option>
+          <option value="auto_resolved">Auto-resolved</option>
+        </select>
+        <select value={filterSeverity} onChange={e => setFilterSeverity(e.target.value)} style={inputStyle}>
+          <option value="">All severities</option>
+          <option value="critical">Critical</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+        <select value={filterTrigger} onChange={e => setFilterTrigger(e.target.value)} style={inputStyle}>
+          <option value="">All triggers</option>
+          <option value="policy_block">Policy Block</option>
+          <option value="policy_review">Policy Review</option>
+          <option value="auto_ks">Auto Kill-Switch</option>
+          <option value="chain_escalation">Chain Escalation</option>
+          <option value="risk_threshold">Risk Threshold</option>
+          <option value="manual">Manual</option>
+        </select>
+        <input
+          value={filterAgent} onChange={e => setFilterAgent(e.target.value)}
+          placeholder="Agent ID" style={{ ...inputStyle, width: 140 }}
+        />
+        <select value={limit} onChange={e => setLimit(Number(e.target.value))} style={inputStyle}>
+          <option value={25}>25 rows</option>
+          <option value={50}>50 rows</option>
+          <option value={100}>100 rows</option>
+          <option value={200}>200 rows</option>
+        </select>
+      </div>
+
+      {/* Bulk actions bar */}
+      {selected.size > 0 && filterStatus === "pending" && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 10, marginBottom: 12,
+          padding: "8px 14px", background: C.bg2, borderRadius: 8, border: `1px solid ${C.line2}`,
+        }}>
+          <span style={{ color: C.p2, fontFamily: mono, fontSize: 11 }}>
+            {selected.size} selected
+          </span>
+          <select value={bulkAction} onChange={e => setBulkAction(e.target.value)} style={inputStyle}>
+            <option value="approved">Approve</option>
+            <option value="rejected">Reject</option>
+          </select>
+          <button onClick={bulkResolve} style={btnStyle(bulkAction === "approved" ? C.green : C.red)}>
+            Bulk {bulkAction === "approved" ? "Approve" : "Reject"}
+          </button>
+          <button onClick={() => setSelected(new Set())} style={btnStyle(C.p3)}>Clear</button>
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div style={{
+          padding: "8px 14px", background: C.redDim, border: `1px solid ${C.red}40`,
+          borderRadius: 8, color: C.red, fontFamily: mono, fontSize: 11, marginBottom: 12,
+        }}>
+          ⚠ {error}
+          <button onClick={() => setError(null)} style={{ marginLeft: 12, background: "none", border: "none", color: C.red, cursor: "pointer", fontFamily: mono }}>✕</button>
+        </div>
+      )}
+
+      {/* Loading */}
+      {loading && events.length === 0 && (
+        <div style={{ textAlign: "center", padding: 40, color: C.p3, fontFamily: mono }}>Loading review queue...</div>
+      )}
+
+      {/* No API */}
+      {!API_BASE && (
+        <div style={{
+          textAlign: "center", padding: 40, color: C.amber, fontFamily: mono, fontSize: 12,
+          background: C.amberDim, borderRadius: 8,
+        }}>
+          ⚠ Set NEXT_PUBLIC_GOVERNOR_API to connect to the governor service.
+        </div>
+      )}
+
+      {/* Event table */}
+      {events.length > 0 && (
+        <div style={{ background: C.bg1, borderRadius: 10, border: `1px solid ${C.line}`, overflow: "hidden" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: mono, fontSize: 11 }}>
+            <thead>
+              <tr style={{ background: C.bg2 }}>
+                {filterStatus === "pending" && (
+                  <th style={{ padding: "8px 6px", textAlign: "center", color: C.p3, width: 30 }}>
+                    <input type="checkbox" checked={selected.size === events.length && events.length > 0} onChange={toggleSelectAll} style={{ accentColor: C.accent }} />
+                  </th>
+                )}
+                <th style={{ padding: "8px 10px", textAlign: "left", color: C.p3, letterSpacing: 0.5 }}>ID</th>
+                <th style={{ padding: "8px 10px", textAlign: "left", color: C.p3, letterSpacing: 0.5 }}>TIME</th>
+                <th style={{ padding: "8px 10px", textAlign: "left", color: C.p3, letterSpacing: 0.5 }}>SEVERITY</th>
+                <th style={{ padding: "8px 10px", textAlign: "left", color: C.p3, letterSpacing: 0.5 }}>STATUS</th>
+                <th style={{ padding: "8px 10px", textAlign: "left", color: C.p3, letterSpacing: 0.5 }}>TOOL</th>
+                <th style={{ padding: "8px 10px", textAlign: "left", color: C.p3, letterSpacing: 0.5 }}>TRIGGER</th>
+                <th style={{ padding: "8px 10px", textAlign: "left", color: C.p3, letterSpacing: 0.5 }}>RISK</th>
+                <th style={{ padding: "8px 10px", textAlign: "left", color: C.p3, letterSpacing: 0.5 }}>AGENT</th>
+                <th style={{ padding: "8px 10px", textAlign: "left", color: C.p3, letterSpacing: 0.5 }}>EXPLANATION</th>
+                <th style={{ padding: "8px 10px", textAlign: "center", color: C.p3, letterSpacing: 0.5 }}>ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {events.map((ev, i) => (
+                <tr key={ev.id} style={{
+                  background: i % 2 === 0 ? "transparent" : C.bg0 + "40",
+                  borderTop: `1px solid ${C.line}`,
+                }}>
+                  {filterStatus === "pending" && (
+                    <td style={{ padding: "6px", textAlign: "center" }}>
+                      <input type="checkbox" checked={selected.has(ev.id)} onChange={() => toggleSelect(ev.id)} style={{ accentColor: C.accent }} />
+                    </td>
+                  )}
+                  <td style={{ padding: "8px 10px", color: C.p2 }}>#{ev.id}</td>
+                  <td style={{ padding: "8px 10px", color: C.p3 }}>
+                    {new Date(ev.created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    {ev.expires_at && ev.status === "pending" && (
+                      <div style={{ fontSize: 9, color: C.amber, marginTop: 2 }}>
+                        expires {new Date(ev.expires_at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+                      </div>
+                    )}
+                  </td>
+                  <td style={{ padding: "8px 10px" }}>
+                    <span style={chipStyle(severityColor(ev.severity))}>{ev.severity.toUpperCase()}</span>
+                  </td>
+                  <td style={{ padding: "8px 10px" }}>
+                    <span style={chipStyle(statusColor(ev.status))}>
+                      {statusIcon(ev.status)} {ev.status}
+                    </span>
+                  </td>
+                  <td style={{ padding: "8px 10px", color: C.p1 }}>{ev.tool}</td>
+                  <td style={{ padding: "8px 10px", color: C.p2 }}>{ev.trigger.replace(/_/g, " ")}</td>
+                  <td style={{ padding: "8px 10px" }}>
+                    <span style={{
+                      color: ev.risk_score >= 80 ? C.red : ev.risk_score >= 50 ? C.amber : C.green,
+                      fontWeight: 700,
+                    }}>
+                      {ev.risk_score}
+                    </span>
+                  </td>
+                  <td style={{ padding: "8px 10px", color: C.p3, maxWidth: 100, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {ev.agent_id || "—"}
+                  </td>
+                  <td style={{ padding: "8px 10px", color: C.p2, maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {ev.explanation}
+                  </td>
+                  <td style={{ padding: "8px 10px", textAlign: "center" }}>
+                    {ev.status === "pending" ? (
+                      <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                        <button onClick={() => { setResolveTarget(ev); setResolveStatus("approved"); setResolveNote(""); }} style={btnStyle(C.green, true)} title="Approve">
+                          ✓
+                        </button>
+                        <button onClick={() => { setResolveTarget(ev); setResolveStatus("rejected"); setResolveNote(""); }} style={btnStyle(C.red, true)} title="Reject">
+                          ✗
+                        </button>
+                      </div>
+                    ) : (
+                      <span style={{ color: C.p3, fontSize: 10 }}>
+                        {ev.resolved_by ? `by ${ev.resolved_by}` : "—"}
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!loading && events.length === 0 && API_BASE && (
+        <div style={{
+          textAlign: "center", padding: 60, color: C.p3, fontFamily: mono, fontSize: 12,
+          background: C.bg1, borderRadius: 10, border: `1px solid ${C.line}`,
+        }}>
+          {filterStatus === "pending" ? "No pending escalations — all clear ✓" : "No escalation events match the current filters."}
+        </div>
+      )}
+
+      {/* Resolve modal */}
+      {resolveTarget && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center",
+          zIndex: 10000,
+        }} onClick={() => setResolveTarget(null)}>
+          <div style={{
+            background: C.bg1, borderRadius: 12, padding: 24, minWidth: 400, maxWidth: 500,
+            border: `1px solid ${C.line2}`, boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
+          }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ color: C.p1, fontFamily: mono, fontSize: 14, margin: "0 0 16px 0" }}>
+              {resolveStatus === "approved" ? "✓ Approve" : "✗ Reject"} Escalation #{resolveTarget.id}
+            </h3>
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ color: C.p3, fontSize: 10, fontFamily: mono, marginBottom: 4 }}>TOOL</div>
+              <div style={{ color: C.p1, fontFamily: mono, fontSize: 12 }}>{resolveTarget.tool}</div>
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ color: C.p3, fontSize: 10, fontFamily: mono, marginBottom: 4 }}>EXPLANATION</div>
+              <div style={{ color: C.p2, fontFamily: mono, fontSize: 11, lineHeight: 1.5 }}>{resolveTarget.explanation}</div>
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ color: C.p3, fontSize: 10, fontFamily: mono, marginBottom: 4 }}>DECISION</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => setResolveStatus("approved")}
+                  style={{
+                    ...btnStyle(C.green),
+                    background: resolveStatus === "approved" ? C.green + "30" : C.green + "10",
+                    borderWidth: resolveStatus === "approved" ? 2 : 1,
+                  }}
+                >
+                  ✓ Approve
+                </button>
+                <button
+                  onClick={() => setResolveStatus("rejected")}
+                  style={{
+                    ...btnStyle(C.red),
+                    background: resolveStatus === "rejected" ? C.red + "30" : C.red + "10",
+                    borderWidth: resolveStatus === "rejected" ? 2 : 1,
+                  }}
+                >
+                  ✗ Reject
+                </button>
+              </div>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ color: C.p3, fontSize: 10, fontFamily: mono, marginBottom: 4 }}>NOTE (optional)</div>
+              <textarea
+                value={resolveNote} onChange={e => setResolveNote(e.target.value)}
+                rows={3}
+                style={{
+                  ...inputStyle, width: "100%", resize: "vertical",
+                  fontFamily: mono, fontSize: 11, boxSizing: "border-box",
+                }}
+                placeholder="Add a resolution note..."
+              />
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button onClick={() => setResolveTarget(null)} style={btnStyle(C.p3)}>Cancel</button>
+              <button
+                onClick={() => {
+                  resolveEvent(resolveTarget.id, resolveStatus, resolveNote || null);
+                  setResolveTarget(null);
+                }}
+                style={btnStyle(resolveStatus === "approved" ? C.green : C.red)}
+              >
+                Confirm {resolveStatus === "approved" ? "Approve" : "Reject"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// ═══════════════════════════════════════════════════════════
 // ROOT APP
 // ═══════════════════════════════════════════════════════════
 // Tabs visible per role
@@ -4485,9 +4958,9 @@ function SettingsTab({ onConfigSaved }) {
 // ROLE_TABS + ALL_TABS (SURGE + Topology added)
 // ═══════════════════════════════════════════════════════════
 const ROLE_TABS = {
-  superadmin: ["dashboard","agent","tester","policies","surge","audit","traces","topology","apikeys","settings","users"],
-  admin:    ["dashboard","agent","tester","policies","surge","audit","traces","topology","apikeys","settings"],
-  operator: ["dashboard","agent","tester","policies","surge","audit","traces","topology","apikeys","settings"],
+  superadmin: ["dashboard","agent","tester","policies","review","surge","audit","traces","topology","apikeys","settings","users"],
+  admin:    ["dashboard","agent","tester","policies","review","surge","audit","traces","topology","apikeys","settings"],
+  operator: ["dashboard","agent","tester","policies","review","surge","audit","traces","topology","apikeys","settings"],
   auditor:  ["dashboard","agent","surge","audit","traces","topology","apikeys"],
 };
 
@@ -4496,6 +4969,7 @@ const ALL_TABS = [
   { id:"agent",     label:"Agent Demo",        icon:"🤖" },
   { id:"tester",    label:"Action Tester",     icon:"▶" },
   { id:"policies",  label:"Policy Editor",     icon:"◆" },
+  { id:"review",    label:"Review Queue",      icon:"◎" },
   { id:"surge",     label:"SURGE",             icon:"⬡" },
   { id:"audit",     label:"Audit Trail",       icon:"☰" },
   { id:"traces",    label:"Traces",            icon:"⧉" },
@@ -4958,6 +5432,7 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
               setEPWithAudit(rebuilt, `Rollback to: ${snap.label}`);
             }}/>}
           {tab==="agent"     && <AgentRunner onResult={onResult}/>}
+          {tab==="review"    && (userRole==="superadmin"||userRole==="admin"||userRole==="operator") && <ReviewQueueTab/>}
           {tab==="surge"     && <SurgeTab receipts={surgeReceipts} stakedPolicies={stakedPolicies} setStaked={setStakedPolicies} userRole={userRole}/>}
           {tab==="audit"     && <AuditTrailTab auditLog={auditLog} policySnapshots={policySnapshots}/>}
           {tab==="traces"    && <TracesTab/>}

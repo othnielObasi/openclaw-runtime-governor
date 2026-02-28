@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import httpx
@@ -47,6 +47,7 @@ def get_escalation_config(agent_id: Optional[str] = None) -> dict:
         "auto_ks_risk_threshold": 82,
         "auto_ks_window_size": 10,
         "review_risk_threshold": 70,
+        "review_expiry_minutes": 30,
         "notify_on_block": True,
         "notify_on_review": True,
         "notify_on_auto_ks": True,
@@ -82,6 +83,7 @@ def _row_to_dict(row: EscalationConfig) -> dict:
         "auto_ks_risk_threshold": row.auto_ks_risk_threshold,
         "auto_ks_window_size": row.auto_ks_window_size,
         "review_risk_threshold": row.review_risk_threshold,
+        "review_expiry_minutes": row.review_expiry_minutes,
         "notify_on_block": row.notify_on_block,
         "notify_on_review": row.notify_on_review,
         "notify_on_auto_ks": row.notify_on_auto_ks,
@@ -186,9 +188,14 @@ def create_escalation_event(
     session_id: Optional[str],
     trigger: str,
     action_log_id: Optional[int] = None,
+    expiry_minutes: int = 30,
 ) -> Optional[int]:
     """Create a review queue entry. Returns the escalation event ID."""
     severity = compute_severity(risk_score, decision, chain_pattern)
+
+    expires_at = None
+    if expiry_minutes and expiry_minutes > 0:
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=expiry_minutes)
 
     try:
         with db_session() as session:
@@ -205,6 +212,7 @@ def create_escalation_event(
                 policy_ids=",".join(policy_ids) if policy_ids else None,
                 chain_pattern=chain_pattern,
                 status="pending",
+                expires_at=expires_at,
             )
             session.add(event)
             session.flush()
@@ -320,6 +328,8 @@ def handle_post_evaluation(
         if chain_pattern:
             trigger = "chain_escalation"
 
+        expiry_minutes = config.get("review_expiry_minutes", 30)
+
         event_id = create_escalation_event(
             tool=tool,
             decision=decision,
@@ -331,6 +341,7 @@ def handle_post_evaluation(
             session_id=session_id,
             trigger=trigger,
             action_log_id=action_log_id,
+            expiry_minutes=expiry_minutes,
         )
         result["escalation_id"] = event_id
         result["severity"] = compute_severity(risk_score, decision, chain_pattern)

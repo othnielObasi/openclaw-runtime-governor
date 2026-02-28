@@ -16,6 +16,7 @@ GOVERNOR_API_KEY  – API key for authentication (ocg_… format, sent as X-API-
 from __future__ import annotations
 
 import os
+import time
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -38,6 +39,14 @@ class GovernorBlockedError(RuntimeError):
     """Raised when the governor blocks an action."""
 
 
+class GovernorReviewRejectedError(RuntimeError):
+    """Raised when a review decision is rejected by a human operator."""
+
+
+class GovernorReviewExpiredError(RuntimeError):
+    """Raised when a review decision times out (hold mode only)."""
+
+
 # ---------------------------------------------------------------------------
 # Action evaluation
 # ---------------------------------------------------------------------------
@@ -46,6 +55,10 @@ def evaluate_action(
     tool: str,
     args: Dict[str, Any],
     context: Optional[Dict[str, Any]] = None,
+    *,
+    review_mode: str = "proceed",
+    hold_timeout: int = 60,
+    hold_poll_interval: float = 1.0,
 ) -> Dict[str, Any]:
     """
     Send a tool-call to the governor for evaluation.
@@ -55,9 +68,23 @@ def evaluate_action(
 
     Raises GovernorBlockedError if decision == "block".
 
+    review_mode:
+      - "proceed" (default): Return the result immediately for 'review'
+        decisions. Callers should inspect decision and handle accordingly.
+      - "hold": If decision is 'review', long-poll the hold endpoint until
+        a human operator approves/rejects, or the timeout expires.
+        Raises GovernorReviewRejectedError if rejected.
+        Raises GovernorReviewExpiredError if timed out or expired.
+
+    hold_timeout: Max seconds to wait in hold mode (1-300, default: 60).
+    hold_poll_interval: Seconds between server-side polls (default: 1.0).
+
     Tip: include ``trace_id`` and ``span_id`` in *context* to auto-create a
     governance span in the agent's trace tree.
     """
+    if review_mode not in ("proceed", "hold"):
+        raise ValueError(f"review_mode must be 'proceed' or 'hold', got '{review_mode}'")
+
     payload = {"tool": tool, "args": args, "context": context}
     with httpx.Client(timeout=_TIMEOUT, headers=_headers()) as client:
         resp = client.post(f"{GOVERNOR_URL}/actions/evaluate", json=payload)
@@ -70,19 +97,91 @@ def evaluate_action(
             f"Governor blocked tool '{tool}': {result.get('explanation', 'no reason given')}"
         )
 
+    # Handle review decisions
+    if result.get("decision") == "review" and review_mode == "hold":
+        escalation_id = result.get("escalation_id")
+        if escalation_id:
+            hold_result = _hold_for_review(
+                escalation_id,
+                timeout_seconds=hold_timeout,
+                poll_interval=hold_poll_interval,
+            )
+            result["review_status"] = hold_result.get("status", "unknown")
+            result["review_resolved_by"] = hold_result.get("resolved_by")
+            result["review_resolution_note"] = hold_result.get("resolution_note")
+
+            if hold_result.get("timed_out"):
+                raise GovernorReviewExpiredError(
+                    f"Review for tool '{tool}' timed out after {hold_timeout}s "
+                    f"(escalation_id={escalation_id})"
+                )
+            if hold_result.get("status") == "rejected":
+                raise GovernorReviewRejectedError(
+                    f"Review for tool '{tool}' was rejected: "
+                    f"{hold_result.get('resolution_note', 'no reason given')} "
+                    f"(escalation_id={escalation_id})"
+                )
+            if hold_result.get("status") == "expired":
+                raise GovernorReviewExpiredError(
+                    f"Review for tool '{tool}' expired before resolution "
+                    f"(escalation_id={escalation_id})"
+                )
+            # approved or auto_resolved → continue
+
     return result
+
+
+def _hold_for_review(
+    escalation_id: int,
+    timeout_seconds: int = 60,
+    poll_interval: float = 1.0,
+) -> Dict[str, Any]:
+    """
+    Call the hold endpoint to long-poll for review resolution.
+    Returns the hold result dict from the server.
+    """
+    params = {
+        "timeout_seconds": timeout_seconds,
+        "poll_interval": poll_interval,
+    }
+    # Use a longer client timeout than the hold timeout to avoid premature disconnects
+    client_timeout = timeout_seconds + 10
+    try:
+        with httpx.Client(timeout=client_timeout, headers=_headers()) as client:
+            resp = client.post(
+                f"{GOVERNOR_URL}/escalation/queue/{escalation_id}/hold",
+                params=params,
+            )
+            resp.raise_for_status()
+        return resp.json()
+    except httpx.TimeoutException:
+        return {"event_id": escalation_id, "status": "pending", "timed_out": True}
+    except Exception:
+        # If the hold endpoint is unavailable, fall through gracefully
+        return {"event_id": escalation_id, "status": "pending", "timed_out": True}
 
 
 def governed_call(
     tool: str,
     args: Dict[str, Any],
     context: Optional[Dict[str, Any]] = None,
+    *,
+    review_mode: str = "proceed",
+    hold_timeout: int = 60,
 ) -> Dict[str, Any]:
     """
     Convenience wrapper: evaluate then return the decision.
-    Callers should inspect `decision` for 'review' and handle accordingly.
+
+    review_mode:
+      - "proceed": Return immediately (caller handles 'review' decisions).
+      - "hold": Wait for human resolution on 'review' decisions.
+        Raises GovernorReviewRejectedError / GovernorReviewExpiredError.
     """
-    return evaluate_action(tool, args, context)
+    return evaluate_action(
+        tool, args, context,
+        review_mode=review_mode,
+        hold_timeout=hold_timeout,
+    )
 
 
 # ---------------------------------------------------------------------------

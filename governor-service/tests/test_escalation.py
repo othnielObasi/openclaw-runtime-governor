@@ -3,9 +3,11 @@ tests/test_escalation.py — Tests for the escalation subsystem
 ==============================================================
 
 Covers: config CRUD, review queue lifecycle, auto-KS thresholds,
-severity computation, and webhook management.
+severity computation, webhook management, hold/wait endpoint,
+auto-expiry, and review_expiry_minutes config.
 """
 import pytest
+from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -422,4 +424,207 @@ class TestNoEscalationOnAllow:
 
         resp = client.get("/escalation/queue", headers=_headers(admin_token))
         assert len(resp.json()) == 0
+        _cleanup_escalation_tables()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Review expiry config field
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TestReviewExpiryConfig:
+    def test_config_includes_review_expiry_minutes(self, admin_token):
+        _cleanup_escalation_tables()
+        resp = client.post(
+            "/escalation/config",
+            json={"scope": "*", "review_expiry_minutes": 45},
+            headers=_headers(admin_token),
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["review_expiry_minutes"] == 45
+        _cleanup_escalation_tables()
+
+    def test_config_default_expiry_30(self, admin_token):
+        _cleanup_escalation_tables()
+        resp = client.post(
+            "/escalation/config",
+            json={"scope": "*"},
+            headers=_headers(admin_token),
+        )
+        assert resp.status_code == 201
+        assert resp.json()["review_expiry_minutes"] == 30
+        _cleanup_escalation_tables()
+
+    def test_engine_defaults_include_expiry(self):
+        _cleanup_escalation_tables()
+        config = get_escalation_config("no-agent")
+        assert "review_expiry_minutes" in config
+        assert config["review_expiry_minutes"] == 30
+        _cleanup_escalation_tables()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Hold endpoint
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TestHoldEndpoint:
+    def _create_pending_event(self):
+        """Insert a pending escalation event directly in DB."""
+        with db_session() as session:
+            ev = EscalationEvent(
+                tool="shell",
+                agent_id="test-agent",
+                session_id="sess-1",
+                trigger="policy_review",
+                severity="medium",
+                decision="review",
+                risk_score=65,
+                explanation="Needs review",
+                status="pending",
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            )
+            session.add(ev)
+            session.flush()
+            return ev.id
+
+    def test_hold_returns_on_resolved(self, admin_token):
+        _cleanup_escalation_tables()
+        event_id = self._create_pending_event()
+
+        # Resolve the event first
+        resp = client.post(
+            f"/escalation/queue/{event_id}/resolve",
+            json={"status": "approved", "note": "Looks good"},
+            headers=_headers(admin_token),
+        )
+        assert resp.status_code == 200
+
+        # Hold should return immediately with approved status
+        resp = client.post(
+            f"/escalation/queue/{event_id}/hold",
+            params={"timeout_seconds": 2, "poll_interval": 0.5},
+            headers=_headers(admin_token),
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "approved"
+        assert data["timed_out"] is False
+        assert data["resolved_by"] is not None
+        _cleanup_escalation_tables()
+
+    def test_hold_times_out_for_pending(self, admin_token):
+        _cleanup_escalation_tables()
+        event_id = self._create_pending_event()
+
+        resp = client.post(
+            f"/escalation/queue/{event_id}/hold",
+            params={"timeout_seconds": 1, "poll_interval": 0.5},
+            headers=_headers(admin_token),
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "pending"
+        assert data["timed_out"] is True
+        _cleanup_escalation_tables()
+
+    def test_hold_404_for_missing_event(self, admin_token):
+        _cleanup_escalation_tables()
+        resp = client.post(
+            "/escalation/queue/99999/hold",
+            params={"timeout_seconds": 1},
+            headers=_headers(admin_token),
+        )
+        assert resp.status_code == 404
+        _cleanup_escalation_tables()
+
+    def test_hold_requires_auth(self):
+        resp = client.post("/escalation/queue/1/hold")
+        assert resp.status_code in (401, 403)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Auto-expiry
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TestAutoExpiry:
+    def _create_expired_event(self):
+        """Insert a pending event whose expires_at is in the past."""
+        with db_session() as session:
+            ev = EscalationEvent(
+                tool="shell",
+                agent_id="test-agent",
+                trigger="policy_review",
+                severity="medium",
+                decision="review",
+                risk_score=60,
+                explanation="Expired review",
+                status="pending",
+                expires_at=datetime.now(timezone.utc) - timedelta(minutes=5),
+            )
+            session.add(ev)
+            session.flush()
+            return ev.id
+
+    def test_expired_event_auto_expires_on_queue_list(self, admin_token):
+        _cleanup_escalation_tables()
+        event_id = self._create_expired_event()
+
+        # Listing the queue should auto-expire the stale event
+        resp = client.get(
+            "/escalation/queue",
+            params={"status": "expired"},
+            headers=_headers(admin_token),
+        )
+        assert resp.status_code == 200
+        events = resp.json()
+        expired_ids = [e["id"] for e in events]
+        assert event_id in expired_ids
+        assert events[0]["status"] == "expired"
+        _cleanup_escalation_tables()
+
+    def test_expired_event_counted_in_stats(self, admin_token):
+        _cleanup_escalation_tables()
+        self._create_expired_event()
+
+        resp = client.get("/escalation/queue/stats", headers=_headers(admin_token))
+        assert resp.status_code == 200
+        stats = resp.json()
+        assert stats["expired"] >= 1
+        _cleanup_escalation_tables()
+
+    def test_hold_detects_expired_event(self, admin_token):
+        _cleanup_escalation_tables()
+        event_id = self._create_expired_event()
+
+        resp = client.post(
+            f"/escalation/queue/{event_id}/hold",
+            params={"timeout_seconds": 1, "poll_interval": 0.5},
+            headers=_headers(admin_token),
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "expired"
+        assert data["timed_out"] is False
+        _cleanup_escalation_tables()
+
+    def test_event_has_expires_at_field(self, admin_token):
+        _cleanup_escalation_tables()
+        # Trigger a review action to create an escalation event via the full pipeline
+        resp = client.post(
+            "/actions/evaluate",
+            json={
+                "tool": "shell",
+                "args": {"cmd": "rm -rf /"},
+                "context": {"agent_id": "expiry-test"},
+            },
+            headers=_headers(admin_token),
+        )
+        data = resp.json()
+        esc_id = data.get("escalation_id")
+        if esc_id:
+            resp = client.get(f"/escalation/queue/{esc_id}", headers=_headers(admin_token))
+            assert resp.status_code == 200
+            ev = resp.json()
+            # expires_at should be set (not None) since default expiry is 30 minutes
+            assert ev.get("expires_at") is not None
         _cleanup_escalation_tables()

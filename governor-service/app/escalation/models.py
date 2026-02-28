@@ -44,6 +44,9 @@ class EscalationConfig(Base):
 
     review_risk_threshold: Mapped[int] = mapped_column(Integer, default=70)
 
+    # Review auto-expiry: pending events expire after this many minutes (0 = never)
+    review_expiry_minutes: Mapped[int] = mapped_column(Integer, default=30)
+
     notify_on_block: Mapped[bool] = mapped_column(Boolean, default=True)
     notify_on_review: Mapped[bool] = mapped_column(Boolean, default=True)
     notify_on_auto_ks: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -97,6 +100,9 @@ class EscalationEvent(Base):
     resolved_by: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
     resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     resolution_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Auto-expiry: if set, pending events older than this are auto-expired
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
 
 
 class EscalationWebhook(Base):

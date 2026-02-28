@@ -9,6 +9,7 @@ Covers:
 """
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -24,6 +25,21 @@ from .models import EscalationConfig, EscalationEvent, EscalationWebhook
 router = APIRouter(prefix="/escalation", tags=["escalation"])
 
 
+def _utc_now_naive() -> datetime:
+    """Return current UTC time as a naive datetime (for SQLite compat)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _dt_is_past(dt: Optional[datetime]) -> bool:
+    """Check if a datetime is in the past, handling naive/aware mismatch."""
+    if dt is None:
+        return False
+    now = _utc_now_naive()
+    # Strip tzinfo for comparison (SQLite stores naive datetimes)
+    dt_naive = dt.replace(tzinfo=None) if dt.tzinfo else dt
+    return dt_naive <= now
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Schemas
 # ═══════════════════════════════════════════════════════════════════════════
@@ -37,6 +53,7 @@ class EscalationConfigCreate(BaseModel):
     auto_ks_risk_threshold: int = Field(82, ge=1, le=100)
     auto_ks_window_size: int = Field(10, ge=1, le=200)
     review_risk_threshold: int = Field(70, ge=0, le=100)
+    review_expiry_minutes: int = Field(30, ge=0, le=10080, description="Auto-expire pending reviews after N minutes (0 = never)")
     notify_on_block: bool = True
     notify_on_review: bool = True
     notify_on_auto_ks: bool = True
@@ -48,6 +65,7 @@ class EscalationConfigUpdate(BaseModel):
     auto_ks_risk_threshold: Optional[int] = Field(None, ge=1, le=100)
     auto_ks_window_size: Optional[int] = Field(None, ge=1, le=200)
     review_risk_threshold: Optional[int] = Field(None, ge=0, le=100)
+    review_expiry_minutes: Optional[int] = Field(None, ge=0, le=10080)
     notify_on_block: Optional[bool] = None
     notify_on_review: Optional[bool] = None
     notify_on_auto_ks: Optional[bool] = None
@@ -63,6 +81,7 @@ class EscalationConfigRead(BaseModel):
     auto_ks_risk_threshold: int
     auto_ks_window_size: int
     review_risk_threshold: int
+    review_expiry_minutes: int
     notify_on_block: bool
     notify_on_review: bool
     notify_on_auto_ks: bool
@@ -92,6 +111,7 @@ class EscalationEventRead(BaseModel):
     resolved_by: Optional[str] = None
     resolved_at: Optional[datetime] = None
     resolution_note: Optional[str] = None
+    expires_at: Optional[datetime] = None
 
 
 class EscalationResolve(BaseModel):
@@ -231,6 +251,9 @@ def list_queue(
     _user: User = Depends(require_any),
 ):
     """List escalation events (review queue). Default: most recent first."""
+    # Expire any stale pending events before listing
+    _expire_stale_events()
+
     with db_session() as session:
         stmt = select(EscalationEvent).order_by(EscalationEvent.created_at.desc())
         if status:
@@ -250,6 +273,9 @@ def list_queue(
 @router.get("/queue/stats", response_model=EscalationStats)
 def queue_stats(_user: User = Depends(require_any)):
     """Summary statistics for the escalation review queue."""
+    # Expire stale events first for accurate counts
+    _expire_stale_events()
+
     with db_session() as session:
         total = session.execute(select(func.count(EscalationEvent.id))).scalar() or 0
 
@@ -336,6 +362,112 @@ def bulk_resolve(
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Auto-expiry helper
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _expire_stale_events() -> int:
+    """
+    Expire any pending events whose expires_at is in the past.
+    Called lazily before queue reads and the hold endpoint.
+    Returns the number of events expired.
+    """
+    now = _utc_now_naive()
+    expired = 0
+    try:
+        with db_session() as session:
+            # Fetch all pending events that have an expires_at set
+            stmt = (
+                select(EscalationEvent)
+                .where(EscalationEvent.status == "pending")
+                .where(EscalationEvent.expires_at != None)  # noqa: E711
+            )
+            rows = session.execute(stmt).scalars().all()
+            for row in rows:
+                if _dt_is_past(row.expires_at):
+                    row.status = "expired"
+                    row.resolved_at = now
+                    row.resolution_note = "Auto-expired (review TTL exceeded)"
+                    expired += 1
+    except Exception as exc:
+        import logging
+        logging.getLogger("governor.escalation").warning("Auto-expiry sweep failed: %s", exc)
+    return expired
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Hold / Wait endpoint (long-poll for SDK hold mode)
+# ═══════════════════════════════════════════════════════════════════════════
+
+class HoldResult(BaseModel):
+    event_id: int
+    status: str
+    resolved_by: Optional[str] = None
+    resolved_at: Optional[datetime] = None
+    resolution_note: Optional[str] = None
+    timed_out: bool = False
+
+
+@router.post("/queue/{event_id}/hold", response_model=HoldResult)
+async def hold_for_review(
+    event_id: int,
+    timeout_seconds: int = Query(60, ge=1, le=300, description="Max seconds to wait"),
+    poll_interval: float = Query(1.0, ge=0.5, le=5.0, description="Seconds between polls"),
+    _user: User = Depends(require_any),
+):
+    """
+    Long-poll endpoint for SDK review_mode='hold'.
+
+    Blocks until the escalation event is resolved (approved/rejected/expired)
+    or the timeout is reached. The SDK calls this after receiving a 'review'
+    decision to wait for a human operator to act.
+
+    Returns the final status of the event and whether the wait timed out.
+    """
+    # First expire any stale events
+    _expire_stale_events()
+
+    start = asyncio.get_event_loop().time()
+    deadline = start + timeout_seconds
+
+    while True:
+        with db_session() as session:
+            row = session.get(EscalationEvent, event_id)
+            if not row:
+                raise HTTPException(404, f"Escalation event {event_id} not found")
+
+            # Check expires_at on-access
+            if (
+                row.status == "pending"
+                and _dt_is_past(row.expires_at)
+            ):
+                row.status = "expired"
+                row.resolved_at = _utc_now_naive()
+                row.resolution_note = "Auto-expired (review TTL exceeded)"
+                session.flush()
+
+            if row.status != "pending":
+                return HoldResult(
+                    event_id=row.id,
+                    status=row.status,
+                    resolved_by=row.resolved_by,
+                    resolved_at=row.resolved_at,
+                    resolution_note=row.resolution_note,
+                    timed_out=False,
+                )
+
+        # Check timeout
+        now = asyncio.get_event_loop().time()
+        if now >= deadline:
+            return HoldResult(
+                event_id=event_id,
+                status="pending",
+                timed_out=True,
+            )
+
+        await asyncio.sleep(poll_interval)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Webhook endpoints
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -407,4 +539,5 @@ def _event_to_read(row: EscalationEvent) -> EscalationEventRead:
         resolved_by=row.resolved_by,
         resolved_at=row.resolved_at,
         resolution_note=row.resolution_note,
+        expires_at=row.expires_at,
     )
