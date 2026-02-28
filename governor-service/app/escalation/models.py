@@ -131,3 +131,41 @@ class EscalationWebhook(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc)
     )
+
+
+class NotificationChannel(Base):
+    """
+    Multi-channel notification endpoint — supports email, Slack, WhatsApp, Jira,
+    and generic webhook.
+
+    channel_type: "email" | "slack" | "whatsapp" | "jira" | "webhook"
+    config_json stores channel-specific configuration:
+
+    Email:    {"smtp_host","smtp_port","from_addr","to_addrs":[...],"use_tls":true}
+    Slack:    {"webhook_url":"https://hooks.slack.com/..."} or {"bot_token":"xoxb-...","channel":"#alerts"}
+    WhatsApp: {"api_url":"https://graph.facebook.com/v17.0/...","phone_number_id":"...","access_token":"...","to_numbers":[...]}
+    Jira:     {"base_url":"https://myorg.atlassian.net","project_key":"GOV","issue_type":"Task","email":"...","api_token":"..."}
+    Webhook:  {"url":"...","auth_header":"Bearer ..."}
+    """
+
+    __tablename__ = "notification_channels"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    label: Mapped[str] = mapped_column(String(256), default="")
+    channel_type: Mapped[str] = mapped_column(String(32), index=True)
+    # channel_type: email | slack | whatsapp | jira | webhook
+
+    config_json: Mapped[str] = mapped_column(Text)  # JSON — channel-specific config
+
+    # What to notify on
+    on_block: Mapped[bool] = mapped_column(Boolean, default=True)
+    on_review: Mapped[bool] = mapped_column(Boolean, default=True)
+    on_auto_ks: Mapped[bool] = mapped_column(Boolean, default=True)
+    on_policy_change: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+    last_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    error_count: Mapped[int] = mapped_column(Integer, default=0)

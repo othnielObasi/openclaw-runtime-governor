@@ -10,9 +10,11 @@ from sqlalchemy import select
 
 from ..auth.dependencies import require_any, require_operator
 from ..database import db_session
-from ..models import PolicyModel, PolicyAuditLog, User
+from ..models import PolicyModel, PolicyAuditLog, PolicyVersion, User
 from ..policies.loader import invalidate_policy_cache
-from ..schemas import PolicyCreate, PolicyRead, PolicyUpdate, PolicyAuditRead
+from ..schemas import (
+    PolicyCreate, PolicyRead, PolicyUpdate, PolicyAuditRead, PolicyVersionRead,
+)
 
 router = APIRouter(prefix="/policies", tags=["policies"])
 
@@ -43,9 +45,33 @@ def _row_to_read(r: PolicyModel) -> PolicyRead:
         match_json=json.loads(r.match_json or "{}"),
         action=r.action,
         is_active=r.is_active,
+        version=getattr(r, "version", 1) or 1,
         created_at=r.created_at,
         updated_at=r.updated_at,
     )
+
+
+def _snapshot_version(
+    session,
+    row: PolicyModel,
+    *,
+    created_by: str | None = None,
+    note: str | None = None,
+) -> PolicyVersion:
+    """Create an immutable version snapshot of the current policy state."""
+    ver = PolicyVersion(
+        policy_id=row.policy_id,
+        version=row.version or 1,
+        description=row.description,
+        severity=row.severity,
+        match_json=row.match_json,
+        action=row.action,
+        is_active=row.is_active,
+        created_by=created_by,
+        note=note,
+    )
+    session.add(ver)
+    return ver
 
 
 def _log_policy_audit(
@@ -339,8 +365,13 @@ def create_policy(
             severity=payload.severity,
             match_json=json.dumps(payload.match_json),
             action=payload.action,
+            version=1,
         )
         session.add(row)
+        session.flush()  # ensure row has defaults before snapshot
+
+        # Create initial version snapshot (v1)
+        _snapshot_version(session, row, created_by=user.username, note="Initial creation")
 
         _log_policy_audit(
             session, "create", payload.policy_id, user,
@@ -381,6 +412,7 @@ def update_policy(
             "action": row.action,
             "match_json": json.loads(row.match_json or "{}"),
             "is_active": row.is_active,
+            "version": row.version or 1,
         }
 
         # Validate regex if match_json is being updated
@@ -391,13 +423,19 @@ def update_policy(
         for field, value in changes.items():
             setattr(row, field, value)
 
+        # Increment version
+        row.version = (row.version or 1) + 1
         row.updated_at = datetime.now(timezone.utc)
+
+        # Snapshot the new version
+        _snapshot_version(session, row, created_by=user.username, note="Edited")
 
         # Build after-state for audit (only changed fields)
         after = {}
         raw_changes = payload.model_dump(exclude_unset=True)
         for k, v in raw_changes.items():
             after[k] = v
+        after["version"] = row.version
 
         _log_policy_audit(
             session, "edit", policy_id, user,
@@ -494,6 +532,110 @@ def activate_policy(
             )
             session.flush()
             invalidate_policy_cache()
+
+        return _row_to_read(row)
+
+
+# ---------------------------------------------------------------------------
+# Version history & restore
+# ---------------------------------------------------------------------------
+
+@router.get("/{policy_id}/versions", response_model=List[PolicyVersionRead])
+def list_policy_versions(
+    policy_id: str,
+    _user: User = Depends(require_any),
+) -> List[PolicyVersionRead]:
+    """List all saved versions of a policy (newest first)."""
+    with db_session() as session:
+        # Verify policy exists
+        row = session.execute(
+            select(PolicyModel).where(PolicyModel.policy_id == policy_id)
+        ).scalar_one_or_none()
+        if not row:
+            raise HTTPException(status_code=404, detail="Policy not found.")
+
+        stmt = (
+            select(PolicyVersion)
+            .where(PolicyVersion.policy_id == policy_id)
+            .order_by(PolicyVersion.version.desc())
+        )
+        versions = session.execute(stmt).scalars().all()
+        return [
+            PolicyVersionRead(
+                id=v.id,
+                policy_id=v.policy_id,
+                version=v.version,
+                description=v.description,
+                severity=v.severity,
+                match_json=json.loads(v.match_json or "{}"),
+                action=v.action,
+                is_active=v.is_active,
+                created_by=v.created_by,
+                created_at=v.created_at,
+                note=v.note,
+            )
+            for v in versions
+        ]
+
+
+@router.post("/{policy_id}/restore/{version}", response_model=PolicyRead)
+def restore_policy_version(
+    policy_id: str,
+    version: int,
+    user: User = Depends(require_operator),
+) -> PolicyRead:
+    """
+    Restore a policy to a previous version.
+
+    Creates a *new* version with the content from the specified historical
+    version — history is never rewritten.
+    """
+    with db_session() as session:
+        row = session.execute(
+            select(PolicyModel).where(PolicyModel.policy_id == policy_id)
+        ).scalar_one_or_none()
+        if not row:
+            raise HTTPException(status_code=404, detail="Policy not found.")
+
+        target = session.execute(
+            select(PolicyVersion)
+            .where(PolicyVersion.policy_id == policy_id)
+            .where(PolicyVersion.version == version)
+        ).scalar_one_or_none()
+        if not target:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Version {version} not found for policy '{policy_id}'.",
+            )
+
+        before_version = row.version or 1
+
+        # Apply historical values
+        row.description = target.description
+        row.severity = target.severity
+        row.match_json = target.match_json
+        row.action = target.action
+        row.is_active = target.is_active
+        row.version = before_version + 1
+        row.updated_at = datetime.now(timezone.utc)
+
+        # Snapshot the restored version
+        _snapshot_version(
+            session, row,
+            created_by=user.username,
+            note=f"Restored from v{version}",
+        )
+
+        _log_policy_audit(
+            session, "restore", policy_id, user,
+            changes={
+                "restored_from_version": version,
+                "new_version": row.version,
+            },
+            note=f"Restored to content from v{version}",
+        )
+        session.flush()
+        invalidate_policy_cache()
 
         return _row_to_read(row)
 

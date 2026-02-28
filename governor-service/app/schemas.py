@@ -133,8 +133,25 @@ class PolicyRead(PolicyBase):
     match_json: Dict[str, Any]
     action: str
     is_active: bool = True
+    version: int = 1
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+
+class PolicyVersionRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    policy_id: str
+    version: int
+    description: str
+    severity: int
+    match_json: Dict[str, Any]
+    action: str
+    is_active: bool
+    created_by: Optional[str] = None
+    created_at: Optional[datetime] = None
+    note: Optional[str] = None
 
 
 class PolicyAuditRead(BaseModel):
@@ -148,6 +165,57 @@ class PolicyAuditRead(BaseModel):
     user_role: str
     changes_json: Optional[Dict[str, Any]] = None
     note: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Notification channels
+# ---------------------------------------------------------------------------
+
+class NotificationChannelCreate(BaseModel):
+    label: str = ""
+    channel_type: str = Field(..., pattern="^(email|slack|whatsapp|jira|webhook)$")
+    config_json: Dict[str, Any] = Field(
+        ...,
+        description=(
+            "Channel-specific config. "
+            "Email: {smtp_host, smtp_port, from_addr, to_addrs, use_tls, username?, password?}. "
+            "Slack: {webhook_url} or {bot_token, channel}. "
+            "WhatsApp: {api_url, phone_number_id, access_token, to_numbers}. "
+            "Jira: {base_url, project_key, issue_type, email, api_token}. "
+            "Webhook: {url, auth_header?}."
+        ),
+    )
+    on_block: bool = True
+    on_review: bool = True
+    on_auto_ks: bool = True
+    on_policy_change: bool = False
+
+
+class NotificationChannelUpdate(BaseModel):
+    label: Optional[str] = None
+    config_json: Optional[Dict[str, Any]] = None
+    on_block: Optional[bool] = None
+    on_review: Optional[bool] = None
+    on_auto_ks: Optional[bool] = None
+    on_policy_change: Optional[bool] = None
+    is_active: Optional[bool] = None
+
+
+class NotificationChannelRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    label: str
+    channel_type: str
+    config_json: Dict[str, Any]
+    on_block: bool
+    on_review: bool
+    on_auto_ks: bool
+    on_policy_change: bool
+    is_active: bool
+    created_at: Optional[datetime] = None
+    last_sent_at: Optional[datetime] = None
+    error_count: int = 0
 
 
 # ---------------------------------------------------------------------------

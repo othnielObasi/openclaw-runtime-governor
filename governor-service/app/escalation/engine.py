@@ -27,6 +27,7 @@ from ..models import ActionLog
 from ..state import set_kill_switch, is_kill_switch_enabled
 from ..event_bus import ActionEvent, action_bus
 from .models import EscalationConfig, EscalationEvent, EscalationWebhook
+from .channels import dispatch_notification_channels
 
 logger = logging.getLogger("governor.escalation")
 
@@ -387,21 +388,25 @@ def handle_post_evaluation(
 
     # ── Step 3: Dispatch webhooks ──
     if decision == "block" and config.get("notify_on_block"):
-        dispatch_webhooks("block", _build_webhook_payload(
+        webhook_payload = _build_webhook_payload(
             "action_blocked", tool, decision, risk_score, explanation,
             policy_ids, chain_pattern, agent_id,
-        ))
+        )
+        dispatch_webhooks("block", webhook_payload)
+        dispatch_notification_channels("block", webhook_payload)
         result["webhooks_dispatched"] = True
 
     if decision == "review" and config.get("notify_on_review"):
-        dispatch_webhooks("review", _build_webhook_payload(
+        webhook_payload = _build_webhook_payload(
             "action_review", tool, decision, risk_score, explanation,
             policy_ids, chain_pattern, agent_id,
-        ))
+        )
+        dispatch_webhooks("review", webhook_payload)
+        dispatch_notification_channels("review", webhook_payload)
         result["webhooks_dispatched"] = True
 
     if ks_trigger and config.get("notify_on_auto_ks"):
-        dispatch_webhooks("auto_ks", {
+        ks_payload = {
             "event": "auto_kill_switch",
             "reason": ks_trigger["detail"],
             "trigger": ks_trigger["trigger"],
@@ -409,7 +414,9 @@ def handle_post_evaluation(
             "avg_risk": ks_trigger["avg_risk"],
             "agent_id": agent_id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        }
+        dispatch_webhooks("auto_ks", ks_payload)
+        dispatch_notification_channels("auto_ks", ks_payload)
         result["webhooks_dispatched"] = True
 
     return result

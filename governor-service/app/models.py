@@ -51,12 +51,38 @@ class PolicyModel(Base):
     match_json: Mapped[str] = mapped_column(Text)    # JSON
     action: Mapped[str] = mapped_column(String(32))
     is_active: Mapped[bool] = mapped_column(default=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
+
+
+class PolicyVersion(Base):
+    """
+    Immutable snapshot of a policy at a specific version.
+
+    Every edit creates a new version entry preserving the full prior state.
+    Enables restoring any previous version.
+    """
+
+    __tablename__ = "policy_versions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    policy_id: Mapped[str] = mapped_column(String(64), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    description: Mapped[str] = mapped_column(Text)
+    severity: Mapped[int] = mapped_column(Integer)
+    match_json: Mapped[str] = mapped_column(Text)
+    action: Mapped[str] = mapped_column(String(32))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_by: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc), index=True
+    )
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
 class PolicyAuditLog(Base):

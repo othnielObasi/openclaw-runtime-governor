@@ -1634,8 +1634,36 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
   const [importResult, setImportResult] = useState(null);
   const [busy, setBusy]           = useState(false);
   const [opLog, setOpLog]         = useState([]); // lightweight operation history
+  const [versionHistoryPolicy, setVersionHistoryPolicy] = useState(null);
+  const [versionList, setVersionList] = useState([]);
+  const [versionLoading, setVersionLoading] = useState(false);
 
   const addOp = (msg) => setOpLog(prev => [{ id:Date.now(), msg, time:new Date().toLocaleTimeString() }, ...prev].slice(0,30));
+
+  // ── Version history helpers ─────────────────────────────────
+  const loadVersionHistory = async (policyId) => {
+    if (!API_BASE) return;
+    setVersionHistoryPolicy(policyId);
+    setVersionLoading(true);
+    try {
+      const r = await fetch(`${API_BASE}/policies/${encodeURIComponent(policyId)}/versions`, {headers:headers()});
+      if (!r.ok) throw new Error(`${r.status}`);
+      setVersionList(await r.json());
+    } catch(e) { setVersionList([]); }
+    finally { setVersionLoading(false); }
+  };
+  const restoreVersion = async (policyId, version) => {
+    if (!API_BASE) return;
+    setBusy(true);
+    try {
+      const r = await fetch(`${API_BASE}/policies/${encodeURIComponent(policyId)}/restore/${version}`, {method:"POST",headers:headers()});
+      if (!r.ok) throw new Error(`${r.status}`);
+      addOp(`Restored ${policyId} to v${version}`);
+      await loadPolicies(true);
+      await loadVersionHistory(policyId);
+    } catch(e) { setApiError(`Restore failed: ${e.message}`); }
+    finally { setBusy(false); }
+  };
 
   // ── Server → local mapping helper ───────────────────────────
   const mapServerToLocal = (sp) => {
@@ -1644,7 +1672,7 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
     return {
       id: sp.policy_id, sev: sp.severity, description: sp.description,
       action: sp.action, status: sp.is_active ? "active" : "archived",
-      version: 1, source: "runtime", matchTool: mt, matchRegex: rx,
+      version: sp.version || 1, source: "runtime", matchTool: mt, matchRegex: rx,
       created_at: sp.created_at, updated_at: sp.updated_at,
       fn: (t, a, fl) => {
         if (mt && t !== mt) return false;
@@ -2225,10 +2253,17 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
                   ) : <span/>}
                 </div>
 
-                {/* Policy name + description */}
+                {/* Policy name + description + version badge */}
                 <div>
-                  <div style={{fontFamily:mono, fontSize:14, fontWeight:600,
-                    color:C.p1, marginBottom:2}}>{p.id}</div>
+                  <div style={{display:"flex", alignItems:"center", gap:6}}>
+                    <span style={{fontFamily:mono, fontSize:14, fontWeight:600,
+                      color:C.p1}}>{p.id}</span>
+                    {isRuntime && (
+                      <span style={{fontFamily:mono, fontSize:10, padding:"1px 5px",
+                        border:`1px solid ${C.accent}`, color:C.accent,
+                        letterSpacing:0.5}}>v{p.version||1}</span>
+                    )}
+                  </div>
                   {p.description && (
                     <div style={{fontFamily:sans, fontSize:13, color:C.p3,
                       lineHeight:1.4}}>{p.description}</div>
@@ -2287,6 +2322,15 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
                       onMouseEnter={e=>{e.target.style.borderColor=C.accent;e.target.style.color=C.accent;}}
                       onMouseLeave={e=>{e.target.style.borderColor=C.line2;e.target.style.color=C.p2;}}>
                       ✎ EDIT
+                    </button>
+                  )}
+                  {isRuntime && API_BASE && (
+                    <button onClick={()=>loadVersionHistory(p.id)} disabled={busy} style={{
+                      fontFamily:mono, fontSize:11, padding:"3px 0",
+                      border:`1px solid ${C.cyan||"#22d3ee"}`, color:C.cyan||"#22d3ee",
+                      background:"transparent", cursor:"pointer",
+                      textAlign:"center", letterSpacing:0.5, opacity:busy?0.5:1}}>
+                      ⏱ HISTORY
                     </button>
                   )}
                   {isRuntime && (p.status||"active")==="active" && (
@@ -2556,6 +2600,112 @@ function PolicyEditorTab({ extraPolicies, setExtraPolicies, policySnapshots, onR
           </>
         )}
       </div>
+
+      {/* ══ VERSION HISTORY MODAL ══════════════════════════════════ */}
+      {versionHistoryPolicy && (
+        <div style={{position:"fixed", inset:0, zIndex:9999,
+          background:"rgba(0,0,0,0.7)", display:"flex", alignItems:"center", justifyContent:"center"}}
+          onClick={()=>setVersionHistoryPolicy(null)}>
+          <div style={{background:C.bg1, border:`1px solid ${C.line2}`, minWidth:700,
+            maxWidth:900, maxHeight:"80vh", overflow:"auto", padding:0}}
+            onClick={e=>e.stopPropagation()}>
+            <div style={{display:"flex", alignItems:"center", justifyContent:"space-between",
+              padding:"16px 20px", borderBottom:`1px solid ${C.line}`, background:C.bg0}}>
+              <div>
+                <div style={{fontFamily:mono, fontSize:14, fontWeight:700, color:C.p1, letterSpacing:1}}>
+                  VERSION HISTORY
+                </div>
+                <div style={{fontFamily:mono, fontSize:12, color:C.accent, marginTop:2}}>
+                  {versionHistoryPolicy}
+                </div>
+              </div>
+              <button onClick={()=>setVersionHistoryPolicy(null)} style={{
+                fontFamily:mono, fontSize:12, padding:"5px 12px", cursor:"pointer",
+                border:`1px solid ${C.line2}`, color:C.p3, background:"transparent",
+                letterSpacing:1}}>✕ CLOSE</button>
+            </div>
+
+            {versionLoading ? (
+              <div style={{padding:40, textAlign:"center", fontFamily:mono, fontSize:14, color:C.p3}}>
+                Loading version history…
+              </div>
+            ) : versionList.length === 0 ? (
+              <div style={{padding:40, textAlign:"center", fontFamily:sans, fontSize:14, color:C.p3}}>
+                No version history available for this policy.
+              </div>
+            ) : (
+              <div style={{padding:"12px 20px"}}>
+                {/* Header */}
+                <div style={{display:"grid", gridTemplateColumns:"50px 1fr 50px 70px 70px 140px 100px",
+                  gap:6, padding:"6px 8px", marginBottom:4}}>
+                  {["VER","DESCRIPTION","SEV","ACTION","STATUS","DATE",""].map(h => (
+                    <div key={h} style={{fontFamily:mono, fontSize:11, color:C.p3,
+                      letterSpacing:1.5, textTransform:"uppercase"}}>{h}</div>
+                  ))}
+                </div>
+                {/* Version rows */}
+                {versionList.map((v, i) => (
+                  <div key={v.id} style={{
+                    display:"grid", gridTemplateColumns:"50px 1fr 50px 70px 70px 140px 100px",
+                    gap:6, alignItems:"center", padding:"10px 8px",
+                    borderBottom:`1px solid ${C.line}`,
+                    background:i===0?C.bg2:"transparent"}}>
+                    <div style={{fontFamily:mono, fontSize:14, fontWeight:700, color:C.accent}}>
+                      v{v.version}
+                    </div>
+                    <div>
+                      <div style={{fontFamily:sans, fontSize:13, color:C.p2, lineHeight:1.4}}>
+                        {v.description}
+                      </div>
+                      {v.note && (
+                        <div style={{fontFamily:mono, fontSize:11, color:C.p3, marginTop:2}}>
+                          {v.note}{v.created_by ? ` · by ${v.created_by}` : ""}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{fontFamily:mono, fontSize:14, fontWeight:700, textAlign:"center",
+                      color:v.severity>=80?C.red:v.severity>=50?C.amber:C.green}}>
+                      {v.severity}
+                    </div>
+                    <div style={{textAlign:"center"}}>
+                      <span style={{fontFamily:mono, fontSize:11, letterSpacing:0.5,
+                        padding:"2px 6px", border:`1px solid ${ac(v.action)}`,
+                        color:ac(v.action), textTransform:"uppercase"}}>{v.action}</span>
+                    </div>
+                    <div>
+                      <span style={{fontFamily:mono, fontSize:11, letterSpacing:0.5,
+                        padding:"2px 6px", border:`1px solid ${v.is_active?C.green:C.p3}`,
+                        color:v.is_active?C.green:C.p3, textTransform:"uppercase"}}>
+                        {v.is_active?"active":"archived"}
+                      </span>
+                    </div>
+                    <div style={{fontFamily:mono, fontSize:11, color:C.p3}}>
+                      {v.created_at ? new Date(v.created_at).toLocaleString() : "—"}
+                    </div>
+                    <div>
+                      {i===0 ? (
+                        <span style={{fontFamily:mono, fontSize:11, color:C.p3,
+                          padding:"4px 8px", border:`1px solid ${C.line2}`,
+                          textAlign:"center", display:"block"}}>CURRENT</span>
+                      ) : (
+                        <button onClick={()=>restoreVersion(versionHistoryPolicy, v.version)}
+                          disabled={busy} style={{
+                          fontFamily:mono, fontSize:11, fontWeight:700,
+                          padding:"4px 8px", cursor:"pointer", width:"100%",
+                          border:`1px solid ${C.amber}`, color:C.amber,
+                          background:C.amberDim, letterSpacing:0.5,
+                          opacity:busy?0.5:1}}>
+                          ↩ RESTORE
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -4122,6 +4272,7 @@ function SettingsTab({ onConfigSaved }) {
   const [configs, setConfigs] = useState([]);
   const [webhooks, setWebhooks] = useState([]);
   const [activeScope, setActiveScope] = useState("*");
+  const [channels, setChannels] = useState([]);
 
   // Form state for current scope
   const [form, setForm] = useState({
@@ -4139,17 +4290,24 @@ function SettingsTab({ onConfigSaved }) {
   const [whForm, setWhForm] = useState({ url: "", label: "", on_block: true, on_review: true, on_auto_ks: true });
   const [newAgentScope, setNewAgentScope] = useState("");
 
+  // Notification channel form
+  const [chForm, setChForm] = useState({ label:"", channel_type:"email", on_block:true, on_review:true, on_auto_ks:true, on_policy_change:false });
+  const [chConfig, setChConfig] = useState({});
+  const [showChForm, setShowChForm] = useState(false);
+
   // ── Load ──
   const loadConfigs = async () => {
     if (!API_BASE) { setLoading(false); return; }
     setLoading(true); setErr("");
     try {
-      const [cfgRes, whRes] = await Promise.all([
+      const [cfgRes, whRes, chRes] = await Promise.all([
         fetch(`${API_BASE}/escalation/config`, { headers: headers() }),
         fetch(`${API_BASE}/escalation/webhooks`, { headers: headers() }),
+        fetch(`${API_BASE}/notifications`, { headers: headers() }),
       ]);
       if (cfgRes.ok) { const data = await cfgRes.json(); setConfigs(data); }
       if (whRes.ok)  { const data = await whRes.json();  setWebhooks(data); }
+      if (chRes.ok)  { const data = await chRes.json();  setChannels(data); }
     } catch (e) { setErr(e.message); }
     finally { setLoading(false); }
   };
@@ -4261,6 +4419,48 @@ function SettingsTab({ onConfigSaved }) {
       });
       await loadConfigs();
     } catch (e) { setErr(e.message); }
+  };
+
+  // ── Notification channel CRUD ──
+  const addChannel = async () => {
+    if (!chForm.channel_type) return;
+    try {
+      const r = await fetch(`${API_BASE}/notifications`, {
+        method:"POST", headers:headers(),
+        body: JSON.stringify({ ...chForm, config_json:chConfig }),
+      });
+      if (!r.ok) { const e=await r.json().catch(()=>({})); throw new Error(e.detail||"Create failed"); }
+      setChForm({ label:"", channel_type:"email", on_block:true, on_review:true, on_auto_ks:true, on_policy_change:false });
+      setChConfig({});
+      setShowChForm(false);
+      await loadConfigs();
+    } catch(e) { setErr(e.message); }
+  };
+
+  const deleteChannel = async (id) => {
+    try {
+      await fetch(`${API_BASE}/notifications/${id}`, { method:"DELETE", headers:headers() });
+      await loadConfigs();
+    } catch(e) { setErr(e.message); }
+  };
+
+  const toggleChannel = async (ch) => {
+    try {
+      await fetch(`${API_BASE}/notifications/${ch.id}`, {
+        method:"PATCH", headers:headers(),
+        body: JSON.stringify({ is_active: !ch.is_active }),
+      });
+      await loadConfigs();
+    } catch(e) { setErr(e.message); }
+  };
+
+  const testChannel = async (id) => {
+    try {
+      const r = await fetch(`${API_BASE}/notifications/${id}/test`, { method:"POST", headers:headers() });
+      const data = await r.json();
+      if (data.success) { setSuccess(`Test notification sent to channel #${id}`); setTimeout(()=>setSuccess(""),4000); }
+      else { setErr(`Test failed: ${data.error||"unknown error"}`); }
+    } catch(e) { setErr(e.message); }
   };
 
   // ── Style helpers ──
@@ -4545,6 +4745,215 @@ function SettingsTab({ onConfigSaved }) {
             + ADD
           </button>
         </div>
+      </div>
+
+      {/* ═══ Section 5: Notification Channels (Email, Slack, WhatsApp, Jira) ═══ */}
+      <div style={{marginBottom:24, padding:16, border:`1px solid ${C.line2}`, background:C.bg1}}>
+        <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:4}}>
+          <div>
+            <div style={{fontFamily:mono, fontSize:13, fontWeight:700, color:C.p1, letterSpacing:1}}>
+              NOTIFICATION CHANNELS
+            </div>
+            <div style={{fontFamily:mono, fontSize:11, color:C.p3, marginTop:2}}>
+              Multi-channel alerts — Email, Slack, WhatsApp, Jira, or generic webhook
+            </div>
+          </div>
+          <button onClick={()=>setShowChForm(!showChForm)}
+            style={{fontFamily:mono, fontSize:11, padding:"5px 14px", cursor:"pointer",
+              border:`1px solid ${C.accent}`, color:C.accent, background:"transparent"}}>
+            {showChForm ? "✕ CANCEL" : "+ ADD CHANNEL"}
+          </button>
+        </div>
+
+        {/* Existing channels */}
+        {channels.length > 0 && (
+          <div style={{marginTop:12, marginBottom:showChForm?16:0}}>
+            {channels.map(ch => {
+              const typeColors = {email:C.cyan||"#22d3ee", slack:"#4a154b", whatsapp:C.green, jira:"#0052cc", webhook:C.p3};
+              const tc = typeColors[ch.channel_type]||C.p3;
+              return (
+                <div key={ch.id} style={{display:"flex", alignItems:"center", gap:10, padding:"10px 0",
+                  borderBottom:`1px solid ${C.line}`}}>
+                  <span style={{fontFamily:mono, fontSize:10, fontWeight:700, padding:"3px 8px",
+                    border:`1px solid ${tc}`, color:tc, letterSpacing:1,
+                    textTransform:"uppercase", minWidth:70, textAlign:"center"}}>
+                    {ch.channel_type}
+                  </span>
+                  <div style={{flex:1}}>
+                    <div style={{fontFamily:mono, fontSize:12, color:C.p1}}>
+                      {ch.label || `${ch.channel_type} channel`}
+                    </div>
+                    <div style={{fontFamily:mono, fontSize:10, color:C.muted, marginTop:2}}>
+                      {ch.on_block&&"block "}{ch.on_review&&"review "}{ch.on_auto_ks&&"auto-ks "}{ch.on_policy_change&&"policy-change"}
+                      {" · "}{ch.is_active ? <span style={{color:C.green}}>active</span> : <span style={{color:C.red}}>paused</span>}
+                      {ch.error_count > 0 && <span style={{color:C.red}}> · {ch.error_count} errors</span>}
+                      {ch.last_sent_at && <span> · last sent {new Date(ch.last_sent_at).toLocaleString()}</span>}
+                    </div>
+                  </div>
+                  <button onClick={()=>testChannel(ch.id)}
+                    style={{fontFamily:mono, fontSize:10, padding:"3px 10px", cursor:"pointer",
+                      border:`1px solid ${C.accent}`, color:C.accent, background:"transparent"}}>
+                    TEST
+                  </button>
+                  <button onClick={()=>toggleChannel(ch)}
+                    style={{fontFamily:mono, fontSize:10, padding:"3px 10px", cursor:"pointer",
+                      border:`1px solid ${C.line2}`, color:ch.is_active?C.amber:C.green, background:"transparent"}}>
+                    {ch.is_active ? "PAUSE" : "ENABLE"}
+                  </button>
+                  <button onClick={()=>deleteChannel(ch.id)}
+                    style={{fontFamily:mono, fontSize:10, padding:"3px 10px", cursor:"pointer",
+                      border:`1px solid ${C.red}`, color:C.red, background:"transparent"}}>
+                    DELETE
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {channels.length === 0 && !showChForm && (
+          <div style={{fontFamily:mono, fontSize:12, color:C.p3, padding:"14px 0", textAlign:"center"}}>
+            No notification channels configured. Click "+ ADD CHANNEL" to set up email, Slack, WhatsApp, or Jira alerts.
+          </div>
+        )}
+
+        {/* Add channel form */}
+        {showChForm && (
+          <div style={{marginTop:12, padding:14, border:`1px solid ${C.accent}22`, background:C.bg0}}>
+            <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12}}>
+              <div>
+                <div style={{fontFamily:mono, fontSize:10, color:C.muted, marginBottom:3}}>CHANNEL TYPE</div>
+                <select value={chForm.channel_type}
+                  onChange={e=>{setChForm(f=>({...f, channel_type:e.target.value})); setChConfig({});}}
+                  style={{...inputStyle, fontSize:12}}>
+                  <option value="email">Email (SMTP)</option>
+                  <option value="slack">Slack</option>
+                  <option value="whatsapp">WhatsApp</option>
+                  <option value="jira">Jira</option>
+                  <option value="webhook">Webhook (Generic)</option>
+                </select>
+              </div>
+              <div>
+                <div style={{fontFamily:mono, fontSize:10, color:C.muted, marginBottom:3}}>LABEL</div>
+                <input value={chForm.label} onChange={e=>setChForm(f=>({...f,label:e.target.value}))}
+                  placeholder="e.g. Team Alerts" style={{...inputStyle, fontSize:12}}/>
+              </div>
+            </div>
+
+            {/* Channel-specific config fields */}
+            {chForm.channel_type==="email" && (
+              <div style={{display:"grid", gridTemplateColumns:"1fr 80px 1fr 1fr", gap:8, marginBottom:12}}>
+                <div>
+                  <div style={{fontFamily:mono, fontSize:10, color:C.muted, marginBottom:3}}>SMTP HOST</div>
+                  <input value={chConfig.smtp_host||""} onChange={e=>setChConfig(c=>({...c,smtp_host:e.target.value}))}
+                    placeholder="smtp.gmail.com" style={{...inputStyle, fontSize:11}}/>
+                </div>
+                <div>
+                  <div style={{fontFamily:mono, fontSize:10, color:C.muted, marginBottom:3}}>PORT</div>
+                  <input value={chConfig.smtp_port||""} onChange={e=>setChConfig(c=>({...c,smtp_port:e.target.value}))}
+                    placeholder="587" style={{...inputStyle, fontSize:11}}/>
+                </div>
+                <div>
+                  <div style={{fontFamily:mono, fontSize:10, color:C.muted, marginBottom:3}}>FROM</div>
+                  <input value={chConfig.from_addr||""} onChange={e=>setChConfig(c=>({...c,from_addr:e.target.value}))}
+                    placeholder="alerts@example.com" style={{...inputStyle, fontSize:11}}/>
+                </div>
+                <div>
+                  <div style={{fontFamily:mono, fontSize:10, color:C.muted, marginBottom:3}}>TO (comma-separated)</div>
+                  <input value={(chConfig.to_addrs||[]).join(",")} onChange={e=>setChConfig(c=>({...c,to_addrs:e.target.value.split(",").map(s=>s.trim()).filter(Boolean)}))}
+                    placeholder="admin@org.com,ops@org.com" style={{...inputStyle, fontSize:11}}/>
+                </div>
+              </div>
+            )}
+            {chForm.channel_type==="slack" && (
+              <div style={{marginBottom:12}}>
+                <div style={{fontFamily:mono, fontSize:10, color:C.muted, marginBottom:3}}>WEBHOOK URL</div>
+                <input value={chConfig.webhook_url||""} onChange={e=>setChConfig(c=>({...c,webhook_url:e.target.value}))}
+                  placeholder="https://hooks.slack.com/services/T.../B.../xxx" style={{...inputStyle, fontSize:11, width:"100%"}}/>
+              </div>
+            )}
+            {chForm.channel_type==="whatsapp" && (
+              <div style={{display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:12}}>
+                <div>
+                  <div style={{fontFamily:mono, fontSize:10, color:C.muted, marginBottom:3}}>PHONE NUMBER ID</div>
+                  <input value={chConfig.phone_number_id||""} onChange={e=>setChConfig(c=>({...c,phone_number_id:e.target.value}))}
+                    placeholder="123456789" style={{...inputStyle, fontSize:11}}/>
+                </div>
+                <div>
+                  <div style={{fontFamily:mono, fontSize:10, color:C.muted, marginBottom:3}}>ACCESS TOKEN</div>
+                  <input value={chConfig.access_token||""} onChange={e=>setChConfig(c=>({...c,access_token:e.target.value}))}
+                    placeholder="EAAxxxx..." style={{...inputStyle, fontSize:11}} type="password"/>
+                </div>
+                <div>
+                  <div style={{fontFamily:mono, fontSize:10, color:C.muted, marginBottom:3}}>TO NUMBERS (comma-sep)</div>
+                  <input value={(chConfig.to_numbers||[]).join(",")} onChange={e=>setChConfig(c=>({...c,to_numbers:e.target.value.split(",").map(s=>s.trim()).filter(Boolean)}))}
+                    placeholder="+1234567890" style={{...inputStyle, fontSize:11}}/>
+                </div>
+              </div>
+            )}
+            {chForm.channel_type==="jira" && (
+              <div style={{display:"grid", gridTemplateColumns:"1fr 100px 100px 1fr 1fr", gap:8, marginBottom:12}}>
+                <div>
+                  <div style={{fontFamily:mono, fontSize:10, color:C.muted, marginBottom:3}}>BASE URL</div>
+                  <input value={chConfig.base_url||""} onChange={e=>setChConfig(c=>({...c,base_url:e.target.value}))}
+                    placeholder="https://myorg.atlassian.net" style={{...inputStyle, fontSize:11}}/>
+                </div>
+                <div>
+                  <div style={{fontFamily:mono, fontSize:10, color:C.muted, marginBottom:3}}>PROJECT</div>
+                  <input value={chConfig.project_key||""} onChange={e=>setChConfig(c=>({...c,project_key:e.target.value}))}
+                    placeholder="GOV" style={{...inputStyle, fontSize:11}}/>
+                </div>
+                <div>
+                  <div style={{fontFamily:mono, fontSize:10, color:C.muted, marginBottom:3}}>ISSUE TYPE</div>
+                  <input value={chConfig.issue_type||""} onChange={e=>setChConfig(c=>({...c,issue_type:e.target.value}))}
+                    placeholder="Task" style={{...inputStyle, fontSize:11}}/>
+                </div>
+                <div>
+                  <div style={{fontFamily:mono, fontSize:10, color:C.muted, marginBottom:3}}>EMAIL</div>
+                  <input value={chConfig.email||""} onChange={e=>setChConfig(c=>({...c,email:e.target.value}))}
+                    placeholder="bot@myorg.com" style={{...inputStyle, fontSize:11}}/>
+                </div>
+                <div>
+                  <div style={{fontFamily:mono, fontSize:10, color:C.muted, marginBottom:3}}>API TOKEN</div>
+                  <input value={chConfig.api_token||""} onChange={e=>setChConfig(c=>({...c,api_token:e.target.value}))}
+                    placeholder="ATATT..." style={{...inputStyle, fontSize:11}} type="password"/>
+                </div>
+              </div>
+            )}
+            {chForm.channel_type==="webhook" && (
+              <div style={{display:"grid", gridTemplateColumns:"2fr 1fr", gap:8, marginBottom:12}}>
+                <div>
+                  <div style={{fontFamily:mono, fontSize:10, color:C.muted, marginBottom:3}}>URL</div>
+                  <input value={chConfig.url||""} onChange={e=>setChConfig(c=>({...c,url:e.target.value}))}
+                    placeholder="https://example.com/hook" style={{...inputStyle, fontSize:11}}/>
+                </div>
+                <div>
+                  <div style={{fontFamily:mono, fontSize:10, color:C.muted, marginBottom:3}}>AUTH HEADER (optional)</div>
+                  <input value={chConfig.auth_header||""} onChange={e=>setChConfig(c=>({...c,auth_header:e.target.value}))}
+                    placeholder="Bearer token..." style={{...inputStyle, fontSize:11}}/>
+                </div>
+              </div>
+            )}
+
+            {/* Event toggles */}
+            <div style={{display:"flex", gap:6, marginBottom:12, flexWrap:"wrap"}}>
+              {[{k:"on_block",l:"Block"},{k:"on_review",l:"Review"},{k:"on_auto_ks",l:"Auto-KS"},{k:"on_policy_change",l:"Policy Change"}].map(({k,l})=>(
+                <button key={k} onClick={()=>setChForm(f=>({...f,[k]:!f[k]}))}
+                  style={{fontFamily:mono, fontSize:10, padding:"3px 10px", cursor:"pointer",
+                    border:`1px solid ${chForm[k]?C.green:C.line2}`,
+                    color:chForm[k]?C.green:C.muted, background:"transparent"}}>
+                  {l}: {chForm[k]?"ON":"OFF"}
+                </button>
+              ))}
+            </div>
+
+            <button onClick={addChannel}
+              style={{fontFamily:mono, fontSize:12, fontWeight:700, padding:"6px 20px", cursor:"pointer",
+                border:`1px solid ${C.green}`, color:C.green, background:"rgba(34,197,94,0.08)",
+                letterSpacing:1}}>
+              + CREATE CHANNEL
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ═══ Config summary (read-only) ═══ */}
