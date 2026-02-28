@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import { useAuth } from "../components/AuthContext";
 import GovernorLogin from "../components/GovernorLogin";
 import GovernorDashboard from "../components/GovernorDashboard";
@@ -339,6 +340,27 @@ function LandingPage({ onSelect }: { onSelect: (mode: "demo" | "live") => void }
           </div>
         </div>
       </div>
+
+      {/* ── Documentation link ── */}
+      <Link href="/docs" style={{
+        fontFamily: mono, fontSize: 12, fontWeight: 600,
+        color: C.p3, letterSpacing: 2, textDecoration: "none",
+        padding: "10px 24px", marginTop: 32,
+        border: `1px solid ${C.line}`,
+        transition: "all 0.2s ease",
+        textTransform: "uppercase",
+      }}
+        onMouseEnter={(e: React.MouseEvent<HTMLAnchorElement>) => {
+          e.currentTarget.style.borderColor = C.p2;
+          e.currentTarget.style.color = C.p1;
+        }}
+        onMouseLeave={(e: React.MouseEvent<HTMLAnchorElement>) => {
+          e.currentTarget.style.borderColor = C.line;
+          e.currentTarget.style.color = C.p3;
+        }}
+      >
+        📖 Documentation
+      </Link>
 
       {/* ── Footer ── */}
       <div style={{
