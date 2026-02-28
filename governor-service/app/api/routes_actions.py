@@ -155,6 +155,7 @@ def evaluate_action_route(
 @router.get("", response_model=List[ActionLogRead])
 def list_actions(
     limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0, description="Number of records to skip for pagination"),
     tool: str | None = Query(None, description="Filter by tool name"),
     decision: str | None = Query(None, description="Filter by decision (allow/block/review)"),
     agent_id: str | None = Query(None, description="Filter by agent_id"),
@@ -169,7 +170,7 @@ def list_actions(
             stmt = stmt.where(ActionLog.decision == decision)
         if agent_id:
             stmt = stmt.where(ActionLog.agent_id == agent_id)
-        stmt = stmt.limit(limit)
+        stmt = stmt.offset(offset).limit(limit)
 
         rows = session.execute(stmt).scalars().all()
         return [

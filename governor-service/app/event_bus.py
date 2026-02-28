@@ -55,11 +55,20 @@ class ActionEvent:
 class EventBus:
     """Simple broadcast pub/sub using per-subscriber asyncio queues."""
 
-    def __init__(self) -> None:
+    def __init__(self, max_subscribers: int = 500) -> None:
         self._subscribers: set[asyncio.Queue[ActionEvent]] = set()
+        self._max_subscribers = max_subscribers
 
     def subscribe(self) -> asyncio.Queue[ActionEvent]:
-        """Register a new subscriber. Returns the queue to read from."""
+        """Register a new subscriber. Returns the queue to read from.
+
+        Raises RuntimeError if the max subscriber limit is reached.
+        """
+        if len(self._subscribers) >= self._max_subscribers:
+            raise RuntimeError(
+                f"Maximum SSE subscribers reached ({self._max_subscribers}). "
+                "Try again later."
+            )
         q: asyncio.Queue[ActionEvent] = asyncio.Queue(maxsize=256)
         self._subscribers.add(q)
         return q
@@ -85,5 +94,12 @@ class EventBus:
         return len(self._subscribers)
 
 
-# Module-level singleton
-action_bus = EventBus()
+# Module-level singleton — import settings lazily to avoid circular imports
+def _get_max_subscribers() -> int:
+    try:
+        from .config import settings
+        return settings.max_sse_subscribers
+    except Exception:
+        return 500
+
+action_bus = EventBus(max_subscribers=_get_max_subscribers())

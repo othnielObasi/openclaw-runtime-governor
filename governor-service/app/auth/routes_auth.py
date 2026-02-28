@@ -1,12 +1,13 @@
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
 from .core import hash_password, verify_password, create_access_token, generate_api_key
 from .dependencies import get_current_user, require_admin, require_superadmin
+from ..config import settings
 from ..database import db_session
 from ..models import User, LoginHistory
 from ..rate_limit import limiter
@@ -42,11 +43,12 @@ class UserRead(BaseModel):
     last_login_at: Optional[datetime] = None
     login_count: int = 0
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class LoginHistoryRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     user_id: int
     username: str
@@ -54,9 +56,6 @@ class LoginHistoryRead(BaseModel):
     user_agent: Optional[str] = None
     method: str
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class SignupRequest(BaseModel):
@@ -109,7 +108,7 @@ def login(request: Request, body: LoginRequest) -> TokenResponse:
     with db_session() as session:
         user_row = session.get(User, user.id)
         if user_row:
-            user_row.last_login_at = datetime.now()
+            user_row.last_login_at = datetime.now(timezone.utc)
             user_row.login_count = (user_row.login_count or 0) + 1
 
         ip = request.client.host if request.client else None
@@ -137,8 +136,13 @@ def login(request: Request, body: LoginRequest) -> TokenResponse:
 # ---------------------------------------------------------------------------
 
 @router.post("/signup", response_model=TokenResponse, status_code=201)
-@limiter.limit("5/minute")
+@limiter.limit("3/minute")
 def signup(request: Request, body: SignupRequest) -> TokenResponse:
+    if not settings.registration_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Public registration is disabled. Contact an administrator.",
+        )
     with db_session() as session:
         existing = session.execute(
             select(User).where(User.username == body.username)

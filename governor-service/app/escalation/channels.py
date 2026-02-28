@@ -27,6 +27,7 @@ import httpx
 from sqlalchemy import select
 
 from ..database import db_session
+from ..encryption import decrypt_value
 from .models import NotificationChannel
 
 logger = logging.getLogger("governor.channels")
@@ -344,6 +345,13 @@ def dispatch_notification_channels(
                     continue
 
                 config = json.loads(ch.config_json) if isinstance(ch.config_json, str) else ch.config_json
+                # Decrypt secrets if encryption is enabled
+                raw = ch.config_json if isinstance(ch.config_json, str) else json.dumps(ch.config_json)
+                decrypted = decrypt_value(raw)
+                try:
+                    config = json.loads(decrypted)
+                except (json.JSONDecodeError, TypeError):
+                    pass  # config already parsed above
                 dispatcher = _DISPATCHERS.get(ch.channel_type)
                 if not dispatcher:
                     logger.warning("Unknown channel type %r for channel %r", ch.channel_type, ch.label)
@@ -382,6 +390,13 @@ def test_notification_channel(channel_id: int) -> dict:
             return {"success": False, "error": "Channel not found"}
 
         config = json.loads(ch.config_json) if isinstance(ch.config_json, str) else ch.config_json
+        # Decrypt secrets if encryption is enabled
+        raw = ch.config_json if isinstance(ch.config_json, str) else json.dumps(ch.config_json)
+        raw = decrypt_value(raw)
+        try:
+            config = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            pass  # already parsed above
         dispatcher = _DISPATCHERS.get(ch.channel_type)
         if not dispatcher:
             return {"success": False, "error": f"Unknown channel type: {ch.channel_type}"}

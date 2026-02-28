@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import Depends, HTTPException, Query, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer, APIKeyHeader
-from jose import JWTError
+import jwt
 from sqlalchemy import select
 
 from .core import decode_token
@@ -36,7 +36,7 @@ def get_current_user(
         try:
             payload = decode_token(jwt_token)
             username: str = payload.get("sub", "")
-        except JWTError:
+        except jwt.PyJWTError:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                                 detail="Invalid or expired token.")
         with db_session() as session:

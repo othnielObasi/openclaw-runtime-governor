@@ -15,6 +15,7 @@ from sqlalchemy import select
 
 from ..auth.dependencies import require_any, require_operator
 from ..database import db_session
+from ..encryption import encrypt_value, decrypt_value
 from ..escalation.models import NotificationChannel
 from ..escalation.channels import test_notification_channel
 from ..schemas import (
@@ -27,11 +28,15 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 
 def _row_to_read(ch: NotificationChannel) -> NotificationChannelRead:
+    raw = ch.config_json
+    if isinstance(raw, str):
+        raw = decrypt_value(raw)
+        raw = json.loads(raw)
     return NotificationChannelRead(
         id=ch.id,
         label=ch.label,
         channel_type=ch.channel_type,
-        config_json=json.loads(ch.config_json) if isinstance(ch.config_json, str) else ch.config_json,
+        config_json=raw,
         on_block=ch.on_block,
         on_review=ch.on_review,
         on_auto_ks=ch.on_auto_ks,
@@ -69,7 +74,7 @@ def create_channel(
         ch = NotificationChannel(
             label=payload.label,
             channel_type=payload.channel_type,
-            config_json=json.dumps(payload.config_json),
+            config_json=encrypt_value(json.dumps(payload.config_json)),
             on_block=payload.on_block,
             on_review=payload.on_review,
             on_auto_ks=payload.on_auto_ks,
@@ -110,7 +115,7 @@ def update_channel(
             raise HTTPException(status_code=400, detail="No fields to update.")
 
         if "config_json" in changes:
-            changes["config_json"] = json.dumps(changes["config_json"])
+            changes["config_json"] = encrypt_value(json.dumps(changes["config_json"]))
 
         for field, value in changes.items():
             setattr(ch, field, value)

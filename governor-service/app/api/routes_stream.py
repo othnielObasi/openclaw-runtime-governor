@@ -19,7 +19,7 @@ from __future__ import annotations
 import asyncio
 from typing import AsyncGenerator
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from ..auth.dependencies import require_any
@@ -95,7 +95,10 @@ async def stream_actions(
 
     A ``:heartbeat`` comment is sent every ~15 s.
     """
-    queue = action_bus.subscribe()
+    try:
+        queue = action_bus.subscribe()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
 
     return StreamingResponse(
         _event_generator(request, queue),

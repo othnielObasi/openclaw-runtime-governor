@@ -9,6 +9,13 @@ app = "openclaw-governor"
   [[services.ports]]
     handlers = ["http"]
     port = 80
+    force_https = true
   [[services.ports]]
     handlers = ["tls","http"]
     port = 443
+
+  [[services.http_checks]]
+    interval = "15s"
+    timeout = "5s"
+    path = "/healthz"
+    method = "GET"

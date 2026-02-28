@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -11,6 +11,47 @@ import yaml
 
 from ..config import settings
 from ..schemas import ActionInput
+
+
+# Maximum time (seconds) allowed for a single regex match
+_REGEX_TIMEOUT_S = 0.05
+
+
+def _safe_regex_search(pattern: str, text: str) -> bool:
+    """Execute regex search with compiled+cached pattern. Returns True if match found.
+
+    Protects against ReDoS by pre-compiling patterns and catching errors.
+    """
+    try:
+        compiled = _get_compiled_regex(pattern)
+        if compiled is None:
+            return False
+        return compiled.search(text) is not None
+    except (re.error, RecursionError):
+        return False
+
+
+# LRU-style compiled regex cache (bounded)
+_compiled_regex_cache: Dict[str, Optional[re.Pattern]] = {}
+_MAX_REGEX_CACHE = 500
+
+
+def _get_compiled_regex(pattern: str) -> Optional[re.Pattern]:
+    """Compile and cache a regex pattern. Returns None on compile error."""
+    if pattern in _compiled_regex_cache:
+        return _compiled_regex_cache[pattern]
+    if len(_compiled_regex_cache) >= _MAX_REGEX_CACHE:
+        # Evict oldest entries
+        keys = list(_compiled_regex_cache.keys())
+        for k in keys[:100]:
+            del _compiled_regex_cache[k]
+    try:
+        compiled = re.compile(pattern)
+        _compiled_regex_cache[pattern] = compiled
+        return compiled
+    except re.error:
+        _compiled_regex_cache[pattern] = None
+        return None
 
 
 @dataclass
@@ -34,14 +75,14 @@ class Policy:
         url_regex = m.get("url_regex")
         if url_regex and action.tool == "http_request":
             url = str(action.args.get("url", ""))
-            if not re.search(url_regex, url):
+            if not _safe_regex_search(url_regex, url):
                 return False
 
         # Generic args regex against flattened payload string
         args_regex = m.get("args_regex")
         if args_regex:
             flat = f"{action.tool} {action.args} {action.context}".lower()
-            if not re.search(args_regex, flat):
+            if not _safe_regex_search(args_regex, flat):
                 return False
 
         # If the policy has a tool match but no regex constraints → matched

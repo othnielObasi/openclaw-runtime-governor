@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import bcrypt
-from jose import JWTError, jwt
+import jwt
 
 from ..config import settings
 
@@ -45,7 +45,7 @@ def create_access_token(
 
 
 def decode_token(token: str) -> dict:
-    """Decode and validate JWT. Raises JWTError on failure."""
+    """Decode and validate JWT. Raises jwt.PyJWTError on failure."""
     return jwt.decode(token, settings.jwt_secret, algorithms=[ALGORITHM])
 
 

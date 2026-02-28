@@ -4,7 +4,7 @@ import sys
 from functools import lru_cache
 from typing import List
 
-from pydantic import field_validator
+from pydantic import ConfigDict, field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -12,6 +12,8 @@ _DEFAULT_JWT_SECRET = "change-me-in-production-use-long-random-string"
 
 
 class Settings(BaseSettings):
+    model_config = ConfigDict(env_prefix="GOVERNOR_")
+
     # Database
     database_url: str = "sqlite:///./governor.db"
     log_sql: bool = False
@@ -28,6 +30,7 @@ class Settings(BaseSettings):
     # Auth
     jwt_secret: str = _DEFAULT_JWT_SECRET
     jwt_expire_minutes: int = 480  # 8 hours
+    registration_enabled: bool = True  # Set False in production to disable public signup
 
     # Rate limiting
     login_rate_limit: str = "5/minute"
@@ -36,6 +39,16 @@ class Settings(BaseSettings):
     # SURGE integration
     surge_governance_fee_enabled: bool = False
     surge_wallet_address: str = ""
+
+    # Encryption key for notification channel secrets (Fernet key)
+    # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    encryption_key: str = ""
+
+    # Logging
+    log_format: str = "json"  # "json" or "text"
+
+    # SSE
+    max_sse_subscribers: int = 500
 
     @field_validator("jwt_secret")
     @classmethod
@@ -56,8 +69,22 @@ class Settings(BaseSettings):
             )
         return v
 
-    class Config:
-        env_prefix = "GOVERNOR_"
+    @field_validator("allow_cors_origins")
+    @classmethod
+    def validate_cors_origins(cls, v: List[str], info) -> List[str]:
+        """Refuse to start in production with CORS wildcard."""
+        env = info.data.get("environment", "development")
+        if env != "development" and v == ["*"]:
+            print(
+                "\n🚨 WARNING: GOVERNOR_ALLOW_CORS_ORIGINS is set to ['*'].\n"
+                "   Set GOVERNOR_ALLOW_CORS_ORIGINS to your dashboard URL in production.\n",
+                file=sys.stderr,
+            )
+            raise ValueError(
+                "CORS origins wildcard ['*'] not allowed in non-development environments. "
+                "Set GOVERNOR_ALLOW_CORS_ORIGINS env var."
+            )
+        return v
 
 
 @lru_cache

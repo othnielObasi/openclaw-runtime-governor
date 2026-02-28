@@ -317,12 +317,13 @@ def surge_status(_user: User = Depends(require_any)) -> SurgeGovernanceStatus:
 @router.get("/receipts", response_model=List[GovernanceReceipt])
 def list_receipts(
     limit: int = 50,
+    offset: int = 0,
     _user: User = Depends(require_any),
 ) -> List[GovernanceReceipt]:
     """List recent governance receipts (newest first). DB-persisted."""
     with db_session() as session:
         rows = session.execute(
-            select(SurgeReceipt).order_by(SurgeReceipt.created_at.desc()).limit(limit)
+            select(SurgeReceipt).order_by(SurgeReceipt.created_at.desc()).offset(offset).limit(limit)
         ).scalars().all()
 
         return [
@@ -393,12 +394,8 @@ def stake_policy(
             staker_wallet=body.wallet_address,
         )
         session.add(row)
-
-    # Re-read to get created_at
-    with db_session() as session:
-        row = session.execute(
-            select(SurgeStakedPolicy).where(SurgeStakedPolicy.policy_id == body.policy_id)
-        ).scalar_one()
+        session.flush()
+        session.refresh(row)
         return PolicyStake(
             policy_id=row.policy_id,
             description=row.description,
@@ -479,11 +476,8 @@ def create_wallet(
             total_deposited=body.initial_balance,
         )
         session.add(wallet)
-
-    with db_session() as session:
-        wallet = session.execute(
-            select(SurgeWallet).where(SurgeWallet.wallet_id == body.wallet_id)
-        ).scalar_one()
+        session.flush()
+        session.refresh(wallet)
         return _wallet_read(wallet)
 
 
@@ -536,11 +530,8 @@ def topup_wallet(
         deposited = Decimal(wallet.total_deposited) + amount
         wallet.balance = f"{balance:.4f}"
         wallet.total_deposited = f"{deposited:.4f}"
-
-    with db_session() as session:
-        wallet = session.execute(
-            select(SurgeWallet).where(SurgeWallet.wallet_id == wallet_id)
-        ).scalar_one()
+        session.flush()
+        session.refresh(wallet)
         return _wallet_read(wallet)
 
 

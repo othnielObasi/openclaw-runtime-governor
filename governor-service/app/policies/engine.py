@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import re
 import time
+import unicodedata
 from typing import List
 
 from .loader import Policy, load_all_policies
@@ -16,18 +18,39 @@ from ..chain_analysis import check_chain_escalation
 # ---------------------------------------------------------------------------
 
 _INJECTION_PATTERNS = [
-    "ignore previous instructions",
-    "override all prior rules",
-    "disable safety",
-    "jailbreak",
-    "do anything now",
-    "developer_mode",
-    "rm -rf /",
-    "format c:",
-    "drop database",
-    "exec xp_cmdshell",
-    "base64_decode(",
+    r"ignore\s+previous\s+instructions",
+    r"override\s+all\s+prior\s+rules",
+    r"disable\s+safety",
+    r"jailbreak",
+    r"do\s+anything\s+now",
+    r"developer[_\s]mode",
+    r"rm\s+-rf\s+/",
+    r"format\s+c:",
+    r"drop\s+database",
+    r"exec\s+xp_cmdshell",
+    r"base64_decode\s*\(",
+    r"ignore\s+all\s+rules",
+    r"you\s+are\s+now\s+in",
+    r"pretend\s+you\s+are",
+    r"act\s+as\s+if\s+you\s+have\s+no\s+restrictions",
+    r"forget\s+(all\s+)?instructions",
+    r"system\s*prompt\s*override",
+    r"\bsudo\b.*\brm\b",
+    r"eval\s*\(",
+    r"os\.system\s*\(",
 ]
+
+# Pre-compile injection patterns for performance
+_INJECTION_COMPILED = [re.compile(p, re.IGNORECASE) for p in _INJECTION_PATTERNS]
+
+
+def _normalize_text(text: str) -> str:
+    """Normalize Unicode and collapse whitespace to defeat obfuscation."""
+    # NFKC normalization converts homoglyphs to ASCII equivalents
+    text = unicodedata.normalize("NFKC", text)
+    # Collapse all whitespace (including zero-width chars) into single spaces
+    text = re.sub(r"[\s\u200b\u200c\u200d\ufeff]+", " ", text)
+    return text.lower()
 
 
 def _flatten_payload(action: ActionInput) -> str:
@@ -41,7 +64,7 @@ def _flatten_payload(action: ActionInput) -> str:
             parts.append(str(action.context))
         except Exception:
             pass
-    return " ".join(parts).lower()
+    return _normalize_text(" ".join(parts))
 
 
 def _run_injection_firewall(action: ActionInput) -> tuple[bool, str | None, list[str]]:
@@ -50,9 +73,10 @@ def _run_injection_firewall(action: ActionInput) -> tuple[bool, str | None, list
     Returns (triggered, reason, matched_patterns).
     """
     payload = _flatten_payload(action)
-    for marker in _INJECTION_PATTERNS:
-        if marker in payload:
-            return True, f"Injection firewall triggered on pattern: '{marker}'", [marker]
+    for pattern in _INJECTION_COMPILED:
+        m = pattern.search(payload)
+        if m:
+            return True, f"Injection firewall triggered on pattern: '{m.group()}'", [pattern.pattern]
     return False, None, []
 
 
@@ -143,7 +167,7 @@ def evaluate_action(action: ActionInput) -> ActionDecision:
             policy_ids=["injection-firewall"], execution_trace=trace,
         )
     trace.append(_step(2, "Injection Firewall", "firewall", "pass", 0, [],
-                       f"Scanned {len(_INJECTION_PATTERNS)} patterns — none matched.", t))
+                       f"Scanned {len(_INJECTION_COMPILED)} patterns — none matched.", t))
 
     # ── Layer 3: Scope enforcement ────────────────────────────────────
     t = time.perf_counter()
