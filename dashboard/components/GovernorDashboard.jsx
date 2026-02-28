@@ -3551,6 +3551,655 @@ function ConversationsTab() {
 }
 
 // ═══════════════════════════════════════════════════════════
+// TAB: VERIFICATION — post-execution verification results
+// Shows the 8 verification checks run on each action and
+// their results (pass/fail/warn), plus drift scores.
+// ═══════════════════════════════════════════════════════════
+function VerificationTab() {
+  const API_BASE = (typeof process!=="undefined" && process.env?.NEXT_PUBLIC_GOVERNOR_API) || null;
+  const getToken = () => typeof window!=="undefined" ? localStorage.getItem("ocg_token") : null;
+  const hdrs = () => ({ "Content-Type":"application/json", ...(getToken() ? {"Authorization":`Bearer ${getToken()}`} : {}) });
+
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [expanded, setExpanded] = useState(null);
+  const [filterVerdict, setFilterVerdict] = useState("ALL");
+  const [filterAgent, setFilterAgent] = useState("");
+
+  const fetchLogs = useCallback(async () => {
+    if (!API_BASE) return;
+    setLoading(true);
+    try {
+      let url = `${API_BASE}/actions/verifications?limit=100`;
+      if (filterVerdict !== "ALL") url += `&verdict=${filterVerdict}`;
+      if (filterAgent) url += `&agent_id=${encodeURIComponent(filterAgent)}`;
+      const r = await fetch(url, { headers: hdrs() });
+      if (r.ok) setLogs(await r.json());
+    } catch (e) { /* silent */ }
+    finally { setLoading(false); }
+  }, [API_BASE, filterVerdict, filterAgent]);
+
+  useEffect(() => { fetchLogs(); }, [fetchLogs]);
+
+  const CHECK_ICONS = {
+    "credential-scan": "🔑", "destructive-output": "💥", "scope-compliance": "🔒",
+    "diff-size": "📏", "intent-alignment": "🎯", "output-injection": "💉",
+    "independent-reverify": "🔁", "drift-detection": "📊",
+  };
+  const resultColor = r => r==="pass"?C.green:r==="fail"?C.red:C.amber;
+  const verdictColor = v => v==="compliant"?C.green:v==="violation"?C.red:C.amber;
+  const verdictIcon = v => v==="compliant"?"✅":v==="violation"?"⛔":"⚠️";
+
+  // Compute stats
+  const stats = {compliant:0, violation:0, suspicious:0};
+  logs.forEach(l => { if (stats[l.verdict] !== undefined) stats[l.verdict]++; });
+
+  return (
+    <div style={{display:"flex", flexDirection:"column", height:"100%", background:C.bg0}}>
+      {/* Header */}
+      <div style={{background:C.bg1, borderBottom:`1px solid ${C.line}`, padding:"12px 16px", flexShrink:0}}>
+        <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10}}>
+          <div>
+            <div style={{fontFamily:mono, fontSize:14, fontWeight:600, color:C.p1, letterSpacing:1.5}}>POST-EXECUTION VERIFICATION</div>
+            <div style={{fontFamily:mono, fontSize:11, color:C.p3, marginTop:2}}>
+              8 independent checks per action · {logs.length} verification records
+            </div>
+          </div>
+          <div style={{display:"flex", gap:6}}>
+            {[["compliant",C.green],["suspicious",C.amber],["violation",C.red]].map(([k,col])=>(
+              <span key={k} style={{fontFamily:mono, fontSize:11, color:col, padding:"3px 8px",
+                border:`1px solid ${col}`, background:`${col}14`}}>
+                {k.toUpperCase()}: {stats[k]}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div style={{display:"flex", gap:6, alignItems:"center", flexWrap:"wrap"}}>
+          {["ALL","compliant","suspicious","violation"].map(f=>(
+            <button key={f} onClick={()=>setFilterVerdict(f)} style={{
+              fontFamily:mono, fontSize:11, padding:"3px 10px", cursor:"pointer", letterSpacing:1,
+              border:`1px solid ${filterVerdict===f?(f==="ALL"?C.p2:verdictColor(f)):C.line2}`,
+              color:filterVerdict===f?(f==="ALL"?C.p2:verdictColor(f)):C.p3,
+              background:filterVerdict===f?`${f==="ALL"?C.p2:verdictColor(f)}14`:"transparent",
+            }}>{f.toUpperCase()}</button>
+          ))}
+          <input value={filterAgent} onChange={e=>setFilterAgent(e.target.value)}
+            placeholder="filter by agent_id..."
+            style={{marginLeft:"auto", background:C.bg2, border:`1px solid ${C.line2}`,
+              color:C.p1, fontFamily:mono, fontSize:12, padding:"4px 10px", outline:"none", width:200}} />
+          <button onClick={fetchLogs} disabled={loading}
+            style={{fontFamily:mono, fontSize:11, padding:"4px 10px", cursor:"pointer",
+              border:`1px solid ${C.line2}`, color:C.p2, background:"transparent"}}>
+            {loading ? "..." : "↻ REFRESH"}
+          </button>
+        </div>
+      </div>
+
+      {/* Column headers */}
+      <div style={{background:C.bg2, borderBottom:`1px solid ${C.line}`, padding:"5px 16px", flexShrink:0,
+        display:"grid", gridTemplateColumns:"60px 110px 120px 80px 80px 1fr 80px"}}>
+        {["ID","TOOL","AGENT","VERDICT","DRIFT","CHECKS","TIME"].map(h=>(
+          <span key={h} style={{fontFamily:mono, fontSize:10, color:C.p3, letterSpacing:1.5}}>{h}</span>
+        ))}
+      </div>
+
+      {/* Rows */}
+      <div style={{flex:1, overflow:"auto"}}>
+        {loading && logs.length===0 ? (
+          <div style={{padding:"40px 16px", textAlign:"center", fontFamily:mono, fontSize:12, color:C.p3}}>Loading...</div>
+        ) : logs.length===0 ? (
+          <div style={{padding:"40px 16px", textAlign:"center", fontFamily:mono, fontSize:12, color:C.p3}}>
+            No verification records. Use POST /actions/verify to submit tool results.
+          </div>
+        ) : logs.map((log, i) => {
+          const findings = log.findings_json || [];
+          const isExpanded = expanded === log.id;
+          const passCount = findings.filter(f=>f.result==="pass").length;
+          const failCount = findings.filter(f=>f.result==="fail").length;
+          const warnCount = findings.filter(f=>f.result==="warn").length;
+
+          return (
+            <div key={log.id}>
+              <div onClick={()=>setExpanded(isExpanded?null:log.id)}
+                style={{display:"grid", gridTemplateColumns:"60px 110px 120px 80px 80px 1fr 80px",
+                  padding:"8px 16px", cursor:"pointer",
+                  borderBottom:`1px solid ${C.line}`,
+                  background:isExpanded?C.bg2:i%2===0?C.bg0:C.bg1,
+                  alignItems:"center", transition:"background 0.15s"}}>
+                <span style={{fontFamily:mono, fontSize:11, color:C.p3}}>#{log.id}</span>
+                <span style={{fontFamily:mono, fontSize:12, color:C.p1, fontWeight:600}}>{log.tool}</span>
+                <span style={{fontFamily:mono, fontSize:11, color:C.p2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                  {log.agent_id || "—"}
+                </span>
+                <span style={{fontFamily:mono, fontSize:11, color:verdictColor(log.verdict), fontWeight:600}}>
+                  {verdictIcon(log.verdict)} {log.verdict?.toUpperCase()}
+                </span>
+                <span style={{fontFamily:mono, fontSize:11,
+                  color:log.drift_score >= 0.7 ? C.red : log.drift_score >= 0.4 ? C.amber : C.green}}>
+                  {log.drift_score != null ? (log.drift_score * 100).toFixed(0) + "%" : "—"}
+                </span>
+                <div style={{display:"flex", gap:4}}>
+                  {passCount>0 && <span style={{fontFamily:mono, fontSize:10, color:C.green, padding:"1px 6px",
+                    border:`1px solid ${C.green}`, background:C.greenDim}}>{passCount} pass</span>}
+                  {warnCount>0 && <span style={{fontFamily:mono, fontSize:10, color:C.amber, padding:"1px 6px",
+                    border:`1px solid ${C.amber}`, background:C.amberDim}}>{warnCount} warn</span>}
+                  {failCount>0 && <span style={{fontFamily:mono, fontSize:10, color:C.red, padding:"1px 6px",
+                    border:`1px solid ${C.red}`, background:C.redDim}}>{failCount} fail</span>}
+                </div>
+                <span style={{fontFamily:mono, fontSize:10, color:C.p3}}>
+                  {log.created_at ? new Date(log.created_at).toLocaleTimeString() : ""}
+                </span>
+              </div>
+
+              {/* Expanded detail: individual checks */}
+              {isExpanded && (
+                <div style={{background:C.bg2, borderBottom:`1px solid ${C.line}`, padding:"12px 16px 12px 76px"}}>
+                  <div style={{fontFamily:mono, fontSize:10, color:C.p3, letterSpacing:1.5, marginBottom:8}}>
+                    VERIFICATION CHECKS ({findings.length})
+                  </div>
+                  <div style={{display:"flex", flexDirection:"column", gap:6}}>
+                    {findings.map((f, fi) => (
+                      <div key={fi} style={{display:"flex", alignItems:"center", gap:10,
+                        padding:"6px 12px", background:C.bg0, border:`1px solid ${C.line}`}}>
+                        <span style={{fontSize:16, width:24, textAlign:"center"}}>
+                          {CHECK_ICONS[f.check] || "🔍"}
+                        </span>
+                        <span style={{fontFamily:mono, fontSize:12, color:C.p1, fontWeight:600, minWidth:180}}>
+                          {f.check}
+                        </span>
+                        <span style={{fontFamily:mono, fontSize:11, color:resultColor(f.result),
+                          padding:"1px 8px", border:`1px solid ${resultColor(f.result)}`,
+                          background:`${resultColor(f.result)}14`, fontWeight:600, minWidth:50, textAlign:"center"}}>
+                          {f.result?.toUpperCase()}
+                        </span>
+                        <span style={{fontFamily:mono, fontSize:11, color:C.p3, minWidth:50}}>
+                          +{f.risk_contribution || 0} risk
+                        </span>
+                        <span style={{fontFamily:sans, fontSize:12, color:C.p2, flex:1}}>
+                          {f.detail}
+                        </span>
+                        {f.duration_ms != null && (
+                          <span style={{fontFamily:mono, fontSize:10, color:C.p3}}>
+                            {f.duration_ms.toFixed(1)}ms
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {/* Extra metadata */}
+                  <div style={{display:"flex", gap:12, marginTop:10, flexWrap:"wrap"}}>
+                    {log.risk_delta !== 0 && (
+                      <span style={{fontFamily:mono, fontSize:11,
+                        color:log.risk_delta > 0 ? C.red : C.green}}>
+                        Risk Δ: {log.risk_delta > 0 ? "+" : ""}{log.risk_delta}
+                      </span>
+                    )}
+                    {log.escalated && (
+                      <span style={{fontFamily:mono, fontSize:11, color:C.red,
+                        padding:"1px 8px", border:`1px solid ${C.red}`, background:C.redDim}}>
+                        ⚡ ESCALATED
+                      </span>
+                    )}
+                    {log.trace_id && (
+                      <span style={{fontFamily:mono, fontSize:10, color:C.p3}}>
+                        trace: {log.trace_id}
+                      </span>
+                    )}
+                    {log.session_id && (
+                      <span style={{fontFamily:mono, fontSize:10, color:C.p3}}>
+                        session: {log.session_id}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+// TAB: DRIFT DETECTION — cross-session behavioral drift
+// Visualizes the 5 drift signal dimensions and aggregate
+// drift scores across verification records.
+// ═══════════════════════════════════════════════════════════
+function DriftTab() {
+  const API_BASE = (typeof process!=="undefined" && process.env?.NEXT_PUBLIC_GOVERNOR_API) || null;
+  const getToken = () => typeof window!=="undefined" ? localStorage.getItem("ocg_token") : null;
+  const hdrs = () => ({ "Content-Type":"application/json", ...(getToken() ? {"Authorization":`Bearer ${getToken()}`} : {}) });
+
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchLogs = useCallback(async () => {
+    if (!API_BASE) return;
+    setLoading(true);
+    try {
+      const r = await fetch(`${API_BASE}/actions/verifications?limit=200`, { headers: hdrs() });
+      if (r.ok) setLogs(await r.json());
+    } catch (e) { /* silent */ }
+    finally { setLoading(false); }
+  }, [API_BASE]);
+
+  useEffect(() => { fetchLogs(); }, [fetchLogs]);
+
+  // Extract unique agents and their latest drift info
+  const agentDrift = {};
+  logs.forEach(l => {
+    if (!l.agent_id) return;
+    if (!agentDrift[l.agent_id] || new Date(l.created_at) > new Date(agentDrift[l.agent_id].created_at)) {
+      agentDrift[l.agent_id] = l;
+    }
+  });
+
+  // Aggregate drift timeline (most recent 50 entries with drift_score)
+  const driftTimeline = logs.filter(l => l.drift_score != null).slice(0, 50);
+
+  // Signal dimension definitions
+  const SIGNALS = [
+    { name: "tool-distribution", icon: "🔧", desc: "Jensen-Shannon divergence in tool usage vs 7-day baseline", weight: 0.30 },
+    { name: "risk-profile", icon: "📈", desc: "Shift in avg risk score or block rate", weight: 0.25 },
+    { name: "operating-hours", icon: "🕐", desc: "Activity outside normal operating hours", weight: 0.15 },
+    { name: "action-velocity", icon: "⚡", desc: "Action rate anomaly (>2-5x baseline)", weight: 0.15 },
+    { name: "scope-expansion", icon: "🔓", desc: "Agent using tools outside historical repertoire", weight: 0.15 },
+  ];
+
+  const driftColor = d => d >= 0.7 ? C.red : d >= 0.4 ? C.amber : C.green;
+  const driftLabel = d => d >= 0.85 ? "CRITICAL" : d >= 0.7 ? "HIGH" : d >= 0.4 ? "MODERATE" : "NORMAL";
+
+  // Global stats
+  const avgDrift = driftTimeline.length > 0
+    ? driftTimeline.reduce((s, l) => s + (l.drift_score || 0), 0) / driftTimeline.length : 0;
+  const maxDrift = driftTimeline.length > 0
+    ? Math.max(...driftTimeline.map(l => l.drift_score || 0)) : 0;
+  const alertCount = driftTimeline.filter(l => (l.drift_score||0) >= 0.7).length;
+
+  return (
+    <div style={{display:"flex", flexDirection:"column", height:"100%", background:C.bg0}}>
+      {/* Header */}
+      <div style={{background:C.bg1, borderBottom:`1px solid ${C.line}`, padding:"12px 16px", flexShrink:0}}>
+        <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10}}>
+          <div>
+            <div style={{fontFamily:mono, fontSize:14, fontWeight:600, color:C.p1, letterSpacing:1.5}}>DRIFT DETECTION</div>
+            <div style={{fontFamily:mono, fontSize:11, color:C.p3, marginTop:2}}>
+              Cross-session behavioral drift · 5 signal dimensions · 7-day rolling baseline
+            </div>
+          </div>
+          <div style={{display:"flex", gap:8}}>
+            <button onClick={fetchLogs} disabled={loading}
+              style={{fontFamily:mono, fontSize:11, padding:"4px 10px", cursor:"pointer",
+                border:`1px solid ${C.line2}`, color:C.p2, background:"transparent"}}>
+              {loading ? "..." : "↻ REFRESH"}
+            </button>
+          </div>
+        </div>
+
+        {/* Global metrics */}
+        <div style={{display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:10}}>
+          {[
+            ["AVG DRIFT", `${(avgDrift*100).toFixed(1)}%`, driftColor(avgDrift)],
+            ["MAX DRIFT", `${(maxDrift*100).toFixed(1)}%`, driftColor(maxDrift)],
+            ["ALERTS (≥70%)", `${alertCount}`, alertCount > 0 ? C.red : C.green],
+            ["AGENTS TRACKED", `${Object.keys(agentDrift).length}`, C.p2],
+          ].map(([label, val, col]) => (
+            <div key={label} style={{background:C.bg2, border:`1px solid ${C.line}`, padding:"10px 14px", textAlign:"center"}}>
+              <div style={{fontFamily:mono, fontSize:10, color:C.p3, letterSpacing:1, marginBottom:4}}>{label}</div>
+              <div style={{fontFamily:mono, fontSize:22, fontWeight:700, color:col}}>{val}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{flex:1, overflow:"auto", padding:"12px 16px"}}>
+
+        {/* Signal Dimensions Reference */}
+        <div style={{marginBottom:20}}>
+          <div style={{fontFamily:mono, fontSize:12, fontWeight:600, color:C.p1, letterSpacing:1.5, marginBottom:10}}>
+            SIGNAL DIMENSIONS
+          </div>
+          <div style={{display:"grid", gridTemplateColumns:"repeat(5, 1fr)", gap:8}}>
+            {SIGNALS.map(sig => (
+              <div key={sig.name} style={{background:C.bg1, border:`1px solid ${C.line}`, padding:"10px 12px"}}>
+                <div style={{fontSize:22, marginBottom:6}}>{sig.icon}</div>
+                <div style={{fontFamily:mono, fontSize:11, color:C.p1, fontWeight:600, marginBottom:3}}>
+                  {sig.name}
+                </div>
+                <div style={{fontFamily:sans, fontSize:11, color:C.p3, lineHeight:1.4, marginBottom:6}}>
+                  {sig.desc}
+                </div>
+                <div style={{fontFamily:mono, fontSize:10, color:C.p2}}>
+                  weight: {(sig.weight * 100).toFixed(0)}%
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Per-agent drift status */}
+        <div style={{marginBottom:20}}>
+          <div style={{fontFamily:mono, fontSize:12, fontWeight:600, color:C.p1, letterSpacing:1.5, marginBottom:10}}>
+            AGENT DRIFT STATUS
+          </div>
+          {Object.keys(agentDrift).length === 0 ? (
+            <div style={{padding:"30px", textAlign:"center", fontFamily:mono, fontSize:12, color:C.p3,
+              background:C.bg1, border:`1px solid ${C.line}`}}>
+              No agents with drift data yet. Submit verifications via POST /actions/verify.
+            </div>
+          ) : Object.entries(agentDrift).map(([agentId, log]) => (
+            <div key={agentId} style={{background:C.bg1, border:`1px solid ${C.line}`, padding:"12px 16px", marginBottom:8}}>
+              <div style={{display:"flex", alignItems:"center", gap:10, marginBottom:8}}>
+                <span style={{fontFamily:mono, fontSize:13, color:C.p1, fontWeight:600}}>🤖 {agentId}</span>
+                <span style={{fontFamily:mono, fontSize:11, color:driftColor(log.drift_score||0),
+                  padding:"2px 8px", border:`1px solid ${driftColor(log.drift_score||0)}`,
+                  background:`${driftColor(log.drift_score||0)}14`, fontWeight:600}}>
+                  {driftLabel(log.drift_score||0)} · {((log.drift_score||0)*100).toFixed(1)}%
+                </span>
+                <span style={{fontFamily:mono, fontSize:10, color:C.p3, marginLeft:"auto"}}>
+                  {new Date(log.created_at).toLocaleString()}
+                </span>
+              </div>
+
+              {/* Drift score bar */}
+              <div style={{background:C.bg0, height:24, border:`1px solid ${C.line}`, position:"relative", marginBottom:8}}>
+                <div style={{
+                  position:"absolute", top:0, left:0, bottom:0,
+                  width:`${Math.min((log.drift_score||0)*100, 100)}%`,
+                  background: driftColor(log.drift_score||0),
+                  opacity:0.3, transition:"width 0.3s"
+                }} />
+                {/* Threshold markers */}
+                <div style={{position:"absolute", left:"40%", top:0, bottom:0, width:1, background:C.amber, opacity:0.4}} />
+                <div style={{position:"absolute", left:"70%", top:0, bottom:0, width:1, background:C.red, opacity:0.4}} />
+                <div style={{position:"absolute", left:"85%", top:0, bottom:0, width:1, background:C.red, opacity:0.8}} />
+                <span style={{position:"absolute", right:6, top:3, fontFamily:mono, fontSize:11, color:C.p1}}>
+                  {((log.drift_score||0)*100).toFixed(1)}%
+                </span>
+              </div>
+
+              <div style={{display:"flex", gap:6, flexWrap:"wrap"}}>
+                <span style={{fontFamily:mono, fontSize:10, color:C.p3}}>session: {log.session_id || "—"}</span>
+                <span style={{fontFamily:mono, fontSize:10, color:C.p3}}>tool: {log.tool}</span>
+                <span style={{fontFamily:mono, fontSize:10,
+                  color:log.verdict==="violation"?C.red:log.verdict==="suspicious"?C.amber:C.green}}>
+                  verdict: {log.verdict}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Drift timeline */}
+        <div>
+          <div style={{fontFamily:mono, fontSize:12, fontWeight:600, color:C.p1, letterSpacing:1.5, marginBottom:10}}>
+            DRIFT TIMELINE ({driftTimeline.length} records)
+          </div>
+          {driftTimeline.length === 0 ? (
+            <div style={{padding:"30px", textAlign:"center", fontFamily:mono, fontSize:12, color:C.p3,
+              background:C.bg1, border:`1px solid ${C.line}`}}>
+              No drift data available.
+            </div>
+          ) : (
+            <div style={{display:"flex", alignItems:"flex-end", gap:2, height:120, background:C.bg1,
+              border:`1px solid ${C.line}`, padding:"8px 12px"}}>
+              {driftTimeline.slice().reverse().map((l, i) => {
+                const h = Math.max((l.drift_score || 0) * 100, 2);
+                return (
+                  <div key={i} title={`${l.agent_id || "?"} · ${((l.drift_score||0)*100).toFixed(1)}% · ${l.tool}`}
+                    style={{flex:1, minWidth:3, maxWidth:12, height:`${h}%`,
+                      background: driftColor(l.drift_score||0), opacity:0.8,
+                      transition:"height 0.2s"}} />
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+// TAB: CHAIN ANALYSIS — attack chain pattern visualization
+// Shows the 11 detection patterns, recent chain triggers,
+// and session-level chain analysis from action history.
+// ═══════════════════════════════════════════════════════════
+function ChainAnalysisTab() {
+  const API_BASE = (typeof process!=="undefined" && process.env?.NEXT_PUBLIC_GOVERNOR_API) || null;
+  const getToken = () => typeof window!=="undefined" ? localStorage.getItem("ocg_token") : null;
+  const hdrs = () => ({ "Content-Type":"application/json", ...(getToken() ? {"Authorization":`Bearer ${getToken()}`} : {}) });
+
+  const [actions, setActions] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchActions = useCallback(async () => {
+    if (!API_BASE) return;
+    setLoading(true);
+    try {
+      const r = await fetch(`${API_BASE}/actions?limit=200`, { headers: hdrs() });
+      if (r.ok) setActions(await r.json());
+    } catch (e) { /* silent */ }
+    finally { setLoading(false); }
+  }, [API_BASE]);
+
+  useEffect(() => { fetchActions(); }, [fetchActions]);
+
+  // The 11 chain patterns (static reference)
+  const PATTERNS = [
+    { name: "browse-then-exfil", boost: 35, min: 2, icon: "🌐", severity: "medium",
+      desc: "HTTP browsing followed by outbound messaging — potential data exfiltration" },
+    { name: "read-write-exec", boost: 45, min: 3, icon: "📁", severity: "high",
+      desc: "File read → write → shell sequence — lateral movement pattern" },
+    { name: "repeated-scope-probing", boost: 60, min: 2, icon: "🔍", severity: "high",
+      desc: "Two or more scope violations in a single session" },
+    { name: "credential-then-http", boost: 55, min: 2, icon: "🔑", severity: "high",
+      desc: "Credential access followed by HTTP — exfiltration attempt" },
+    { name: "rapid-tool-switching", boost: 30, min: 3, icon: "⚡", severity: "medium",
+      desc: "Three+ high-risk tool categories in 5 actions" },
+    { name: "block-bypass-retry", boost: 40, min: 2, icon: "🔄", severity: "medium",
+      desc: "Retrying previously blocked tools — persistence attempt" },
+    { name: "escalating-risk", boost: 50, min: 5, icon: "📈", severity: "high",
+      desc: "Monotonically increasing risk severity across actions" },
+    { name: "argument-mutation", boost: 45, min: 4, icon: "🧬", severity: "high",
+      desc: "Same tool repeated 4+ times with different args — fuzzing" },
+    { name: "privilege-chain", boost: 65, min: 2, icon: "👑", severity: "critical",
+      desc: "Credential access followed by elevated tool use" },
+    { name: "verification-evasion", boost: 55, min: 3, icon: "🎭", severity: "high",
+      desc: "Switching to related tools after a block — evasion" },
+    { name: "high-block-rate", boost: 50, min: 4, icon: "🚫", severity: "high",
+      desc: "More than 50% of recent actions blocked" },
+  ];
+
+  const severityColor = s => s==="critical"?C.red:s==="high"?C.amber:C.p2;
+  const decisionColor = d => d==="block"?C.red:d==="review"?C.amber:C.green;
+
+  // Analyze recent actions to find triggered chains (from explanation field heuristic)
+  const chainTriggers = actions.filter(a =>
+    (a.explanation || "").toLowerCase().includes("chain") ||
+    (a.explanation || "").toLowerCase().includes("attack pattern")
+  );
+
+  // Group actions by session for session analysis
+  const sessions = {};
+  actions.forEach(a => {
+    const sid = a.session_id || "unknown";
+    if (!sessions[sid]) sessions[sid] = [];
+    sessions[sid].push(a);
+  });
+
+  // Per-session risk profile
+  const sessionProfiles = Object.entries(sessions).map(([sid, acts]) => {
+    const blocked = acts.filter(a=>a.decision==="block").length;
+    const reviewed = acts.filter(a=>a.decision==="review").length;
+    const avgRisk = acts.reduce((s,a)=>s+(a.risk_score||0), 0) / acts.length;
+    const maxRisk = Math.max(...acts.map(a=>a.risk_score||0));
+    const blockRate = acts.length > 0 ? blocked / acts.length : 0;
+    return { sid, count: acts.length, blocked, reviewed, avgRisk, maxRisk, blockRate, actions: acts };
+  }).sort((a,b) => b.maxRisk - a.maxRisk);
+
+  return (
+    <div style={{display:"flex", flexDirection:"column", height:"100%", background:C.bg0}}>
+      {/* Header */}
+      <div style={{background:C.bg1, borderBottom:`1px solid ${C.line}`, padding:"12px 16px", flexShrink:0}}>
+        <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10}}>
+          <div>
+            <div style={{fontFamily:mono, fontSize:14, fontWeight:600, color:C.p1, letterSpacing:1.5}}>CHAIN ANALYSIS</div>
+            <div style={{fontFamily:mono, fontSize:11, color:C.p3, marginTop:2}}>
+              11 attack chain patterns · session correlation · {actions.length} actions analyzed
+            </div>
+          </div>
+          <div style={{display:"flex", gap:6}}>
+            <span style={{fontFamily:mono, fontSize:11, color: chainTriggers.length > 0 ? C.red : C.green,
+              padding:"3px 8px", border:`1px solid ${chainTriggers.length > 0 ? C.red : C.green}`,
+              background: chainTriggers.length > 0 ? C.redDim : C.greenDim}}>
+              {chainTriggers.length > 0 ? `⚠ ${chainTriggers.length} CHAIN TRIGGERS` : "✓ NO ACTIVE CHAINS"}
+            </span>
+            <button onClick={fetchActions} disabled={loading}
+              style={{fontFamily:mono, fontSize:11, padding:"4px 10px", cursor:"pointer",
+                border:`1px solid ${C.line2}`, color:C.p2, background:"transparent"}}>
+              {loading ? "..." : "↻ REFRESH"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div style={{flex:1, overflow:"auto", padding:"12px 16px"}}>
+
+        {/* Pattern Reference Grid */}
+        <div style={{marginBottom:20}}>
+          <div style={{fontFamily:mono, fontSize:12, fontWeight:600, color:C.p1, letterSpacing:1.5, marginBottom:10}}>
+            DETECTION PATTERNS (11)
+          </div>
+          <div style={{display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:8}}>
+            {PATTERNS.map(p => (
+              <div key={p.name} style={{background:C.bg1, border:`1px solid ${C.line}`, padding:"10px 14px"}}>
+                <div style={{display:"flex", alignItems:"center", gap:6, marginBottom:6}}>
+                  <span style={{fontSize:18}}>{p.icon}</span>
+                  <span style={{fontFamily:mono, fontSize:11, color:C.p1, fontWeight:600}}>{p.name}</span>
+                </div>
+                <div style={{fontFamily:sans, fontSize:11, color:C.p3, lineHeight:1.4, marginBottom:6}}>
+                  {p.desc}
+                </div>
+                <div style={{display:"flex", gap:8}}>
+                  <span style={{fontFamily:mono, fontSize:10, color:C.red, padding:"1px 6px",
+                    border:`1px solid ${C.red}`, background:C.redDim}}>+{p.boost} risk</span>
+                  <span style={{fontFamily:mono, fontSize:10, color:severityColor(p.severity), padding:"1px 6px",
+                    border:`1px solid ${severityColor(p.severity)}`}}>{p.severity.toUpperCase()}</span>
+                  <span style={{fontFamily:mono, fontSize:10, color:C.p3, padding:"1px 6px",
+                    border:`1px solid ${C.line2}`}}>min: {p.min} actions</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Chain Triggers — detected attacks */}
+        {chainTriggers.length > 0 && (
+          <div style={{marginBottom:20}}>
+            <div style={{fontFamily:mono, fontSize:12, fontWeight:600, color:C.red, letterSpacing:1.5, marginBottom:10}}>
+              ⚠ CHAIN TRIGGERS DETECTED
+            </div>
+            {chainTriggers.map((a, i) => (
+              <div key={a.id || i} style={{background:C.bg1, border:`1px solid ${C.red}`, padding:"10px 16px", marginBottom:6}}>
+                <div style={{display:"flex", alignItems:"center", gap:8, flexWrap:"wrap"}}>
+                  <span style={{fontFamily:mono, fontSize:12, fontWeight:600, color:C.red}}>
+                    ⛔ {a.tool?.toUpperCase()}
+                  </span>
+                  <span style={{fontFamily:mono, fontSize:11, color:decisionColor(a.decision),
+                    padding:"1px 6px", border:`1px solid ${decisionColor(a.decision)}`,
+                    background:`${decisionColor(a.decision)}14`}}>{(a.decision||"").toUpperCase()}</span>
+                  <span style={{fontFamily:mono, fontSize:10, color:C.p3}}>risk: {a.risk_score}</span>
+                  {a.agent_id && <span style={{fontFamily:mono, fontSize:10, color:C.p2}}>agent: {a.agent_id}</span>}
+                  <span style={{fontFamily:mono, fontSize:10, color:C.p3, marginLeft:"auto"}}>
+                    {a.created_at ? new Date(a.created_at).toLocaleString() : ""}
+                  </span>
+                </div>
+                <div style={{fontFamily:sans, fontSize:12, color:C.p2, marginTop:4, lineHeight:1.4}}>
+                  {a.explanation}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Session Risk Profiles */}
+        <div>
+          <div style={{fontFamily:mono, fontSize:12, fontWeight:600, color:C.p1, letterSpacing:1.5, marginBottom:10}}>
+            SESSION RISK PROFILES ({sessionProfiles.length} sessions)
+          </div>
+          {sessionProfiles.length === 0 ? (
+            <div style={{padding:"30px", textAlign:"center", fontFamily:mono, fontSize:12, color:C.p3,
+              background:C.bg1, border:`1px solid ${C.line}`}}>
+              No session data. Run some evaluations to populate.
+            </div>
+          ) : sessionProfiles.slice(0, 20).map(sp => (
+            <div key={sp.sid} style={{background:C.bg1, border:`1px solid ${C.line}`, padding:"10px 16px", marginBottom:6}}>
+              <div style={{display:"flex", alignItems:"center", gap:10, marginBottom:6}}>
+                <span style={{fontFamily:mono, fontSize:12, color:C.p1, fontWeight:600,
+                  maxWidth:240, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                  📋 {sp.sid}
+                </span>
+                <span style={{fontFamily:mono, fontSize:10, color:C.p3, padding:"1px 6px",
+                  border:`1px solid ${C.line2}`}}>{sp.count} actions</span>
+                {sp.blocked > 0 && (
+                  <span style={{fontFamily:mono, fontSize:10, color:C.red, padding:"1px 6px",
+                    border:`1px solid ${C.red}`, background:C.redDim}}>
+                    {sp.blocked} blocked ({(sp.blockRate*100).toFixed(0)}%)
+                  </span>
+                )}
+                {sp.reviewed > 0 && (
+                  <span style={{fontFamily:mono, fontSize:10, color:C.amber, padding:"1px 6px",
+                    border:`1px solid ${C.amber}`, background:C.amberDim}}>{sp.reviewed} reviewed</span>
+                )}
+              </div>
+
+              {/* Risk bar */}
+              <div style={{display:"flex", alignItems:"center", gap:8}}>
+                <span style={{fontFamily:mono, fontSize:10, color:C.p3, minWidth:60}}>avg risk</span>
+                <div style={{flex:1, height:10, background:C.bg0, border:`1px solid ${C.line}`, position:"relative"}}>
+                  <div style={{position:"absolute", top:0, left:0, bottom:0,
+                    width:`${Math.min(sp.avgRisk, 100)}%`,
+                    background: sp.avgRisk >= 70 ? C.red : sp.avgRisk >= 40 ? C.amber : C.green,
+                    opacity:0.6}} />
+                </div>
+                <span style={{fontFamily:mono, fontSize:11, fontWeight:600, minWidth:30,
+                  color: sp.avgRisk >= 70 ? C.red : sp.avgRisk >= 40 ? C.amber : C.green}}>
+                  {sp.avgRisk.toFixed(0)}
+                </span>
+              </div>
+              <div style={{display:"flex", alignItems:"center", gap:8, marginTop:3}}>
+                <span style={{fontFamily:mono, fontSize:10, color:C.p3, minWidth:60}}>max risk</span>
+                <div style={{flex:1, height:10, background:C.bg0, border:`1px solid ${C.line}`, position:"relative"}}>
+                  <div style={{position:"absolute", top:0, left:0, bottom:0,
+                    width:`${Math.min(sp.maxRisk, 100)}%`,
+                    background: sp.maxRisk >= 70 ? C.red : sp.maxRisk >= 40 ? C.amber : C.green,
+                    opacity:0.6}} />
+                </div>
+                <span style={{fontFamily:mono, fontSize:11, fontWeight:600, minWidth:30,
+                  color: sp.maxRisk >= 70 ? C.red : sp.maxRisk >= 40 ? C.amber : C.green}}>
+                  {sp.maxRisk}
+                </span>
+              </div>
+
+              {/* Action decision strip */}
+              <div style={{display:"flex", gap:1, marginTop:6}}>
+                {sp.actions.slice(-30).map((a, i) => (
+                  <div key={i} title={`${a.tool} · ${a.decision} · risk:${a.risk_score}`}
+                    style={{flex:1, height:8, minWidth:3,
+                      background: decisionColor(a.decision), opacity:0.7}} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
 // TAB: TOPOLOGY — Req 5 Execution Mediation / Stage D proof
 // Proves no direct execution path from agent to tool.
 // All paths must flow through evaluate() — the control plane.
@@ -5814,10 +6463,10 @@ function ReviewQueueTab() {
 // ROLE_TABS + ALL_TABS (SURGE + Topology added)
 // ═══════════════════════════════════════════════════════════
 const ROLE_TABS = {
-  superadmin: ["dashboard","agent","tester","policies","review","surge","audit","conversations","traces","topology","apikeys","settings","users"],
-  admin:    ["dashboard","agent","tester","policies","review","surge","audit","conversations","traces","topology","apikeys","settings"],
-  operator: ["dashboard","agent","tester","policies","review","surge","audit","conversations","traces","topology","apikeys","settings"],
-  auditor:  ["dashboard","agent","surge","audit","conversations","traces","topology","apikeys"],
+  superadmin: ["dashboard","agent","tester","policies","review","surge","audit","conversations","verification","drift","chains","traces","topology","apikeys","settings","users"],
+  admin:    ["dashboard","agent","tester","policies","review","surge","audit","conversations","verification","drift","chains","traces","topology","apikeys","settings"],
+  operator: ["dashboard","agent","tester","policies","review","surge","audit","conversations","verification","drift","chains","traces","topology","apikeys","settings"],
+  auditor:  ["dashboard","agent","surge","audit","conversations","verification","drift","chains","traces","topology","apikeys"],
 };
 
 const ALL_TABS = [
@@ -5829,6 +6478,9 @@ const ALL_TABS = [
   { id:"surge",     label:"SURGE",             icon:"⬡" },
   { id:"audit",     label:"Audit Trail",       icon:"☰" },
   { id:"conversations", label:"Conversations", icon:"💬" },
+  { id:"verification", label:"Verification",  icon:"✅" },
+  { id:"drift",     label:"Drift Detection",   icon:"📈" },
+  { id:"chains",    label:"Chain Analysis",    icon:"⛓" },
   { id:"traces",    label:"Traces",            icon:"⧉" },
   { id:"topology",  label:"Topology",          icon:"◎" },
   { id:"apikeys",   label:"API Keys",          icon:"🔑" },
@@ -6293,6 +6945,9 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
           {tab==="surge"     && <SurgeTab receipts={surgeReceipts} stakedPolicies={stakedPolicies} setStaked={setStakedPolicies} userRole={userRole}/>}
           {tab==="audit"     && <AuditTrailTab auditLog={auditLog} policySnapshots={policySnapshots}/>}
           {tab==="conversations" && <ConversationsTab/>}
+          {tab==="verification" && <VerificationTab/>}
+          {tab==="drift"     && <DriftTab/>}
+          {tab==="chains"    && <ChainAnalysisTab/>}
           {tab==="traces"    && <TracesTab/>}
           {tab==="topology"  && <TopologyTab gs={gs} killSwitch={killSwitch} degraded={degraded}/>}
           {tab==="apikeys"   && <ApiKeysTab/>}

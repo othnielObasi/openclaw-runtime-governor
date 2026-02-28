@@ -69,7 +69,7 @@ except ImportError:
 GOVERNOR_URL = os.getenv("GOVERNOR_URL", "http://localhost:8000")
 API_KEY = os.getenv("GOVERNOR_API_KEY", "")
 USERNAME = os.getenv("GOVERNOR_USERNAME", "admin")
-PASSWORD = os.getenv("GOVERNOR_PASSWORD", "govern-prod-2026")
+PASSWORD = os.getenv("GOVERNOR_PASSWORD", "Gov3rnor-Pr0d!")
 
 AGENT_ID = "defi-research-agent-01"
 SESSION_ID = f"demo-{secrets.token_hex(6)}"

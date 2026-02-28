@@ -46,6 +46,68 @@ _configure_logging()
 # Initialise database tables on startup
 Base.metadata.create_all(bind=engine)
 
+# ---------------------------------------------------------------------------
+# Lightweight schema migration — add columns that create_all() won't add
+# to existing tables.  Uses IF NOT EXISTS (Postgres) or tries/catches for
+# SQLite so it is safe to run on every startup.
+# ---------------------------------------------------------------------------
+def _run_migrations() -> None:
+    """Add any columns introduced after the initial schema."""
+    import sqlalchemy as sa
+    from sqlalchemy import inspect as sa_inspect, text
+
+    inspector = sa_inspect(engine)
+    log = logging.getLogger("governor.migrations")
+
+    # Map: table_name -> list of (column_name, DDL type string)
+    _ADDITIONS = {
+        "action_logs": [
+            ("conversation_id", "VARCHAR(128)"),
+            ("turn_id", "INTEGER"),
+        ],
+    }
+
+    with engine.connect() as conn:
+        for table, columns in _ADDITIONS.items():
+            if not inspector.has_table(table):
+                continue
+            existing = {c["name"] for c in inspector.get_columns(table)}
+            for col_name, col_type in columns:
+                if col_name in existing:
+                    continue
+                stmt = f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}"
+                try:
+                    conn.execute(text(stmt))
+                    conn.commit()
+                    log.info("Migration: added %s.%s (%s)", table, col_name, col_type)
+                except Exception as exc:
+                    conn.rollback()
+                    log.debug("Migration skip %s.%s: %s", table, col_name, exc)
+
+    # Create indexes for new columns (safe — CREATE INDEX IF NOT EXISTS)
+    _INDEXES = [
+        ("action_logs", "conversation_id", "ix_action_logs_conversation_id"),
+        ("action_logs", "turn_id", "ix_action_logs_turn_id"),
+    ]
+    is_pg = "postgresql" in settings.database_url
+    with engine.connect() as conn:
+        for table, col, idx_name in _INDEXES:
+            if is_pg:
+                stmt = f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table} ({col})"
+            else:
+                stmt = f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table} ({col})"
+            try:
+                conn.execute(text(stmt))
+                conn.commit()
+            except Exception:
+                conn.rollback()
+
+
+try:
+    _run_migrations()
+except Exception as exc:
+    logging.getLogger("governor.migrations").warning("Migration pass failed: %s", exc)
+
 # Seed default admin if no users exist
 seed_admin()
 
