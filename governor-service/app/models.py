@@ -42,6 +42,9 @@ class ActionLog(Base):
     explanation: Mapped[str] = mapped_column(Text)
     policy_ids: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # comma-separated
 
+    # Chain analysis (populated when a behavioural attack-chain pattern is detected)
+    chain_pattern: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
+
 
 class PolicyModel(Base):
     """Dynamically managed policy stored in DB (supplements base_policies.yml)."""

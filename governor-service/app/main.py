@@ -64,6 +64,7 @@ def _run_migrations() -> None:
         "action_logs": [
             ("conversation_id", "VARCHAR(128)"),
             ("turn_id", "INTEGER"),
+            ("chain_pattern", "VARCHAR(128)"),
         ],
     }
 
@@ -88,6 +89,7 @@ def _run_migrations() -> None:
     _INDEXES = [
         ("action_logs", "conversation_id", "ix_action_logs_conversation_id"),
         ("action_logs", "turn_id", "ix_action_logs_turn_id"),
+        ("action_logs", "chain_pattern", "ix_action_logs_chain_pattern"),
     ]
     is_pg = "postgresql" in settings.database_url
     with engine.connect() as conn:

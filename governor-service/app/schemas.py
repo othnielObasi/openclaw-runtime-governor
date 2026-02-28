@@ -112,6 +112,7 @@ class ActionLogRead(BaseModel):
     span_id: Optional[str] = None
     conversation_id: Optional[str] = None
     turn_id: Optional[int] = None
+    chain_pattern: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------

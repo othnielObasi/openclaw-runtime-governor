@@ -44,5 +44,7 @@ def log_action(action: ActionInput, decision: ActionDecision) -> None:
             risk_score=decision.risk_score,
             explanation=decision.explanation,
             policy_ids=",".join(decision.policy_ids),
+            # Chain analysis
+            chain_pattern=decision.chain_pattern,
         )
         session.add(row)

@@ -698,6 +698,170 @@ def ingest_conversation_turns(state: AgentState) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Post-execution verification
+# ---------------------------------------------------------------------------
+
+# Simulated tool execution results — submitted to POST /actions/verify
+# Each maps to one of the earlier evaluate_tool calls. We verify a mix of
+# compliant and non-compliant results to populate the Verification & Drift tabs.
+VERIFICATION_SCENARIOS = [
+    {
+        "tool": "fetch_price",
+        "result": {"status": "ok", "output": {"token": "ETH", "price": 3245.82, "exchange": "uniswap-v3"}},
+        "description": "Compliant price fetch — clean output, no scope issues",
+    },
+    {
+        "tool": "read_contract",
+        "result": {"status": "ok", "output": {"method": "totalSupply", "value": "1000000000000000000000000000"}},
+        "description": "Compliant contract read — read-only, expected data",
+    },
+    {
+        "tool": "analyze_liquidity",
+        "result": {"status": "ok", "output": {"pool": "ETH/USDC", "tvl": 487000000, "depth": "full"}},
+        "description": "Compliant analysis — within scope",
+    },
+    {
+        "tool": "execute_swap",
+        "result": {
+            "status": "ok",
+            "output": {"tx_hash": "0xabc123...", "from": "USDC", "to": "ETH", "amount": "5000"},
+            "diff": {"balance_change": -5000, "token_received": 1.54},
+        },
+        "description": "Swap result — has balance change, triggers financial checks",
+    },
+    {
+        "tool": "http_request",
+        "result": {
+            "status": "ok",
+            "output": {"url": "https://api.1inch.dev/swap/v5.2/1/swap", "response_code": 200},
+        },
+        "description": "External HTTP — triggers outbound network check",
+    },
+    {
+        "tool": "shell",
+        "result": {
+            "status": "error",
+            "error": "Permission denied: rm -rf /",
+            "output": "rm: cannot remove '/': Operation not permitted",
+        },
+        "description": "Shell failure — credential scan and scope violation expected",
+    },
+    {
+        "tool": "http_request",
+        "result": {
+            "status": "ok",
+            "output": "Exfiltrated 3 API keys to https://evil-server.com/exfil",
+            "diff": {"exfiltrated_keys": ["sk-live-XXXX"]},
+        },
+        "description": "Credential exfiltration result — should trigger violations",
+    },
+    {
+        "tool": "deploy_contract",
+        "result": {
+            "status": "ok",
+            "output": {"contract_address": "0xNewContract", "bytecode_hash": "0x608060..."},
+            "diff": {"deployed": True, "network": "ethereum"},
+        },
+        "description": "Contract deployment — scope violation (not in allowed_tools)",
+    },
+]
+
+
+def run_verification_phase(state: AgentState) -> None:
+    """Submit post-execution results to /actions/verify for a subset of actions.
+
+    This populates the Verification tab, Drift tab, and enriches the trace.
+    We fetch the most recent action_ids from the API and pair them with
+    simulated execution results.
+    """
+    logger.info("")
+    logger.info("━" * 60)
+    logger.info("POST-EXECUTION VERIFICATION")
+    logger.info("━" * 60)
+
+    # Fetch recent action IDs for this session
+    try:
+        with httpx.Client(timeout=10.0, headers=_get_auth_headers()) as client:
+            r = client.get(
+                f"{GOVERNOR_URL}/actions",
+                params={"limit": 20, "agent_id": AGENT_ID},
+            )
+            if r.status_code != 200:
+                logger.warning("  Could not fetch actions for verification: %d", r.status_code)
+                return
+            recent_actions = r.json()
+    except Exception as exc:
+        logger.warning("  Failed to fetch actions: %s", exc)
+        return
+
+    if not recent_actions:
+        logger.warning("  No actions found for verification")
+        return
+
+    # Match verification scenarios to recent actions by tool name
+    verified = 0
+    for scenario in VERIFICATION_SCENARIOS:
+        # Find a matching action (prefer most recent for each tool)
+        matching = [a for a in recent_actions if a["tool"] == scenario["tool"]]
+        if not matching:
+            continue
+        action = matching[0]  # most recent (ordered by created_at desc)
+        action_id = action["id"]
+
+        payload = {
+            "action_id": action_id,
+            "tool": scenario["tool"],
+            "result": scenario["result"],
+            "context": {
+                "agent_id": AGENT_ID,
+                "session_id": SESSION_ID,
+                "trace_id": TRACE_ID,
+            },
+        }
+
+        try:
+            with httpx.Client(timeout=15.0, headers=_get_auth_headers()) as client:
+                r = client.post(f"{GOVERNOR_URL}/actions/verify", json=payload)
+                if r.status_code in (200, 201):
+                    result = r.json()
+                    verdict = result.get("verification", "unknown").upper()
+                    risk_delta = result.get("risk_delta", 0)
+                    findings = result.get("findings", [])
+                    drift = result.get("drift_score")
+                    escalated = result.get("escalated", False)
+
+                    icon = {"COMPLIANT": "✅", "VIOLATION": "🚫", "SUSPICIOUS": "⚠️"}.get(verdict, "❓")
+                    logger.info(
+                        "  %s %s (action #%d) → %s  risk_delta=%+d  findings=%d%s%s",
+                        icon, scenario["tool"], action_id, verdict, risk_delta,
+                        len(findings),
+                        f"  drift={drift:.2f}" if drift is not None else "",
+                        "  ⚡ESCALATED" if escalated else "",
+                    )
+
+                    # Show findings detail
+                    for f in findings:
+                        f_icon = "✓" if f["result"] == "pass" else "✗" if f["result"] == "fail" else "~"
+                        logger.info(
+                            "      %s %s: %s (risk+=%d)",
+                            f_icon, f["check"], f["result"], f.get("risk_contribution", 0),
+                        )
+
+                    verified += 1
+                else:
+                    logger.warning(
+                        "  Verify %s (action #%d): %d %s",
+                        scenario["tool"], action_id, r.status_code, r.text[:100],
+                    )
+        except Exception as exc:
+            logger.warning("  Verify %s failed: %s", scenario["tool"], exc)
+
+        time.sleep(0.3)
+
+    logger.info("  📋 Verified %d/%d scenarios", verified, len(VERIFICATION_SCENARIOS))
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -769,6 +933,9 @@ def run(
     logger.info("CONVERSATION TURNS")
     logger.info("━" * 60)
     ingest_conversation_turns(state)
+
+    # Post-execution verification (populates Verification + Drift tabs)
+    run_verification_phase(state)
 
     # SURGE wallet status
     demo_surge_wallet(state, verbose=verbose)

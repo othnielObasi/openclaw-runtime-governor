@@ -4015,8 +4015,9 @@ function ChainAnalysisTab() {
   const severityColor = s => s==="critical"?C.red:s==="high"?C.amber:C.p2;
   const decisionColor = d => d==="block"?C.red:d==="review"?C.amber:C.green;
 
-  // Analyze recent actions to find triggered chains (from explanation field heuristic)
+  // Analyze recent actions to find triggered chains (from chain_pattern field or explanation heuristic)
   const chainTriggers = actions.filter(a =>
+    a.chain_pattern ||
     (a.explanation || "").toLowerCase().includes("chain") ||
     (a.explanation || "").toLowerCase().includes("attack pattern")
   );
@@ -4067,6 +4068,46 @@ function ChainAnalysisTab() {
 
       <div style={{flex:1, overflow:"auto", padding:"12px 16px"}}>
 
+        {/* Chain Pattern Distribution (dynamic — from actual data) */}
+        {(() => {
+          const patternCounts = {};
+          actions.forEach(a => {
+            if (a.chain_pattern) {
+              patternCounts[a.chain_pattern] = (patternCounts[a.chain_pattern] || 0) + 1;
+            }
+          });
+          const entries = Object.entries(patternCounts).sort((a,b)=>b[1]-a[1]);
+          if (entries.length === 0) return null;
+          const maxCount = Math.max(...entries.map(e=>e[1]));
+          return (
+            <div style={{marginBottom:20}}>
+              <div style={{fontFamily:mono, fontSize:12, fontWeight:600, color:C.red, letterSpacing:1.5, marginBottom:10}}>
+                DETECTED PATTERNS ({entries.length} types · {entries.reduce((s,e)=>s+e[1],0)} triggers)
+              </div>
+              {entries.map(([name, count]) => {
+                const pRef = PATTERNS.find(p=>p.name===name);
+                return (
+                  <div key={name} style={{display:"flex", alignItems:"center", gap:10, marginBottom:6,
+                    background:C.bg1, border:`1px solid ${C.line}`, padding:"8px 14px"}}>
+                    <span style={{fontSize:16, minWidth:22}}>{pRef?.icon||"🔗"}</span>
+                    <span style={{fontFamily:mono, fontSize:12, color:C.p1, fontWeight:600, minWidth:200}}>{name}</span>
+                    <div style={{flex:1, height:10, background:C.bg0, border:`1px solid ${C.line}`, position:"relative"}}>
+                      <div style={{position:"absolute", top:0, left:0, bottom:0,
+                        width:`${(count/maxCount)*100}%`,
+                        background:pRef ? severityColor(pRef.severity) : C.red, opacity:0.7}} />
+                    </div>
+                    <span style={{fontFamily:mono, fontSize:13, fontWeight:700,
+                      color:pRef ? severityColor(pRef.severity) : C.red, minWidth:32, textAlign:"right"}}>{count}</span>
+                    {pRef && <span style={{fontFamily:mono, fontSize:10,
+                      color:severityColor(pRef.severity), padding:"1px 6px",
+                      border:`1px solid ${severityColor(pRef.severity)}`}}>{pRef.severity.toUpperCase()}</span>}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
+
         {/* Pattern Reference Grid */}
         <div style={{marginBottom:20}}>
           <div style={{fontFamily:mono, fontSize:12, fontWeight:600, color:C.p1, letterSpacing:1.5, marginBottom:10}}>
@@ -4107,6 +4148,12 @@ function ChainAnalysisTab() {
                   <span style={{fontFamily:mono, fontSize:12, fontWeight:600, color:C.red}}>
                     ⛔ {a.tool?.toUpperCase()}
                   </span>
+                  {a.chain_pattern && (
+                    <span style={{fontFamily:mono, fontSize:10, color:C.amber, padding:"1px 6px",
+                      border:`1px solid ${C.amber}`, background:C.amberDim}}>
+                      🔗 {a.chain_pattern}
+                    </span>
+                  )}
                   <span style={{fontFamily:mono, fontSize:11, color:decisionColor(a.decision),
                     padding:"1px 6px", border:`1px solid ${decisionColor(a.decision)}`,
                     background:`${decisionColor(a.decision)}14`}}>{(a.decision||"").toUpperCase()}</span>
