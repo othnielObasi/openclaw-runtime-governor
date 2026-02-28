@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import TraceViewer from "./TraceViewer";
 import AgentRunner from "./AgentRunner";
+import OnboardingGuide, { shouldShowOnboarding, resetOnboarding } from "./OnboardingGuide";
 
 // ═══════════════════════════════════════════════════════════
 // DESIGN TOKENS — SOVEREIGN AI LAB
@@ -5306,7 +5307,7 @@ function SurgeTab({ receipts: localReceipts, stakedPolicies: localStaked, setSta
 // SETTINGS TAB — Escalation config, auto-KS thresholds, webhooks
 // ═══════════════════════════════════════════════════════════
 
-function SettingsTab({ onConfigSaved }) {
+function SettingsTab({ onConfigSaved, onRestartTour }) {
   const API_BASE = (typeof process!=="undefined" && process.env?.NEXT_PUBLIC_GOVERNOR_API) || null;
   const getToken = () => typeof window!=="undefined" ? localStorage.getItem("ocg_token") : null;
   const headers = () => ({ Authorization:`Bearer ${getToken()}`, "Content-Type":"application/json" });
@@ -6028,6 +6029,22 @@ function SettingsTab({ onConfigSaved }) {
       </div>
 
       </>)}
+
+      {/* ═══ Section 6: Onboarding Tour ═══ */}
+      <div style={{marginBottom:20, padding:16, border:`1px solid ${C.line}`, background:C.bg0}}>
+        <div style={{fontFamily:mono, fontSize:11, color:C.muted, letterSpacing:1, marginBottom:10}}>ONBOARDING TOUR</div>
+        <div style={{fontFamily:sans, fontSize:13, color:C.p2, marginBottom:12, lineHeight:1.6}}>
+          Re-launch the interactive walkthrough that introduces each tab and feature. Useful for new team members.
+        </div>
+        <button onClick={() => { resetOnboarding(); if (onRestartTour) onRestartTour(); }}
+          style={{fontFamily:mono, fontSize:12, fontWeight:700, padding:"8px 20px", cursor:"pointer",
+            border:`1px solid ${C.accent}`, color:C.accent, background:C.accentDim,
+            letterSpacing:1, transition:"all 0.15s"}}
+          onMouseEnter={e => { e.currentTarget.style.background = C.accent; e.currentTarget.style.color = "#fff"; }}
+          onMouseLeave={e => { e.currentTarget.style.background = C.accentDim; e.currentTarget.style.color = C.accent; }}>
+          ↻ RESTART TOUR
+        </button>
+      </div>
     </div>
   );
 }
@@ -6782,6 +6799,10 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
   const [sidebarCollapsed, setSC] = useState(false);
   const sideW = sidebarCollapsed ? 48 : 200;
 
+  // ── Onboarding guide state ──
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  useEffect(() => { if (shouldShowOnboarding()) setShowOnboarding(true); }, []);
+
   return (
     <div style={{background:C.bg0, color:C.p1, fontFamily:sans,
       minHeight:"100vh", display:"flex", fontSize:15}}>
@@ -6825,7 +6846,7 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
           {visibleTabs.map(t => {
             const active = tab===t.id;
             return (
-              <button key={t.id} onClick={()=>setTab(t.id)} title={sidebarCollapsed?t.label:""}
+              <button key={t.id} data-tab={t.id} onClick={()=>setTab(t.id)} title={sidebarCollapsed?t.label:""}
                 style={{
                   width:"100%", display:"flex", alignItems:"center", gap:10,
                   padding:sidebarCollapsed?"10px 0":"9px 14px",
@@ -7001,10 +7022,38 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
           {tab==="traces"    && <TracesTab/>}
           {tab==="topology"  && <TopologyTab gs={gs} killSwitch={killSwitch} degraded={degraded}/>}
           {tab==="apikeys"   && <ApiKeysTab/>}
-          {tab==="settings"  && (userRole==="superadmin"||userRole==="admin"||userRole==="operator") && <SettingsTab onConfigSaved={refreshEscalationConfig}/>}
+          {tab==="settings"  && (userRole==="superadmin"||userRole==="admin"||userRole==="operator") && <SettingsTab onConfigSaved={refreshEscalationConfig} onRestartTour={()=>setShowOnboarding(true)}/>}
           {tab==="users"     && userRole==="superadmin" && <AdminUserManagementTab/>}
         </div>
       </div>
+
+      {/* ═══ ONBOARDING GUIDE (floating) ═══ */}
+      <OnboardingGuide
+        visible={showOnboarding}
+        onClose={() => setShowOnboarding(false)}
+        onNavigateTab={setTab}
+      />
+
+      {/* ═══ HELP FAB — show when onboarding is not active ═══ */}
+      {!showOnboarding && (
+        <div
+          onClick={() => { resetOnboarding(); setShowOnboarding(true); }}
+          style={{
+            position:"fixed", bottom:24, right:24, zIndex:9000,
+            width:40, height:40, borderRadius:"50%",
+            background:C.bg2, border:`1px solid ${C.line2}`,
+            display:"flex", alignItems:"center", justifyContent:"center",
+            color:C.p3, fontSize:18, fontFamily:mono, fontWeight:700,
+            cursor:"pointer", transition:"all 0.2s",
+            boxShadow:`0 2px 12px rgba(0,0,0,0.4)`,
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; e.currentTarget.style.transform = "scale(1.1)"; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = C.line2; e.currentTarget.style.color = C.p3; e.currentTarget.style.transform = "scale(1)"; }}
+          title="Open guided tour"
+        >
+          ?
+        </div>
+      )}
     </div>
   );
 }
