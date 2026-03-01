@@ -243,7 +243,8 @@ export default function DocsTab() {
   };
 
   return (
-    <div style={{ display:"flex", height:"100%", minHeight:0, overflow:"hidden" }}>
+    <div style={{ position:"relative", width:"100%", height:"100%" }}>
+    <div style={{ position:"absolute", inset:0, display:"flex", overflow:"hidden" }}>
 
       {/* ═══ LEFT SIDEBAR — TABLE OF CONTENTS (fixed) ═══ */}
       <nav style={{
@@ -251,7 +252,6 @@ export default function DocsTab() {
         background:C.bg1, borderRight:`1px solid ${C.line}`,
         overflowY:"auto", padding:"16px 0",
         display:"flex", flexDirection:"column",
-        height:"100%",
       }}>
         {/* Header */}
         <div style={{
@@ -343,7 +343,6 @@ export default function DocsTab() {
       {/* ═══ MAIN CONTENT ═══ */}
       <main ref={contentRef} style={{
         flex:1, padding:"32px 44px 80px", overflowY:"auto",
-        height:"100%",
         maxWidth:920, animation:"fadeIn 0.4s ease-out",
       }}>
 
@@ -1043,6 +1042,7 @@ const sans = "'DM Sans', sans-serif";`}</CodeBlock>
           >GITHUB →</a>
         </div>
       </main>
+    </div>
     </div>
   );
 }
