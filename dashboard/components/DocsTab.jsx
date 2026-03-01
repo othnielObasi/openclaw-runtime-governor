@@ -216,11 +216,13 @@ export default function DocsTab() {
   const [searchQuery, setSearchQuery] = useState("");
   const contentRef = useRef(null);
 
-  // Intersection observer for TOC highlighting
+  // Intersection observer for TOC highlighting (rooted in the scrollable main container)
   useEffect(() => {
+    const root = contentRef.current;
+    if (!root) return;
     const observer = new IntersectionObserver(
       (entries) => { for (const entry of entries) { if (entry.isIntersecting) setActiveSection(entry.target.id); } },
-      { rootMargin:"-20px 0px -60% 0px", threshold:0.1 }
+      { root, rootMargin:"-20px 0px -60% 0px", threshold:0.1 }
     );
     TOC.forEach(({ id }) => { const el = document.getElementById(id); if (el) observer.observe(el); });
     return () => observer.disconnect();
@@ -231,18 +233,23 @@ export default function DocsTab() {
     : TOC;
 
   const scrollTo = (id) => {
-    document.getElementById(id)?.scrollIntoView({ behavior:"smooth" });
+    const el = document.getElementById(id);
+    const container = contentRef.current;
+    if (el && container) {
+      container.scrollTo({ top: el.offsetTop - container.offsetTop - 20, behavior:"smooth" });
+    }
   };
 
   return (
-    <div style={{ display:"flex", height:"100%", minHeight:0 }}>
+    <div style={{ display:"flex", height:"100%", minHeight:0, overflow:"hidden" }}>
 
-      {/* ═══ LEFT SIDEBAR — TABLE OF CONTENTS ═══ */}
+      {/* ═══ LEFT SIDEBAR — TABLE OF CONTENTS (fixed) ═══ */}
       <nav style={{
         width:240, flexShrink:0,
         background:C.bg1, borderRight:`1px solid ${C.line}`,
         overflowY:"auto", padding:"16px 0",
         display:"flex", flexDirection:"column",
+        height:"100%",
       }}>
         {/* Header */}
         <div style={{
@@ -334,6 +341,7 @@ export default function DocsTab() {
       {/* ═══ MAIN CONTENT ═══ */}
       <main ref={contentRef} style={{
         flex:1, padding:"32px 44px 80px", overflowY:"auto",
+        height:"100%",
         maxWidth:920, animation:"fadeIn 0.4s ease-out",
       }}>
 

