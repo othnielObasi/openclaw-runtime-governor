@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import TraceViewer from "./TraceViewer";
 import AgentRunner from "./AgentRunner";
 import OnboardingGuide, { shouldShowOnboarding, resetOnboarding } from "./OnboardingGuide";
+import DocsTab from "./DocsTab";
 
 // ═══════════════════════════════════════════════════════════
 // DESIGN TOKENS — SOVEREIGN AI LAB
@@ -6530,10 +6531,10 @@ function ReviewQueueTab() {
 // ROLE_TABS + ALL_TABS (SURGE + Topology added)
 // ═══════════════════════════════════════════════════════════
 const ROLE_TABS = {
-  superadmin: ["dashboard","agent","tester","policies","review","surge","audit","conversations","verification","drift","chains","traces","topology","apikeys","settings","users"],
-  admin:    ["dashboard","agent","tester","policies","review","surge","audit","conversations","verification","drift","chains","traces","topology","apikeys","settings"],
-  operator: ["dashboard","agent","tester","policies","review","surge","audit","conversations","verification","drift","chains","traces","topology","apikeys","settings"],
-  auditor:  ["dashboard","agent","surge","audit","conversations","verification","drift","chains","traces","topology","apikeys"],
+  superadmin: ["dashboard","agent","tester","policies","review","surge","audit","conversations","verification","drift","chains","traces","topology","apikeys","settings","users","docs"],
+  admin:    ["dashboard","agent","tester","policies","review","surge","audit","conversations","verification","drift","chains","traces","topology","apikeys","settings","docs"],
+  operator: ["dashboard","agent","tester","policies","review","surge","audit","conversations","verification","drift","chains","traces","topology","apikeys","settings","docs"],
+  auditor:  ["dashboard","agent","surge","audit","conversations","verification","drift","chains","traces","topology","apikeys","docs"],
 };
 
 const ALL_TABS = [
@@ -6553,6 +6554,7 @@ const ALL_TABS = [
   { id:"apikeys",   label:"API Keys",          icon:"🔑" },
   { id:"settings",  label:"Settings",          icon:"⚙" },
   { id:"users",     label:"User Management",   icon:"👥", superadminOnly:true },
+  { id:"docs",      label:"Documentation",     icon:"📖" },
 ];
 
 export default function GovernorDashboard({ userRole="operator", userName="", onLogout=()=>{} }) {
@@ -7024,6 +7026,7 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
           {tab==="apikeys"   && <ApiKeysTab/>}
           {tab==="settings"  && (userRole==="superadmin"||userRole==="admin"||userRole==="operator") && <SettingsTab onConfigSaved={refreshEscalationConfig} onRestartTour={()=>setShowOnboarding(true)}/>}
           {tab==="users"     && userRole==="superadmin" && <AdminUserManagementTab/>}
+          {tab==="docs"      && <DocsTab/>}
         </div>
       </div>
 
