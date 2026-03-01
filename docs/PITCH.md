@@ -1,232 +1,256 @@
-# OpenClaw Runtime Governor — Product Pitch
+# OpenClaw Runtime Governor — Pitch Deck
+
+**Sovereign AI Lab** · SURGE × OpenClaw Hackathon · Track 3: Developer Infrastructure & Tools
 
 ---
 
-## One-Liner
+## SLIDE 1 — The Hook
 
-**The firewall between AI agents and the real world — intercept, govern, and audit every tool call before it executes.**
+### AI agents can now `rm -rf /` your production server. Nobody is watching.
+
+Autonomous agents execute shell commands, call APIs, and manage databases — unsupervised, at scale. The industry is racing to give agents more power. **We built the brakes.**
 
 ---
 
-## The $200B Problem Nobody's Solving
+## SLIDE 2 — The Problem
 
-AI agents are no longer chatbots. They execute shell commands, call APIs, manage databases, read and write files, and browse the web — **autonomously, at scale, unsupervised.**
+### Every 10 seconds, an AI agent executes an unsupervised tool call in production.
 
-The market is racing to give agents more power. Nobody is building the brakes.
+There is **no runtime check** on what tools agents invoke, **no audit trail** of how or why, and **no real-time visibility** when things go wrong at 3 AM. A single ungoverned action can wipe a database, leak credentials, or exfiltrate customer data — and you won't know until the post-mortem.
 
-Consider what's happening right now:
+---
 
-- **A coding assistant** deploys to production and runs `rm -rf /` — destroying infrastructure in seconds.
-- **A data pipeline agent** reads a `.env` file, then quietly POST​s credentials to an external URL — and each individual step looks innocent.
-- **A customer support bot** gets jailbroken mid-conversation and starts ignoring its safety instructions.
-- **A fleet of 50 autonomous agents** operates across your infrastructure and you have zero visibility into what any of them are actually doing.
+## SLIDE 3 — Why Existing Solutions Fail
 
-When these failures happen — and they are happening — the post-mortem is always the same:
+### Safety at the LLM layer cannot prevent unsafe actions at the tool layer.
 
-> *"We didn't know the agent could do that. We didn't see it happening. We have no logs of how or why."*
-
-The existing "solutions" don't work:
-
-| Approach | Fatal Flaw |
-|----------|-----------|
-| Prompt engineering ("please be safe") | Probabilistic, trivially bypassed by injection |
+| Current Approach | Why It Fails |
+|-----------------|-------------|
+| Prompt engineering | Probabilistic — trivially bypassed by injection |
 | Output filtering | Post-hoc — the damage is already done |
-| Fine-tuning / RLHF | Static, can't adapt to novel attacks at runtime |
-| API rate limiting | Blind to payload content and multi-step sequences |
+| Fine-tuning / RLHF | Static — can't adapt to novel runtime attacks |
+| Rate limiting | Content-blind — can't see what's in the payload |
 
-Every approach operates at the wrong layer. **Safety at the language model level cannot prevent unsafe actions at the tool execution level.** A perfectly aligned LLM can still be tricked into calling a dangerous tool — alignment is probabilistic, but `rm -rf /` is deterministic.
+A perfectly aligned LLM can still be tricked into calling a dangerous tool. **Alignment is probabilistic. `rm -rf /` is deterministic.**
 
 ---
 
-## The Solution: Governance at the Execution Boundary
+## SLIDE 4 — Our Solution
 
-**OpenClaw Runtime Governor** sits between every AI agent and the real world — at the exact point where intent becomes action — and applies layered, deterministic governance before anything executes.
+### OpenClaw Runtime Governor: The firewall between AI agents and the real world.
+
+We intercept every tool call **at the execution boundary** — the exact point where an agent's intent becomes a real-world action — and apply 6 layers of deterministic governance **before anything executes**. The dangerous action never fires.
 
 ```
-  AI Agent → "I want to run: shell rm -rf /"
-                          │
-                ┌─────────▼──────────┐
-                │  OpenClaw Governor  │
-                │                    │
-                │  ① Kill Switch     │ ← Global emergency halt
-                │  ② Injection Wall  │ ← Prompt injection detection
-                │  ③ Scope Enforcer  │ ← Tool allowlist enforcement
-                │  ④ Policy Engine   │ ← Configurable rule matching
-                │  ⑤ Risk + Chains   │ ← Multi-step attack detection
-                │  ⑥ Verification    │ ← Post-execution audit
-                │                    │
-                │  Verdict: BLOCK    │
-                │  Risk: 95/100      │
-                └─────────┬──────────┘
-                          │
-                Agent receives block.
-                Tool NEVER executes.
+Agent → "run: shell rm -rf /"
+          │
+    ┌─────▼─────────────┐
+    │  OpenClaw Governor │
+    │  ① Kill Switch     │
+    │  ② Injection Wall  │
+    │  ③ Scope Enforcer  │
+    │  ④ Policy Engine   │
+    │  ⑤ Risk + Chains   │
+    │  ⑥ Verification    │
+    │                    │
+    │  BLOCK · Risk 95   │
+    └─────┬─────────────┘
+          │
+    Tool NEVER executes.
 ```
 
-The pipeline is deterministic. It short-circuits. It produces a full audit trail. And it cannot be bypassed by prompt injection — because it operates *outside* the language model.
+---
+
+## SLIDE 5 — How It Works (Product Deep-Dive)
+
+### 6-layer pipeline, < 50ms latency, 3 lines of code to integrate.
+
+**The pipeline short-circuits** — a kill switch fires before injection scanning, the firewall fires before policy evaluation. Every decision produces a full audit trace with cryptographic attestation (SURGE SHA-256 receipts).
+
+| Layer | What It Does |
+|-------|-------------|
+| **Kill Switch** | One API call halts every agent globally — DB-persisted, survives restarts |
+| **Injection Firewall** | 11 prompt-injection patterns scanned on every payload |
+| **Scope Enforcer** | Tool allowlist — only approved tools execute |
+| **Policy Engine** | YAML base + dynamic DB policies with CRUD, versioning, regex |
+| **Neuro Risk + Chain Analysis** | Heuristic scoring + 11 multi-step attack pattern detection |
+| **Post-Execution Verification** | 8 checks on tool *results* — credential leaks, drift, intent bypass |
 
 ---
 
-## What We've Built
+## SLIDE 6 — Technology Stack
 
-### A Production-Grade Governance Engine
+### Production-grade, language-agnostic, deployed now.
 
-| Metric | Value |
-|--------|-------|
-| **Governance layers** | 6 (kill switch → injection firewall → scope → policies → neuro risk + chain analysis → post-execution verification) |
-| **Attack patterns detected** | 11 multi-step chain patterns (credential exfil, read-write-execute, privilege escalation, data staging, etc.) |
-| **Post-execution checks** | 8 (credential leak scan, destructive output detection, scope compliance, diff anomaly, intent alignment, output injection, re-verification, cross-session drift) |
-| **SDKs** | Python, TypeScript/JavaScript, Java — wrap any agent in 3 lines of code |
-| **Decision latency** | < 50ms per evaluation |
-| **Policy management** | YAML base policies + runtime dynamic policies with CRUD, toggles, regex validation, versioning, and audit trail |
-| **Dashboard** | 16-tab real-time control panel with policy editor, trace viewer, verification dashboard, conversation forensics, and chain analysis visualization |
-| **Test coverage** | 246 tests across governance, policies, streaming, escalation, traces, and versioning |
-| **Database** | 17 tables (PostgreSQL in production, SQLite for dev) |
-| **API surface** | 80 routes across 64 paths |
-| **Authentication** | JWT + API key dual auth, 4-tier RBAC (superadmin, admin, operator, auditor) |
-
-### Real-Time Visibility — Not After-the-Fact Logs
-
-Every governance decision streams to the dashboard via **Server-Sent Events** within milliseconds. You don't find out what your agents did yesterday morning. You **watch governance happen in real time**.
-
-### Multi-Step Attack Detection That No Other Tool Offers
-
-Individual tool calls often look innocent. An agent that reads a credential file looks fine. An agent that makes an HTTP POST looks fine. An agent that does both, 45 seconds apart, is executing a textbook **credential exfiltration attack**.
-
-The Governor maintains a 60-minute session window and evaluates **11 attack chain patterns** in real time — catching sequences that per-action scanning fundamentally cannot detect:
-
-- **Credential → Exfiltration**: Read secrets, then send data externally
-- **Read → Write → Execute**: Classic file-based attack chain
-- **Scope Probing**: Repeated out-of-scope tool attempts (enumeration attack)
-- **Block Bypass Retry**: Agent retrying blocked actions with slight variations
-- **Privilege Escalation**: Sudo access followed by system modifications
-- **Data Staging**: Multiple reads before a network send
-- **Delayed Exfiltration**: Long gap between access and send (evading simple correlation)
-
-### Post-Execution Verification — Trust But Verify
-
-Even after allowing an action, the Governor can verify the *result*. Submit tool output for 8 independent checks — catching agents that produce credentials in output, execute destructive operations, drift from established behavior patterns, or bypass governance decisions.
-
-### Complete Agent Forensics
-
-Full agent trace observability in an OpenTelemetry-inspired trace tree. LLM calls, tool invocations, retrieval steps, and governance decisions — all correlated. When something goes wrong, reconstruct the entire decision chain from the agent's first thought to its last blocked action.
-
-### Cryptographic Attestation for Compliance
-
-Every governance decision generates a **SURGE receipt** — a SHA-256 hash of the decision payload providing tamper-proof evidence that governance was applied at runtime. When auditors or regulators ask "How do you prove your AI was governed?", you hand them the receipt chain.
+| Component | Technology |
+|-----------|-----------|
+| **Backend** | FastAPI (Python 3.12), SQLAlchemy 2.0, PostgreSQL — 80 routes, 17 tables |
+| **Dashboard** | Next.js 14 (React 18) — 16 real-time tabs, SSE streaming |
+| **SDKs** | Python · TypeScript/JS · Java — wrap any agent framework |
+| **Auth** | JWT + API key dual auth, 4-tier RBAC |
+| **Infra** | Fly.io (backend), Vercel × 2 + Vultr VPS (frontend), Docker |
+| **Testing** | 246 tests across governance, policies, streaming, traces, versioning |
+| **Attestation** | SURGE receipts — SHA-256 cryptographic proof of every decision |
 
 ---
 
-## Why Now
+## SLIDE 7 — User Interaction (Demo Walkthrough)
 
-### 1. The Agent Explosion Is Here
-Every major AI lab (OpenAI, Anthropic, Google, Meta) is shipping agent frameworks. Enterprises are deploying autonomous agents into production. The number of unsupervised AI tool calls is growing exponentially — and the governance gap is growing with it.
+### Live dashboard: [openclaw-runtime-governor.vercel.app](https://openclaw-runtime-governor.vercel.app)
 
-### 2. Regulation Is Coming
-The EU AI Act requires runtime governance and auditability for high-risk AI systems. US executive orders are mandating AI safety standards. Enterprises deploying ungoverned agents are accumulating compliance risk.
+**What the audience sees in the demo:**
 
-### 3. The Costs of Failure Are Real
-A single ungoverned agent action can wipe a database, leak credentials, exfiltrate customer data, or trigger a compliance violation. The question isn't *if* an unmonitored agent will cause damage — it's *when*.
+1. **Action Tester** — Submit a tool call (`shell: rm -rf /`) and watch the 6-layer pipeline block it in real time with risk score, matched policies, and full trace
+2. **Real-Time Stream** — SSE events appear within milliseconds as governance decisions fire across agents
+3. **Policy Editor** — Create, toggle, and version rules on-the-fly — instant enforcement without redeployment
+4. **Chain Analysis** — Watch credential-then-exfiltration attacks get caught across multiple innocent-looking steps
+5. **Trace Viewer** — Drill into the full agent execution tree: LLM calls → tool invocations → governance decisions
+6. **Verification Dashboard** — Post-execution audit results: credential scans, drift detection, intent-alignment
+7. **Kill Switch** — One button halts all agents globally — and the dashboard reflects it instantly
 
-### 4. Nothing Else Operates at the Right Layer
-Prompt engineering is probabilistic. Output filtering is post-hoc. Rate limiting is content-blind. The execution boundary — where the agent's intent becomes a real-world action — is the only place where governance can be both **deterministic** and **comprehensive**. Nobody else is building here.
-
----
-
-## Market Opportunity
-
-### Total Addressable Market
-
-The AI agent infrastructure market is projected to reach **$65B by 2028** (Gartner, IDC). Within that:
-
-- **Runtime AI governance** is an emerging category with no dominant player
-- Every organization deploying AI agents needs this — from startups with a single coding assistant to enterprises running fleets of autonomous agents
-- Regulatory compliance alone creates forced adoption across financial services, healthcare, and government
-
-### Target Segments
-
-| Segment | Pain Point | Why OpenClaw |
-|---------|-----------|--------------|
-| **Enterprises deploying AI agents** | No visibility into what agents do at runtime | Real-time governance + full audit trail |
-| **AI platform companies** | Customer trust — "how do I know your agent is safe?" | Embeddable governance layer with attestation |
-| **Regulated industries** (finance, health, gov) | Compliance requires provable AI governance | Cryptographic receipts + deterministic policy enforcement |
-| **DevOps/MLOps teams** | Agent observability gap — can see infra, can't see agent decisions | Trace observability + governance correlation |
-| **AI safety teams** | Research tools don't operate at the execution boundary | Production-grade, multi-layer, multi-step detection |
-
-### Competitive Positioning
-
-| Competitor | What They Do | What They Miss |
-|-----------|-------------|---------------|
-| Guardrails AI | Output validation | Doesn't intercept tool calls, no multi-step detection |
-| LangSmith | Tracing/observability | Passive monitoring, no enforcement |
-| Lakera | Prompt injection detection | LLM layer only, no tool-call governance |
-| Galileo | LLM evaluation | Post-hoc analysis, not runtime enforcement |
-| **OpenClaw** | **Full-stack runtime governance** | **The only solution at the execution boundary** |
+> **Demo mode** runs self-contained with simulated data — no backend required. **Live mode** connects to the production Governor API.
 
 ---
 
-## Business Model
+## SLIDE 8 — Multi-Step Attack Detection (Key Innovation)
 
-### SaaS (Primary)
+### Individual tool calls look innocent. Attack *sequences* don't.
 
-| Tier | Price | Includes |
-|------|-------|----------|
-| **Starter** | Free / $0 | 10K evaluations/month, 1 agent, community support |
-| **Team** | $299/month | 500K evaluations, 25 agents, dashboard, SSE streaming |
-| **Business** | $999/month | 5M evaluations, unlimited agents, full audit trail, SURGE attestation, priority support |
-| **Enterprise** | Custom | Unlimited, dedicated deployment, custom policies, SLA, compliance packages |
+An agent that reads `.env` looks fine. An agent that POST​s to an external URL looks fine. An agent that does both, 45 seconds apart, is executing a **credential exfiltration attack**. We detect 11 chain patterns across a 60-minute session window:
 
-### On-Premise / Self-Hosted
+| Chain Pattern | Risk Boost | Example |
+|--------------|-----------|---------|
+| `credential-then-http` | +55 | Read secrets → send externally |
+| `read-write-exec` | +45 | File read → write → shell execute |
+| `privilege-escalation` | +50 | Sudo access → system modifications |
+| `block-bypass-retry` | +40 | Retrying blocked action with variations |
+| `repeated-scope-probing` | +60 | Enumerating which tools are allowed |
+| `delayed-exfil` | +45 | Long gap between access and exfiltration |
 
-Docker deployment for organizations that require data sovereignty. Annual license based on agent count.
-
-### Platform Integration
-
-Embed OpenClaw governance into AI platform products via white-label SDK. Revenue share per governed evaluation.
+**No other tool on the market detects multi-step agent attacks at the execution boundary.**
 
 ---
 
-## Traction
+## SLIDE 9 — Market Scope
 
-- **Production-deployed** with 3 redundant frontends (Vercel × 2, Vultr VPS) and a Fly.io backend
-- **246 tests** passing across all governance modules
-- **3 SDKs** shipped (Python, TypeScript, Java) — integrate in 3 lines of code
-- **16-tab dashboard** with real-time streaming, policy management, trace viewer, verification, chain analysis, conversation forensics, and comprehensive documentation
-- **Full documentation** — Getting Started guide, Architecture docs, SDK overview, in-app interactive docs
+### TAM: $65B · SAM: $8.2B · SOM: $410M
 
----
+| Market | Size | Basis |
+|--------|------|-------|
+| **TAM** — AI Agent Infrastructure (2028) | **$65B** | Gartner/IDC projections for agentic AI infrastructure |
+| **SAM** — Runtime AI Governance & Safety | **$8.2B** | Organizations actively deploying autonomous agents in production |
+| **SOM** — Year 3 attainable market | **$410M** | Enterprises + regulated industries with compliance mandates |
 
-## The Ask
-
-We're raising a **$2M seed round** to:
-
-1. **Scale the platform** — multi-tenant SaaS, usage-based billing, enterprise SSO
-2. **Expand detection** — ML-powered anomaly detection on top of the deterministic engine, expanding from 11 to 50+ chain patterns
-3. **Build integrations** — native plugins for LangChain, CrewAI, AutoGen, OpenAI Assistants, Amazon Bedrock Agents
-4. **Grow the team** — 3 engineers, 1 DevRel, 1 GTM lead
-5. **Launch commercial product** — public cloud offering with free tier
+**Why this grows fast:** The EU AI Act mandates runtime governance for high-risk AI systems. Every autonomous agent deployment creates a new customer. Regulatory compliance alone forces adoption across finance, healthcare, and government.
 
 ---
 
-## The Team
+## SLIDE 10 — Revenue Streams
 
-**Sovereign AI Lab** — Built at the SURGE × OpenClaw Hackathon (Track 3: Developer Infrastructure & Tools). The team combines deep expertise in AI safety, distributed systems, and developer tooling.
+### Three monetization paths, all usage-aligned.
+
+**1. SaaS Platform (Primary)**
+
+| Tier | Price | Volume |
+|------|-------|--------|
+| Starter | Free | 10K evaluations/month, 1 agent |
+| Team | $299/mo | 500K evaluations, 25 agents |
+| Business | $999/mo | 5M evaluations, unlimited agents, SURGE attestation |
+| Enterprise | Custom | Dedicated deployment, SLA, compliance packages |
+
+**2. On-Premise License** — Docker self-hosted for data sovereignty. Annual license per agent count.
+
+**3. Platform Embed** — White-label SDK for AI platform companies. Revenue share per governed evaluation (e.g., embedded inside LangChain, CrewAI, Bedrock).
 
 ---
 
-## The Vision
+## SLIDE 11 — Competitive Analysis
 
-> Every AI agent that can act in the real world should have a governor that ensures it acts safely, within policy, and with a full audit trail.
+### We're the only solution at the execution boundary.
 
-We're building the **governance layer for the agentic era** — not by making AI "behave better" at the model level, but by enforcing deterministic safety at the only point that matters: **where intent becomes action**.
+| | Guardrails AI | LangSmith | Lakera | Galileo | **OpenClaw** |
+|-|--------------|-----------|--------|---------|-------------|
+| **Where it operates** | LLM output | Traces | LLM input | LLM eval | **Tool call boundary** |
+| **Runtime enforcement** | Partial | ❌ Passive | ❌ Detection | ❌ Post-hoc | **✅ Inline block** |
+| **Multi-step detection** | ❌ | ❌ | ❌ | ❌ | **✅ 11 chain patterns** |
+| **Post-execution audit** | ❌ | ❌ | ❌ | ❌ | **✅ 8 checks** |
+| **Kill switch** | ❌ | ❌ | ❌ | ❌ | **✅ Global halt** |
+| **Cryptographic proof** | ❌ | ❌ | ❌ | ❌ | **✅ SURGE receipts** |
+| **Agent-agnostic SDKs** | Python only | Python only | API | API | **✅ Python + JS + Java** |
 
-The world is giving AI agents the keys to production systems. OpenClaw makes sure there's someone watching every time they turn the key.
+**Our USP:** OpenClaw is the **only** product that intercepts at the tool-call layer, enforces deterministic policies that prompt injection cannot bypass, detects multi-step attacks across sessions, verifies results post-execution, and produces cryptographic proof — all in < 50ms.
 
 ---
 
-**OpenClaw Runtime Governor**
-*The missing safety layer between AI agents and the real world.*
+## SLIDE 12 — Originality & Innovation
 
-Website: [openclaw-runtime-governor.vercel.app](https://openclaw-runtime-governor.vercel.app)
-GitHub: [github.com/othnielObasi/openclaw-runtime-governor](https://github.com/othnielObasi/openclaw-runtime-governor)
-License: MIT
+### Three things nobody else has built.
+
+**1. Execution-Boundary Governance** — Every competitor operates at the LLM layer (input/output). We operate at the tool-call layer — the only place where governance is both deterministic and injection-proof. This is a fundamentally different architecture.
+
+**2. Multi-Step Chain Analysis** — 11 attack patterns evaluated across a 60-minute session window. No other tool correlates sequences of individually-innocent tool calls into attack chains in real time.
+
+**3. SURGE Cryptographic Attestation** — SHA-256 governance receipts that prove, cryptographically, that every agent action was governed at runtime. This doesn't exist anywhere else and directly satisfies emerging regulatory requirements (EU AI Act, US AI executive orders).
+
+---
+
+## SLIDE 13 — Traction & What We Built
+
+### Production-deployed, fully tested, 3 SDKs shipped.
+
+- **80 API routes** across 64 paths — complete governance API
+- **246 tests** passing — governance, policies, streaming, escalation, traces, versioning
+- **17 PostgreSQL tables** — actions, policies, users, traces, conversations, verifications, escalations, SURGE receipts
+- **16-tab dashboard** — real-time streaming, policy editor, trace viewer, verification, chain analysis, conversation forensics, documentation
+- **3 SDKs** (Python, TypeScript, Java) — integrate in 3 lines of code
+- **3 production frontends** (Vercel × 2, Vultr) + **Fly.io backend**
+- **In-app documentation** — interactive Getting Started guide, architecture docs, SDK overview
+
+---
+
+## SLIDE 14 — Future Roadmap
+
+### From hackathon to platform.
+
+| Phase | Timeline | What |
+|-------|---------|------|
+| **Now** | Shipped | 6-layer pipeline, 3 SDKs, 16-tab dashboard, 246 tests, production deployed |
+| **Q2 2026** | 3 months | ML anomaly detection layer, 50+ chain patterns, LangChain/CrewAI native plugins |
+| **Q3 2026** | 6 months | Multi-tenant SaaS, usage billing, enterprise SSO, SOC 2 compliance |
+| **Q4 2026** | 9 months | Agent behavioral fingerprinting, cross-org threat intelligence sharing |
+| **2027** | 12+ months | Industry-standard governance protocol, regulatory certification packages |
+
+**Scalability:** The stateless pipeline architecture scales horizontally. Each evaluation is independent — add replicas to handle millions of evaluations per second. The policy engine hot-reloads without downtime.
+
+**Impact:** As AI agents become infrastructure-critical, every organization will need runtime governance the same way every organization needs a firewall. We're building that standard.
+
+---
+
+## SLIDE 15 — The Ask
+
+### $2M seed to go from hackathon to market.
+
+| Allocation | Amount | Purpose |
+|-----------|--------|---------|
+| Engineering | $900K | 3 senior engineers — ML detection, integrations, scale |
+| GTM | $400K | 1 GTM lead + DevRel — developer adoption, enterprise sales |
+| Infrastructure | $300K | Multi-tenant SaaS, SOC 2, compliance certification |
+| Operations | $400K | 18-month runway buffer |
+
+---
+
+## SLIDE 16 — The Close
+
+> *"The world is giving AI agents the keys to production systems. We make sure there's a governor watching every time they turn the key."*
+
+### OpenClaw Runtime Governor
+
+**The missing safety layer between AI agents and the real world.**
+
+- **Live Demo:** [openclaw-runtime-governor.vercel.app](https://openclaw-runtime-governor.vercel.app)
+- **GitHub:** [github.com/othnielObasi/openclaw-runtime-governor](https://github.com/othnielObasi/openclaw-runtime-governor)
+- **Hackathon:** SURGE × OpenClaw · Track 3 · Sovereign AI Lab
+
+---
+
+*Built with FastAPI · Next.js · PostgreSQL · Python · TypeScript · Java · Fly.io · Vercel · Docker*
