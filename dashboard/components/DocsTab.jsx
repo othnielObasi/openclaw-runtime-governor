@@ -236,7 +236,9 @@ export default function DocsTab() {
     const el = document.getElementById(id);
     const container = contentRef.current;
     if (el && container) {
-      container.scrollTo({ top: el.offsetTop - container.offsetTop - 20, behavior:"smooth" });
+      const elRect = el.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      container.scrollTo({ top: container.scrollTop + elRect.top - containerRect.top - 20, behavior:"smooth" });
     }
   };
 
