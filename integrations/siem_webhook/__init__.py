@@ -462,9 +462,13 @@ class SiemDispatcher:
         Dispatch an event to all registered targets.
         Events are queued and batched per target configuration.
         Returns delivery results for any targets that flushed.
+
+        The lock is released before network I/O to avoid blocking
+        other dispatches during slow deliveries.
         """
         self._stats.total_dispatched += 1
         results = []
+        flush_jobs = []  # (target_copy, events_copy, formatter)
 
         with self._lock:
             for name, target in self._targets.items():
@@ -491,9 +495,24 @@ class SiemDispatcher:
                 )
 
                 if should_flush:
-                    result = self._flush_target(name)
-                    if result:
-                        results.append(result)
+                    # Snapshot and drain queue while holding lock
+                    events = self._queues[name][:]
+                    self._queues[name] = []
+                    self._last_flush[name] = time.time()
+                    formatter = FORMATTERS.get(target.target_type, _format_generic)
+                    flush_jobs.append((target, events, formatter))
+
+        # Deliver OUTSIDE the lock so other dispatches aren't blocked
+        for target, events, formatter in flush_jobs:
+            try:
+                if target.target_type == "syslog":
+                    result = self._deliver_syslog(target, events, formatter)
+                else:
+                    result = self._deliver_http(target, events, formatter)
+                if result:
+                    results.append(result)
+            except Exception:
+                pass  # already handled inside deliver methods
 
         return results
 

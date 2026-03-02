@@ -199,6 +199,9 @@ function SpanRow({
   const govAttrs = isGov && s.attributes ? s.attributes : null;
   const govDecision = govAttrs?.["governor.decision"];
   const govRisk = govAttrs?.["governor.risk_score"];
+  const govPii = govAttrs?.["governor.pii_findings_count"] || 0;
+  const govDeviations: string[] = govAttrs?.["governor.deviation_types"] || [];
+  const govDevCount = govAttrs?.["governor.deviation_count"] || govDeviations.length;
 
   return (
     <div
@@ -278,6 +281,40 @@ function SpanRow({
         >
           {govDecision}
           {govRisk != null && ` · ${govRisk}`}
+        </span>
+      )}
+
+      {/* PII findings badge */}
+      {isGov && govPii > 0 && (
+        <span
+          style={{
+            fontFamily: mono,
+            fontSize: 10,
+            padding: "1px 5px",
+            background: C.amberDim,
+            color: C.amber,
+            border: `1px solid ${C.amber}`,
+            whiteSpace: "nowrap",
+          }}
+        >
+          🏷 PII: {govPii}
+        </span>
+      )}
+
+      {/* Deviation badge */}
+      {isGov && govDevCount > 0 && (
+        <span
+          style={{
+            fontFamily: mono,
+            fontSize: 10,
+            padding: "1px 5px",
+            background: C.redDim,
+            color: C.red,
+            border: `1px solid ${C.red}`,
+            whiteSpace: "nowrap",
+          }}
+        >
+          ⚠ DEV: {govDeviations.length > 0 ? govDeviations.join(", ") : govDevCount}
         </span>
       )}
 

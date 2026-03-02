@@ -43,6 +43,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -420,6 +421,7 @@ class SurgeEngine:
     ):
         self.config = config or SovereignConfig()
         self.checkpoint_interval = checkpoint_interval
+        self._lock = threading.Lock()
         self._receipts: List[GovernanceReceipt] = []
         self._checkpoints: List[MerkleCheckpoint] = []
         self._sequence: int = 0
@@ -508,6 +510,25 @@ class SurgeEngine:
         extra_context: Optional[Dict[str, Any]] = None,
     ) -> GovernanceReceipt:
         """Issue a new governance receipt."""
+        with self._lock:
+            return self._issue_locked(
+                tool, decision, risk_score, explanation, policy_ids,
+                chain_pattern, agent_id, session_id, extra_context,
+            )
+
+    def _issue_locked(
+        self,
+        tool: str,
+        decision: str,
+        risk_score: int,
+        explanation: str = "",
+        policy_ids: Optional[List[str]] = None,
+        chain_pattern: Optional[str] = None,
+        agent_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+        extra_context: Optional[Dict[str, Any]] = None,
+    ) -> GovernanceReceipt:
+        """Internal issue — caller holds self._lock."""
 
         receipt_id = f"surge-{uuid4().hex[:16]}"
         timestamp = datetime.now(timezone.utc).isoformat()
@@ -558,7 +579,7 @@ class SurgeEngine:
         if self.checkpoint_interval > 0:
             since_last = self._sequence - self._last_checkpoint_seq
             if since_last >= self.checkpoint_interval:
-                self.checkpoint()
+                self._checkpoint_locked()
 
         return receipt
 
@@ -566,6 +587,11 @@ class SurgeEngine:
 
     def checkpoint(self) -> MerkleCheckpoint:
         """Create a Merkle tree checkpoint for recent receipts."""
+        with self._lock:
+            return self._checkpoint_locked()
+
+    def _checkpoint_locked(self) -> MerkleCheckpoint:
+        """Internal checkpoint — caller holds self._lock."""
         start_seq = self._last_checkpoint_seq
         end_seq = self._sequence - 1
 

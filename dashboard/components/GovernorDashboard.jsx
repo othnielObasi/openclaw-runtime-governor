@@ -982,7 +982,7 @@ function ActionLogTable({ log, total }) {
       <table style={{width:"100%", borderCollapse:"collapse"}}>
         <thead>
           <tr>
-            {["","Time","Agent","Tool","Trust","Decision","Risk","Stopped At"].map(h=>(
+            {["","Time","Agent","Tool","Trust","Decision","Risk","Stopped At","Signals"].map(h=>(
               <th key={h} style={{fontFamily:mono, fontSize:12, color:C.p3,
                 letterSpacing:1.5, textTransform:"uppercase", textAlign:"left",
                 padding:"6px 8px", borderBottom:`1px solid ${C.line2}`}}>{h}</th>
@@ -1024,12 +1024,31 @@ function ActionLogTable({ log, total }) {
                   </td>
                   <td style={{fontFamily:mono, fontSize:14, fontWeight:600, color:riskColor(e.risk), padding:"7px 8px"}}>{e.risk}</td>
                   <td style={{fontFamily:mono, fontSize:12, color:C.p3, padding:"7px 8px"}}>{e.layerHit||"full-pass"}</td>
+                  <td style={{padding:"5px 6px"}}>
+                    <div style={{display:"flex", gap:3, flexWrap:"wrap"}}>
+                      {(e.piiHits?.length>0 || e.pii_findings_count>0) && (
+                        <span style={{fontFamily:mono, fontSize:9, padding:"1px 5px",
+                          border:`1px solid ${C.amber}`, color:C.amber, background:C.amberDim,
+                          whiteSpace:"nowrap"}}>🏷 PII</span>
+                      )}
+                      {(e.deviation_count>0 || e.deviation_types?.length>0) && (
+                        <span style={{fontFamily:mono, fontSize:9, padding:"1px 5px",
+                          border:`1px solid ${C.red}`, color:C.red, background:C.redDim,
+                          whiteSpace:"nowrap"}}>⚠ DEV</span>
+                      )}
+                      {e.chainAlert?.triggered && (
+                        <span style={{fontFamily:mono, fontSize:9, padding:"1px 5px",
+                          border:`1px solid ${C.red}`, color:C.red, background:C.redDim,
+                          whiteSpace:"nowrap"}}>⛓ CHAIN</span>
+                      )}
+                    </div>
+                  </td>
                 </tr>
 
                 {/* Expanded detail row */}
                 {open && (
                   <tr key={`x${i}`}>
-                    <td colSpan={8} style={{padding:"0 0 2px 0",
+                    <td colSpan={9} style={{padding:"0 0 2px 0",
                       borderBottom:`1px solid ${C.line}`, background:C.bg2}}>
                       <div style={{padding:"10px 14px 12px 28px",
                         borderLeft:`2px solid ${ds.borderColor||C.line2}`}}>
@@ -1066,6 +1085,24 @@ function ActionLogTable({ log, total }) {
                             <span style={{fontFamily:mono, fontSize:10, padding:"2px 6px",
                               border:`1px solid ${C.amber}`, color:C.amber, background:C.amberDim}}>
                               🏷 PII: {e.piiHits.map(p=>`${p.count} ${p.type}`).join(", ")}
+                            </span>
+                          )}
+                          {e.pii_findings_count>0 && !e.piiHits?.length && (
+                            <span style={{fontFamily:mono, fontSize:10, padding:"2px 6px",
+                              border:`1px solid ${C.amber}`, color:C.amber, background:C.amberDim}}>
+                              🏷 PII: {e.pii_findings_count} finding{e.pii_findings_count!==1?"s":""}
+                            </span>
+                          )}
+                          {e.deviation_types?.length>0 && (
+                            <span style={{fontFamily:mono, fontSize:10, padding:"2px 6px",
+                              border:`1px solid ${C.red}`, color:C.red, background:C.redDim}}>
+                              ⚠ DEVIATION: {e.deviation_types.join(", ")}
+                            </span>
+                          )}
+                          {e.deviation_count>0 && !e.deviation_types?.length && (
+                            <span style={{fontFamily:mono, fontSize:10, padding:"2px 6px",
+                              border:`1px solid ${C.red}`, color:C.red, background:C.redDim}}>
+                              ⚠ {e.deviation_count} deviation{e.deviation_count!==1?"s":""}
                             </span>
                           )}
                         </div>
@@ -1347,6 +1384,9 @@ function ActionTesterTab({ killSwitch, extraPolicies, sessionMemory, onResult })
         })),
         chainAlert: data.chain_pattern ? { triggered: true, pattern: data.chain_pattern, desc: data.chain_description } : null,
         piiHits: [],
+        pii_findings_count: data.pii_findings_count || 0,
+        deviation_count: data.deviation_count || 0,
+        deviation_types: data.deviation_types || [],
         trustTier: "internal",
         identityAlert: null,
         confidenceGap: null,
@@ -1374,6 +1414,7 @@ function ActionTesterTab({ killSwitch, extraPolicies, sessionMemory, onResult })
         decision: "error", risk: 0,
         policy: "api-error", expl: `API Error: ${e.message}`,
         trace: [], chainAlert: null, piiHits: [], trustTier: "internal",
+        deviation_count: 0, deviation_types: [], pii_findings_count: 0,
         identityAlert: null, confidenceGap: null,
       };
     }
@@ -4985,6 +5026,731 @@ function AdminUserManagementTab() {
 
 
 // ═══════════════════════════════════════════════════════════
+// MODULE HEALTH STRIP — shows load status for all 12 modules
+// ═══════════════════════════════════════════════════════════
+function ModuleHealthStrip() {
+  const API_BASE = (typeof process!=="undefined" && process.env?.NEXT_PUBLIC_GOVERNOR_API) || null;
+  const getToken = () => typeof window!=="undefined" ? localStorage.getItem("ocg_token") : null;
+  const headers = () => ({ Authorization:`Bearer ${getToken()}`, "Content-Type":"application/json" });
+  const [modules, setModules] = useState(null);
+
+  useEffect(() => {
+    if (!API_BASE) return;
+    fetch(`${API_BASE}/modules/status`, { headers: headers() })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => d && setModules(d))
+      .catch(() => {});
+    const iv = setInterval(() => {
+      fetch(`${API_BASE}/modules/status`, { headers: headers() })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => d && setModules(d))
+        .catch(() => {});
+    }, 30000);
+    return () => clearInterval(iv);
+  }, [API_BASE]);
+
+  if (!modules) return null;
+
+  const FRIENDLY = {
+    injection_detector: "Injection Detector",
+    pii_scanner: "PII Scanner",
+    budget_enforcer: "Budget Enforcer",
+    metrics: "Metrics",
+    compliance_exporter: "Compliance Exporter",
+    fingerprint_engine: "Fingerprinting",
+    surge_engine: "SURGE v2",
+    impact_engine: "Impact Assessment",
+    siem_dispatcher: "SIEM Dispatcher",
+    escalation_connector: "Escalation",
+    surge_router: "SURGE API",
+    impact_router: "Impact API",
+  };
+
+  const entries = Object.entries(modules);
+  const loaded = entries.filter(([,v]) => v).length;
+
+  return (
+    <div style={{ display:"flex", alignItems:"center", gap:1, padding:"6px 20px",
+      background:C.bg1, borderBottom:`1px solid ${C.line}`, flexShrink:0, overflow:"auto" }}>
+      <span style={{ fontFamily:mono, fontSize:10, color:C.p3, letterSpacing:1.5,
+        textTransform:"uppercase", marginRight:8, whiteSpace:"nowrap", flexShrink:0 }}>
+        MODULES {loaded}/{entries.length}
+      </span>
+      {entries.map(([k, v]) => (
+        <div key={k} title={`${FRIENDLY[k]||k}: ${v?"loaded":"not loaded"}`}
+          style={{ display:"flex", alignItems:"center", gap:4, padding:"3px 8px",
+            background:v?C.greenDim:C.redDim, border:`1px solid ${v?C.green:C.red}`,
+            whiteSpace:"nowrap", flexShrink:0 }}>
+          <div style={{ width:5, height:5, borderRadius:"50%",
+            background:v?C.green:C.red, boxShadow:`0 0 4px ${v?C.green:C.red}` }}/>
+          <span style={{ fontFamily:mono, fontSize:9.5, color:v?C.green:C.red,
+            letterSpacing:0.5 }}>{FRIENDLY[k]||k}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+// COMPLIANCE HUB TAB — unified view of all governance modules
+// ═══════════════════════════════════════════════════════════
+function ComplianceHubTab() {
+  const API_BASE = (typeof process!=="undefined" && process.env?.NEXT_PUBLIC_GOVERNOR_API) || null;
+  const getToken = () => typeof window!=="undefined" ? localStorage.getItem("ocg_token") : null;
+  const headers = () => ({ Authorization:`Bearer ${getToken()}`, "Content-Type":"application/json" });
+
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+  const [moduleStatus, setModuleStatus] = useState(null);
+  const [metricsSummary, setMetricsSummary] = useState(null);
+  const [surgeStatus, setSurgeStatus] = useState(null);
+  const [chainVerify, setChainVerify] = useState(null);
+  const [impactReport, setImpactReport] = useState(null);
+  const [escalationStats, setEscalationStats] = useState(null);
+  const [agents, setAgents] = useState([]);
+  const [piiEntities, setPiiEntities] = useState([]);
+  const [subTab, setSubTab] = useState("overview");
+
+  const load = async () => {
+    if (!API_BASE) { setLoading(false); return; }
+    setLoading(true); setErr("");
+    try {
+      const [modR, metR, surR, verR, impR, escR, agR, piiR] = await Promise.all([
+        fetch(`${API_BASE}/modules/status`, { headers: headers() }).catch(() => null),
+        fetch(`${API_BASE}/metrics/summary`, { headers: headers() }).catch(() => null),
+        fetch(`${API_BASE}/surge/v2/status`, { headers: headers() }).catch(() => null),
+        fetch(`${API_BASE}/surge/v2/verify`, { headers: headers() }).catch(() => null),
+        fetch(`${API_BASE}/impact/assess`, { headers: headers() }).catch(() => null),
+        fetch(`${API_BASE}/escalation/queue/stats`, { headers: headers() }).catch(() => null),
+        fetch(`${API_BASE}/fingerprint/agents`, { headers: headers() }).catch(() => null),
+        fetch(`${API_BASE}/pii/entities`, { headers: headers() }).catch(() => null),
+      ]);
+      if (modR?.ok) setModuleStatus(await modR.json());
+      if (metR?.ok) setMetricsSummary(await metR.json());
+      if (surR?.ok) setSurgeStatus(await surR.json());
+      if (verR?.ok) setChainVerify(await verR.json());
+      if (impR?.ok) setImpactReport(await impR.json());
+      if (escR?.ok) setEscalationStats(await escR.json());
+      if (agR?.ok) setAgents(await agR.json());
+      if (piiR?.ok) setPiiEntities(await piiR.json());
+    } catch (e) { setErr(e.message); }
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); const iv = setInterval(load, 15000); return () => clearInterval(iv); }, [API_BASE]);
+
+  const SUB_TABS = [
+    { id:"overview", label:"Overview", icon:"◈" },
+    { id:"receipts", label:"Receipts & Chain", icon:"⛓" },
+    { id:"agents",   label:"Agent Fingerprints", icon:"🤖" },
+    { id:"impact",   label:"Impact Assessment", icon:"📊" },
+    { id:"escalation", label:"Escalation Queue", icon:"🔔" },
+  ];
+
+  // Stat cards helper
+  const StatCard = ({ label, value, color=C.p1, sub="" }) => (
+    <div style={{ background:C.bg0, padding:"13px 18px", flex:1, minWidth:140 }}>
+      <div style={{ fontFamily:mono, fontSize:11, letterSpacing:1.5, color:C.p3,
+        textTransform:"uppercase", marginBottom:5 }}>{label}</div>
+      <div style={{ fontFamily:mono, fontSize:28, fontWeight:600, lineHeight:1, color }}>{value}</div>
+      {sub && <div style={{ fontFamily:mono, fontSize:11, color:C.p3, marginTop:4 }}>{sub}</div>}
+    </div>
+  );
+
+  if (!API_BASE) return (
+    <div style={{ background:C.bg1, padding:20 }}>
+      <PanelHd title="Compliance Hub" tag="NO API" tagColor={C.red}/>
+      <p style={{ fontFamily:mono, fontSize:13, color:C.muted }}>
+        NEXT_PUBLIC_GOVERNOR_API not configured.
+      </p>
+    </div>
+  );
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:1, background:C.line, minHeight:"100%" }}>
+      {/* Sub-tab nav */}
+      <div style={{ display:"flex", gap:0, background:C.bg1, borderBottom:`1px solid ${C.line}` }}>
+        {SUB_TABS.map(t => (
+          <button key={t.id} onClick={() => setSubTab(t.id)} style={{
+            fontFamily:mono, fontSize:12, letterSpacing:1, padding:"10px 16px",
+            border:"none", cursor:"pointer", textTransform:"uppercase",
+            background:subTab===t.id ? C.accentDim : "transparent",
+            color:subTab===t.id ? C.accent : C.p3,
+            borderBottom:subTab===t.id ? `2px solid ${C.accent}` : "2px solid transparent",
+            transition:"all 0.12s",
+          }}>
+            <span style={{ marginRight:6 }}>{t.icon}</span>{t.label}
+          </button>
+        ))}
+        <div style={{ flex:1 }}/>
+        <Btn onClick={load} style={{ margin:"5px 10px" }} variant="default">
+          {loading?"⟳ Loading…":"↻ Refresh"}
+        </Btn>
+      </div>
+
+      {err && (
+        <div style={{ background:C.redDim, padding:"8px 20px", fontFamily:mono, fontSize:12, color:C.red }}>
+          Error: {err}
+        </div>
+      )}
+
+      {/* ── OVERVIEW SUB-TAB ── */}
+      {subTab === "overview" && (
+        <div style={{ display:"flex", flexDirection:"column", gap:1, background:C.line }}>
+          {/* Module load status grid */}
+          <div style={{ background:C.bg1, padding:14 }}>
+            <PanelHd title="Module Status" tag={moduleStatus ? `${Object.values(moduleStatus).filter(Boolean).length}/${Object.keys(moduleStatus).length} LOADED` : "…"} tagColor={C.green}/>
+            {moduleStatus && (
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(180px, 1fr))", gap:8 }}>
+                {Object.entries(moduleStatus).map(([k, v]) => (
+                  <div key={k} style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 12px",
+                    background:C.bg0, border:`1px solid ${v?C.green:C.red}22` }}>
+                    <div style={{ width:8, height:8, borderRadius:"50%", background:v?C.green:C.red,
+                      boxShadow:`0 0 6px ${v?C.green:C.red}` }}/>
+                    <span style={{ fontFamily:mono, fontSize:12, color:v?C.p1:C.red }}>
+                      {k.replace(/_/g," ")}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Metrics summary row */}
+          <div style={{ display:"flex", gap:1, background:C.line }}>
+            <StatCard label="Total Evaluations" value={metricsSummary?.total_evaluations ?? "—"}
+              color={C.p1} sub="all time"/>
+            <StatCard label="Avg Risk" value={metricsSummary?.avg_risk != null ? metricsSummary.avg_risk.toFixed(1) : "—"}
+              color={metricsSummary?.avg_risk >= 60 ? C.red : metricsSummary?.avg_risk >= 30 ? C.amber : C.green}
+              sub="/100"/>
+            <StatCard label="Avg Latency" value={metricsSummary?.avg_latency_ms != null ? `${metricsSummary.avg_latency_ms.toFixed(0)}ms` : "—"}
+              color={C.p1} sub="pipeline"/>
+            <StatCard label="Blocked" value={metricsSummary?.decisions_by_type?.block ?? "—"}
+              color={C.red} sub="actions blocked"/>
+          </div>
+
+          {/* SURGE v2 chain integrity */}
+          <div style={{ background:C.bg1, padding:14 }}>
+            <PanelHd title="Governance Receipt Chain (SURGE v2)"
+              tag={chainVerify?.valid ? "VALID" : chainVerify ? "BROKEN" : "…"}
+              tagColor={chainVerify?.valid ? C.green : C.red}/>
+            <div style={{ display:"flex", gap:16, flexWrap:"wrap" }}>
+              {surgeStatus && <>
+                <div style={{ fontFamily:mono, fontSize:13, color:C.p2 }}>
+                  Receipts: <span style={{ color:C.p1, fontWeight:600 }}>{surgeStatus.total_receipts ?? 0}</span>
+                </div>
+                <div style={{ fontFamily:mono, fontSize:13, color:C.p2 }}>
+                  Checkpoints: <span style={{ color:C.p1, fontWeight:600 }}>{surgeStatus.total_checkpoints ?? 0}</span>
+                </div>
+                <div style={{ fontFamily:mono, fontSize:13, color:C.p2 }}>
+                  Sequence: <span style={{ color:C.p1, fontWeight:600 }}>{surgeStatus.current_sequence ?? 0}</span>
+                </div>
+              </>}
+              {chainVerify && (
+                <div style={{ fontFamily:mono, fontSize:13, color:chainVerify.valid?C.green:C.red }}>
+                  Chain: {chainVerify.valid ? "✓ Intact" : `✗ Broken at seq ${chainVerify.break_at_sequence}`}
+                  {chainVerify.total_verified != null && ` (${chainVerify.total_verified} verified)`}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Decision breakdown */}
+          {metricsSummary?.decisions_by_type && (
+            <div style={{ background:C.bg1, padding:14 }}>
+              <PanelHd title="Decision Breakdown"/>
+              <div style={{ display:"flex", gap:1, background:C.line }}>
+                {Object.entries(metricsSummary.decisions_by_type).map(([dec, count]) => {
+                  const dc = dec==="allow"?C.green:dec==="block"?C.red:dec==="review"?C.amber:C.p2;
+                  return (
+                    <div key={dec} style={{ background:C.bg0, padding:"10px 22px", textAlign:"center", flex:1,
+                      borderBottom:`2px solid ${dc}` }}>
+                      <div style={{ fontFamily:mono, fontSize:26, fontWeight:700, color:dc, lineHeight:1 }}>{count}</div>
+                      <div style={{ fontFamily:mono, fontSize:12, color:C.p3, letterSpacing:1.5, marginTop:3,
+                        textTransform:"uppercase" }}>{dec}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* PII entity types */}
+          {piiEntities.length > 0 && (
+            <div style={{ background:C.bg1, padding:14 }}>
+              <PanelHd title="PII Entity Types Scanned" tag={`${piiEntities.length} TYPES`} tagColor={C.amber}/>
+              <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                {(Array.isArray(piiEntities) ? piiEntities : []).map((ent, i) => (
+                  <span key={i} style={{ fontFamily:mono, fontSize:11, padding:"3px 8px",
+                    border:`1px solid ${C.amber}`, color:C.amber, background:C.amberDim,
+                    textTransform:"uppercase", letterSpacing:1 }}>
+                    🏷 {typeof ent === "string" ? ent : ent.type || ent.entity_type || JSON.stringify(ent)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Escalation queue stats */}
+          {escalationStats && (
+            <div style={{ background:C.bg1, padding:14 }}>
+              <PanelHd title="Escalation Queue" tag={`${escalationStats.pending ?? 0} PENDING`}
+                tagColor={(escalationStats.pending ?? 0) > 0 ? C.amber : C.green}/>
+              <div style={{ display:"flex", gap:1, background:C.line }}>
+                <StatCard label="Pending" value={escalationStats.pending ?? 0} color={C.amber}/>
+                <StatCard label="Approved" value={escalationStats.approved ?? 0} color={C.green}/>
+                <StatCard label="Rejected" value={escalationStats.rejected ?? 0} color={C.red}/>
+                <StatCard label="Total" value={escalationStats.total ?? 0} color={C.p1}/>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── RECEIPTS & CHAIN SUB-TAB ── */}
+      {subTab === "receipts" && <ReceiptsSubTab API_BASE={API_BASE} headers={headers}/>}
+
+      {/* ── AGENT FINGERPRINTS SUB-TAB ── */}
+      {subTab === "agents" && <AgentFingerprintsSubTab API_BASE={API_BASE} headers={headers} agents={agents} reload={load}/>}
+
+      {/* ── IMPACT ASSESSMENT SUB-TAB ── */}
+      {subTab === "impact" && <ImpactSubTab API_BASE={API_BASE} headers={headers} impactReport={impactReport}/>}
+
+      {/* ── ESCALATION QUEUE SUB-TAB ── */}
+      {subTab === "escalation" && <EscalationSubTab API_BASE={API_BASE} headers={headers}/>}
+    </div>
+  );
+}
+
+// ── Receipts & Chain sub-tab ──
+function ReceiptsSubTab({ API_BASE, headers }) {
+  const [receipts, setReceipts] = useState([]);
+  const [checkpoints, setCheckpoints] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!API_BASE) return;
+    Promise.all([
+      fetch(`${API_BASE}/surge/v2/receipts?limit=50`, { headers: headers() }).then(r => r.ok ? r.json() : []),
+      fetch(`${API_BASE}/surge/v2/checkpoints`, { headers: headers() }).then(r => r.ok ? r.json() : []),
+    ]).then(([r, c]) => { setReceipts(r); setCheckpoints(c); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [API_BASE]);
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:1, background:C.line }}>
+      {/* Checkpoints */}
+      <div style={{ background:C.bg1, padding:14 }}>
+        <PanelHd title="Merkle Checkpoints" tag={`${checkpoints.length} CHECKPOINTS`} tagColor={C.green}/>
+        {checkpoints.length === 0 ? (
+          <div style={{ fontFamily:mono, fontSize:12, color:C.muted, padding:"10px 0" }}>No checkpoints yet.</div>
+        ) : (
+          <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+            {checkpoints.slice(0, 10).map((cp, i) => (
+              <div key={i} style={{ display:"grid", gridTemplateColumns:"auto 1fr auto auto", gap:12,
+                padding:"6px 10px", background:C.bg0, alignItems:"center" }}>
+                <span style={{ fontFamily:mono, fontSize:11, color:C.green, fontWeight:600 }}>
+                  #{cp.checkpoint_id || cp.sequence || i + 1}
+                </span>
+                <span style={{ fontFamily:mono, fontSize:11, color:C.p2, overflow:"hidden",
+                  textOverflow:"ellipsis" }}>
+                  root: {cp.merkle_root || cp.root || "—"}
+                </span>
+                <span style={{ fontFamily:mono, fontSize:10, color:C.p3 }}>
+                  {cp.receipt_count || cp.leaf_count || "?"} receipts
+                </span>
+                <span style={{ fontFamily:mono, fontSize:10, color:C.p3 }}>
+                  {cp.timestamp || cp.created_at || ""}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Recent receipts table */}
+      <div style={{ background:C.bg1, padding:14 }}>
+        <PanelHd title="Governance Receipts" tag={loading ? "LOADING…" : `${receipts.length} RECEIPTS`} tagColor={C.accent}/>
+        {receipts.length === 0 ? (
+          <div style={{ fontFamily:mono, fontSize:12, color:C.muted, padding:"10px 0" }}>
+            {loading ? "Loading receipts…" : "No receipts issued yet."}
+          </div>
+        ) : (
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead>
+              <tr>
+                {["ID","Tool","Decision","Risk","Policy","Agent","Time"].map(h => (
+                  <th key={h} style={{ fontFamily:mono, fontSize:11, color:C.p3, letterSpacing:1.5,
+                    textTransform:"uppercase", textAlign:"left", padding:"6px 8px",
+                    borderBottom:`1px solid ${C.line2}` }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {receipts.slice(0, 30).map((r, i) => {
+                const ds = decisionStyle(r.decision);
+                return (
+                  <tr key={i} style={{ borderBottom:`1px solid ${C.line}` }}>
+                    <td style={{ fontFamily:mono, fontSize:10, color:C.p3, padding:"6px 8px" }}>
+                      {(r.receipt_id || r.id || "").slice(0, 16)}…
+                    </td>
+                    <td style={{ fontFamily:mono, fontSize:13, fontWeight:600, color:C.p1, padding:"6px 8px" }}>
+                      {r.tool}
+                    </td>
+                    <td style={{ padding:"5px 6px" }}>
+                      <span style={{ fontFamily:mono, fontSize:11, letterSpacing:1, padding:"3px 7px",
+                        border:"1px solid", textTransform:"uppercase", ...ds }}>{r.decision}</span>
+                    </td>
+                    <td style={{ fontFamily:mono, fontSize:14, fontWeight:600,
+                      color:riskColor(r.risk_score || r.risk || 0), padding:"6px 8px" }}>
+                      {r.risk_score ?? r.risk ?? "—"}
+                    </td>
+                    <td style={{ fontFamily:mono, fontSize:11, color:C.p2, padding:"6px 8px" }}>
+                      {(r.policy_ids || []).join(", ") || r.policy || "—"}
+                    </td>
+                    <td style={{ fontFamily:mono, fontSize:10.5, color:C.p2, padding:"6px 8px" }}>
+                      {r.agent_id || "—"}
+                    </td>
+                    <td style={{ fontFamily:mono, fontSize:9.5, color:C.p3, padding:"6px 8px" }}>
+                      {r.timestamp || r.ts || ""}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Agent Fingerprints sub-tab ──
+function AgentFingerprintsSubTab({ API_BASE, headers, agents, reload }) {
+  const [selected, setSelected] = useState(null);
+  const [detail, setDetail] = useState(null);
+
+  const loadDetail = async (agentId) => {
+    setSelected(agentId);
+    try {
+      const r = await fetch(`${API_BASE}/fingerprint/agents/${agentId}`, { headers: headers() });
+      if (r.ok) setDetail(await r.json());
+    } catch {}
+  };
+
+  return (
+    <div style={{ display:"flex", gap:1, background:C.line, minHeight:400 }}>
+      {/* Agent list */}
+      <div style={{ width:280, flexShrink:0, background:C.bg1, padding:14, overflow:"auto" }}>
+        <PanelHd title="Fingerprinted Agents" tag={`${agents.length}`} tagColor={C.green}/>
+        {agents.length === 0 ? (
+          <div style={{ fontFamily:mono, fontSize:12, color:C.muted }}>No agents fingerprinted yet.</div>
+        ) : (
+          agents.map((a, i) => {
+            const id = a.agent_id || a.id || a;
+            const active = selected === id;
+            return (
+              <div key={i} onClick={() => loadDetail(id)} style={{
+                padding:"8px 10px", cursor:"pointer", marginBottom:2,
+                background:active? C.accentDim : C.bg0,
+                borderLeft:active? `3px solid ${C.accent}` : "3px solid transparent",
+              }}>
+                <div style={{ fontFamily:mono, fontSize:13, color:active?C.accent:C.p1 }}>{id}</div>
+                {a.maturity && <div style={{ fontFamily:mono, fontSize:10, color:C.p3 }}>
+                  maturity: {a.maturity}
+                </div>}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Detail panel */}
+      <div style={{ flex:1, background:C.bg1, padding:14, overflow:"auto" }}>
+        {!selected ? (
+          <div style={{ fontFamily:mono, fontSize:13, color:C.muted, padding:20, textAlign:"center" }}>
+            Select an agent to view fingerprint details.
+          </div>
+        ) : !detail ? (
+          <div style={{ fontFamily:mono, fontSize:13, color:C.muted }}>Loading…</div>
+        ) : (
+          <>
+            <PanelHd title={`Agent: ${selected}`} tag={detail.maturity || "—"} tagColor={C.green}/>
+            {/* Tool usage pattern */}
+            {detail.tool_frequencies && (
+              <div style={{ marginBottom:14 }}>
+                <div style={{ fontFamily:mono, fontSize:11, color:C.p3, letterSpacing:1.5,
+                  textTransform:"uppercase", marginBottom:6 }}>TOOL USAGE PATTERN</div>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                  {Object.entries(detail.tool_frequencies).sort((a,b)=>b[1]-a[1]).slice(0,15).map(([tool, count]) => (
+                    <span key={tool} style={{ fontFamily:mono, fontSize:11, padding:"3px 8px",
+                      border:`1px solid ${C.line2}`, color:C.p1, background:C.bg0 }}>
+                      {tool}: <span style={{ color:C.green, fontWeight:600 }}>{count}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* Behavioural stats */}
+            {detail.behavioral_stats && (
+              <div style={{ marginBottom:14 }}>
+                <div style={{ fontFamily:mono, fontSize:11, color:C.p3, letterSpacing:1.5,
+                  textTransform:"uppercase", marginBottom:6 }}>BEHAVIOURAL STATISTICS</div>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(160px, 1fr))", gap:8 }}>
+                  {Object.entries(detail.behavioral_stats).map(([k, v]) => (
+                    <div key={k} style={{ background:C.bg0, padding:"8px 12px" }}>
+                      <div style={{ fontFamily:mono, fontSize:10, color:C.p3, letterSpacing:1,
+                        textTransform:"uppercase" }}>{k.replace(/_/g," ")}</div>
+                      <div style={{ fontFamily:mono, fontSize:18, fontWeight:600, color:C.p1,
+                        marginTop:3 }}>{typeof v === "number" ? v.toFixed?.(2) ?? v : String(v)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* Deviation history */}
+            {detail.deviations?.length > 0 && (
+              <div>
+                <div style={{ fontFamily:mono, fontSize:11, color:C.p3, letterSpacing:1.5,
+                  textTransform:"uppercase", marginBottom:6 }}>DEVIATION HISTORY</div>
+                {detail.deviations.slice(0,10).map((d, i) => (
+                  <div key={i} style={{ display:"flex", gap:10, padding:"5px 10px", marginBottom:2,
+                    background:C.bg0, alignItems:"center" }}>
+                    <span style={{ fontFamily:mono, fontSize:10, color:C.amber }}>⚠</span>
+                    <span style={{ fontFamily:mono, fontSize:12, color:C.p1, flex:1 }}>{d.reason || d.type || JSON.stringify(d)}</span>
+                    <span style={{ fontFamily:mono, fontSize:10, color:C.p3 }}>{d.timestamp || d.ts || ""}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Raw JSON fallback */}
+            {!detail.tool_frequencies && !detail.behavioral_stats && (
+              <pre style={{ fontFamily:mono, fontSize:11, color:C.p2, background:C.bg0,
+                padding:12, overflow:"auto", maxHeight:400 }}>
+                {JSON.stringify(detail, null, 2)}
+              </pre>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Impact Assessment sub-tab ──
+function ImpactSubTab({ API_BASE, headers, impactReport }) {
+  const [agentDetail, setAgentDetail] = useState(null);
+  const [selectedAgent, setSelectedAgent] = useState("");
+
+  const loadAgent = async (agentId) => {
+    setSelectedAgent(agentId);
+    try {
+      const r = await fetch(`${API_BASE}/impact/assess/agent/${agentId}`, { headers: headers() });
+      if (r.ok) setAgentDetail(await r.json());
+    } catch {}
+  };
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:1, background:C.line }}>
+      {/* Summary */}
+      <div style={{ background:C.bg1, padding:14 }}>
+        <PanelHd title="Impact Assessment Report" tag="FULL SYSTEM" tagColor={C.green}/>
+        {!impactReport ? (
+          <div style={{ fontFamily:mono, fontSize:12, color:C.muted }}>No impact data available yet.</div>
+        ) : (
+          <>
+            <div style={{ display:"flex", gap:1, background:C.line, marginBottom:12 }}>
+              {[
+                { l:"Risk Score", v:impactReport.overall_risk_score ?? impactReport.avg_risk ?? "—",
+                  c:((impactReport.overall_risk_score||impactReport.avg_risk||0) >= 60?C.red:
+                    (impactReport.overall_risk_score||impactReport.avg_risk||0) >= 30?C.amber:C.green) },
+                { l:"Total Actions", v:impactReport.total_actions ?? impactReport.total_evaluations ?? "—", c:C.p1 },
+                { l:"High-Risk", v:impactReport.high_risk_count ?? "—", c:C.red },
+                { l:"Agents", v:impactReport.agent_count ?? impactReport.unique_agents ?? "—", c:C.p1 },
+              ].map(({l,v,c}) => (
+                <div key={l} style={{ background:C.bg0, padding:"10px 18px", flex:1, textAlign:"center" }}>
+                  <div style={{ fontFamily:mono, fontSize:10, color:C.p3, letterSpacing:1.5,
+                    textTransform:"uppercase", marginBottom:4 }}>{l}</div>
+                  <div style={{ fontFamily:mono, fontSize:24, fontWeight:600, color:c }}>{v}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Tool risk table */}
+            {impactReport.tool_risks && (
+              <div>
+                <div style={{ fontFamily:mono, fontSize:11, color:C.p3, letterSpacing:1.5,
+                  textTransform:"uppercase", marginBottom:6 }}>TOOL RISK BREAKDOWN</div>
+                <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                  <thead>
+                    <tr>
+                      {["Tool","Avg Risk","Count","Blocked"].map(h => (
+                        <th key={h} style={{ fontFamily:mono, fontSize:11, color:C.p3, letterSpacing:1.5,
+                          textTransform:"uppercase", textAlign:"left", padding:"6px 8px",
+                          borderBottom:`1px solid ${C.line2}` }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(impactReport.tool_risks).sort((a,b) =>
+                      (b[1].avg_risk||0) - (a[1].avg_risk||0)
+                    ).slice(0, 20).map(([tool, data]) => (
+                      <tr key={tool} style={{ borderBottom:`1px solid ${C.line}` }}>
+                        <td style={{ fontFamily:mono, fontSize:13, fontWeight:600, color:C.p1, padding:"6px 8px" }}>{tool}</td>
+                        <td style={{ fontFamily:mono, fontSize:14, fontWeight:600,
+                          color:riskColor(data.avg_risk||0), padding:"6px 8px" }}>{(data.avg_risk||0).toFixed(1)}</td>
+                        <td style={{ fontFamily:mono, fontSize:12, color:C.p2, padding:"6px 8px" }}>{data.count||0}</td>
+                        <td style={{ fontFamily:mono, fontSize:12, color:C.red, padding:"6px 8px" }}>{data.blocked||0}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Agent risk table */}
+            {impactReport.agent_risks && (
+              <div style={{ marginTop:14 }}>
+                <div style={{ fontFamily:mono, fontSize:11, color:C.p3, letterSpacing:1.5,
+                  textTransform:"uppercase", marginBottom:6 }}>AGENT RISK PROFILES · CLICK TO DRILL DOWN</div>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(200px, 1fr))", gap:8 }}>
+                  {Object.entries(impactReport.agent_risks).map(([agId, data]) => (
+                    <div key={agId} onClick={() => loadAgent(agId)} style={{
+                      background:selectedAgent===agId?C.accentDim:C.bg0, padding:"10px 14px",
+                      cursor:"pointer", border:`1px solid ${selectedAgent===agId?C.accent:C.line2}`,
+                    }}>
+                      <div style={{ fontFamily:mono, fontSize:13, color:C.p1, fontWeight:600 }}>{agId}</div>
+                      <div style={{ fontFamily:mono, fontSize:11, color:C.p3, marginTop:3 }}>
+                        risk: <span style={{ color:riskColor(data.avg_risk||0) }}>
+                          {(data.avg_risk||0).toFixed(1)}</span> · {data.count||0} actions
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Agent detail drill-down */}
+            {agentDetail && (
+              <div style={{ marginTop:14, background:C.bg0, padding:14 }}>
+                <PanelHd title={`Agent Detail: ${selectedAgent}`}/>
+                <pre style={{ fontFamily:mono, fontSize:11, color:C.p2, overflow:"auto", maxHeight:300 }}>
+                  {JSON.stringify(agentDetail, null, 2)}
+                </pre>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Escalation Queue sub-tab ──
+function EscalationSubTab({ API_BASE, headers }) {
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState("pending");
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`${API_BASE}/escalation/queue?status=${filter}&limit=50`, { headers: headers() });
+      if (r.ok) setEvents(await r.json());
+    } catch {}
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, [API_BASE, filter]);
+
+  const resolve = async (eventId, resolution) => {
+    try {
+      await fetch(`${API_BASE}/escalation/queue/${eventId}/resolve`, {
+        method:"POST", headers:headers(),
+        body:JSON.stringify({ resolution, resolved_by:"dashboard_user" }),
+      });
+      load();
+    } catch {}
+  };
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:1, background:C.line }}>
+      <div style={{ background:C.bg1, padding:14 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
+          <PanelHd title="Escalation Queue"/>
+          <div style={{ display:"flex", gap:4 }}>
+            {["pending","approved","rejected","all"].map(f => (
+              <Btn key={f} onClick={() => setFilter(f)}
+                variant={filter===f?"cyan":"default"}>{f}</Btn>
+            ))}
+          </div>
+        </div>
+
+        {loading ? (
+          <div style={{ fontFamily:mono, fontSize:12, color:C.muted }}>Loading…</div>
+        ) : events.length === 0 ? (
+          <div style={{ fontFamily:mono, fontSize:12, color:C.muted, padding:"10px 0" }}>
+            No {filter} escalation events.
+          </div>
+        ) : (
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead>
+              <tr>
+                {["ID","Agent","Tool","Severity","Risk","Status","Time","Actions"].map(h => (
+                  <th key={h} style={{ fontFamily:mono, fontSize:11, color:C.p3, letterSpacing:1.5,
+                    textTransform:"uppercase", textAlign:"left", padding:"6px 8px",
+                    borderBottom:`1px solid ${C.line2}` }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {events.slice(0, 30).map((ev, i) => {
+                const sevColor = ev.severity==="critical"?C.red:ev.severity==="high"?C.amber:C.p2;
+                const statusColor = ev.status==="pending"?C.amber:ev.status==="approved"?C.green:C.red;
+                return (
+                  <tr key={i} style={{ borderBottom:`1px solid ${C.line}` }}>
+                    <td style={{ fontFamily:mono, fontSize:10, color:C.p3, padding:"6px 8px" }}>
+                      {(ev.event_id || ev.id || "").slice(0, 12)}…
+                    </td>
+                    <td style={{ fontFamily:mono, fontSize:12, color:C.p2, padding:"6px 8px" }}>{ev.agent_id || "—"}</td>
+                    <td style={{ fontFamily:mono, fontSize:13, fontWeight:600, color:C.p1, padding:"6px 8px" }}>{ev.tool || "—"}</td>
+                    <td style={{ padding:"5px 6px" }}>
+                      <span style={{ fontFamily:mono, fontSize:11, padding:"2px 6px",
+                        border:`1px solid ${sevColor}`, color:sevColor, textTransform:"uppercase" }}>
+                        {ev.severity || "—"}
+                      </span>
+                    </td>
+                    <td style={{ fontFamily:mono, fontSize:14, fontWeight:600,
+                      color:riskColor(ev.risk_score || 0), padding:"6px 8px" }}>{ev.risk_score ?? "—"}</td>
+                    <td style={{ padding:"5px 6px" }}>
+                      <span style={{ fontFamily:mono, fontSize:11, padding:"2px 6px",
+                        border:`1px solid ${statusColor}`, color:statusColor, textTransform:"uppercase" }}>
+                        {ev.status}
+                      </span>
+                    </td>
+                    <td style={{ fontFamily:mono, fontSize:9.5, color:C.p3, padding:"6px 8px" }}>
+                      {ev.created_at || ev.timestamp || ""}
+                    </td>
+                    <td style={{ padding:"5px 6px" }}>
+                      {ev.status === "pending" && (
+                        <div style={{ display:"flex", gap:4 }}>
+                          <Btn variant="green" onClick={() => resolve(ev.event_id || ev.id, "approved")} style={{ fontSize:10, padding:"2px 6px" }}>✓</Btn>
+                          <Btn variant="red" onClick={() => resolve(ev.event_id || ev.id, "rejected")} style={{ fontSize:10, padding:"2px 6px" }}>✗</Btn>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
 // SURGE TOKEN GOVERNANCE — receipts, staking, wallets (v0.3.0)
 // ═══════════════════════════════════════════════════════════
 let _receiptCounter = 0;
@@ -6531,10 +7297,10 @@ function ReviewQueueTab() {
 // ROLE_TABS + ALL_TABS (SURGE + Topology added)
 // ═══════════════════════════════════════════════════════════
 const ROLE_TABS = {
-  superadmin: ["dashboard","agent","tester","policies","review","surge","audit","conversations","verification","drift","chains","traces","topology","apikeys","settings","users","docs"],
-  admin:    ["dashboard","agent","tester","policies","review","surge","audit","conversations","verification","drift","chains","traces","topology","apikeys","settings","docs"],
-  operator: ["dashboard","agent","tester","policies","review","surge","audit","conversations","verification","drift","chains","traces","topology","apikeys","settings","docs"],
-  auditor:  ["dashboard","agent","surge","audit","conversations","verification","drift","chains","traces","topology","apikeys","docs"],
+  superadmin: ["dashboard","agent","tester","policies","review","compliance","audit","conversations","verification","drift","chains","traces","topology","apikeys","settings","users","docs"],
+  admin:    ["dashboard","agent","tester","policies","review","compliance","audit","conversations","verification","drift","chains","traces","topology","apikeys","settings","docs"],
+  operator: ["dashboard","agent","tester","policies","review","compliance","audit","conversations","verification","drift","chains","traces","topology","apikeys","settings","docs"],
+  auditor:  ["dashboard","agent","compliance","audit","conversations","verification","drift","chains","traces","topology","apikeys","docs"],
 };
 
 const ALL_TABS = [
@@ -6543,7 +7309,7 @@ const ALL_TABS = [
   { id:"tester",    label:"Action Tester",     icon:"▶" },
   { id:"policies",  label:"Policy Editor",     icon:"◆" },
   { id:"review",    label:"Review Queue",      icon:"◎" },
-  { id:"surge",     label:"SURGE",             icon:"⬡" },
+  { id:"compliance", label:"Compliance Hub",    icon:"🛡" },
   { id:"audit",     label:"Audit Trail",       icon:"☰" },
   { id:"conversations", label:"Conversations", icon:"💬" },
   { id:"verification", label:"Verification",  icon:"✅" },
@@ -6772,6 +7538,9 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
         trace:r.trace,
         layerHit:blocked?blocked.matched[0]||blocked.key:null,
         chainAlert:r.chainAlert, piiHits:r.piiHits,
+        deviation_count:r.deviation_count||0,
+        deviation_types:r.deviation_types||[],
+        pii_findings_count:r.pii_findings_count||0,
         time:new Date().toLocaleTimeString() };
       const autoEntry = { decision:r.decision, msg:buildAutoMsg(tool,r),
         time:new Date().toLocaleTimeString() };
@@ -6839,7 +7608,7 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
           </div>
           {!sidebarCollapsed && <div>
             <div style={{fontFamily:mono, fontSize:14, fontWeight:700, color:C.p1, letterSpacing:1.5}}>GOVERNOR</div>
-            <div style={{fontFamily:mono, fontSize:10, color:C.muted, letterSpacing:1}}>v0.3.0 · SURGE</div>
+            <div style={{fontFamily:mono, fontSize:10, color:C.muted, letterSpacing:1}}>v0.4.0 · COMPLIANCE</div>
           </div>}
         </div>
 
@@ -6984,10 +7753,13 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
           <div style={{display:"flex", alignItems:"center", gap:10}}>
             <span style={{fontFamily:mono, fontSize:11, color:C.muted}}>⏱ {fmtUptime(uptime)}</span>
             <span style={{fontFamily:mono, fontSize:11, color:C.p3, letterSpacing:1}}>
-              SOVEREIGN AI LAB · SURGE × OPENCLAW
+              SOVEREIGN AI LAB · OPENCLAW GOVERNOR
             </span>
           </div>
         </div>
+
+        {/* Module Health Strip */}
+        <ModuleHealthStrip/>
 
         {/* Narrative */}
         <NarrativeBar message={narr}/>
@@ -7015,7 +7787,7 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
             }}/>}
           {tab==="agent"     && <AgentRunner onResult={onResult}/>}
           {tab==="review"    && (userRole==="superadmin"||userRole==="admin"||userRole==="operator") && <ReviewQueueTab/>}
-          {tab==="surge"     && <SurgeTab receipts={surgeReceipts} stakedPolicies={stakedPolicies} setStaked={setStakedPolicies} userRole={userRole}/>}
+          {tab==="compliance" && <ComplianceHubTab/>}
           {tab==="audit"     && <AuditTrailTab auditLog={auditLog} policySnapshots={policySnapshots}/>}
           {tab==="conversations" && <ConversationsTab/>}
           {tab==="verification" && <VerificationTab/>}

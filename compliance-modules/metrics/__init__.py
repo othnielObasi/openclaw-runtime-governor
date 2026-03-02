@@ -130,11 +130,15 @@ class GovernorMetrics:
         with self._lock:
             lines = []
 
+            def _sanitize_label(v: str) -> str:
+                """Escape Prometheus label value: backslash, double-quote, newline."""
+                return v.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+
             def counter(name: str, help_text: str, labels_values: Dict[str, int], label_name: str = "type"):
                 lines.append(f"# HELP {name} {help_text}")
                 lines.append(f"# TYPE {name} counter")
                 for label, value in sorted(labels_values.items()):
-                    lines.append(f'{name}{{{label_name}="{label}"}} {value}')
+                    lines.append(f'{name}{{{label_name}="{_sanitize_label(label)}"}} {value}')
 
             def gauge(name: str, help_text: str, value):
                 lines.append(f"# HELP {name} {help_text}")
