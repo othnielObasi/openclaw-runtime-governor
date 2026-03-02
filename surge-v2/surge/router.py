@@ -11,8 +11,14 @@ from . import SurgeEngine, SovereignConfig, GovernanceReceipt
 
 router = APIRouter(tags=["SURGE Governance Receipts"])
 
-# Default engine — configure via startup
+# Default engine — will be replaced by module registry's engine when mounted
 engine = SurgeEngine(config=SovereignConfig())
+
+
+def set_engine(e: SurgeEngine) -> None:
+    """Allow the governor-service to inject its configured engine."""
+    global engine
+    engine = e
 
 
 class IssueRequest(BaseModel):

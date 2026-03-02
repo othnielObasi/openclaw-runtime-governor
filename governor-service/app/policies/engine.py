@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 import time
 import unicodedata
@@ -11,6 +12,10 @@ from ..state import is_kill_switch_enabled
 from ..neuro.risk_estimator import estimate_neural_risk
 from ..session_store import get_agent_history
 from ..chain_analysis import check_chain_escalation
+from ..modules import modules as gov_modules
+from ..config import settings
+
+_log = logging.getLogger("governor.engine")
 
 
 # ---------------------------------------------------------------------------
@@ -157,17 +162,90 @@ def evaluate_action(action: ActionInput) -> ActionDecision:
 
     # ── Layer 2: Injection firewall ───────────────────────────────────
     t = time.perf_counter()
-    triggered, reason, inj_matched = _run_injection_firewall(action)
-    if triggered:
-        trace.append(_step(2, "Injection Firewall", "firewall", "block", 95,
-                           inj_matched, reason, t))
-        return ActionDecision(
-            decision="block", risk_score=95,
-            explanation=reason or "Injection firewall blocked this action.",
-            policy_ids=["injection-firewall"], execution_trace=trace,
-        )
-    trace.append(_step(2, "Injection Firewall", "firewall", "pass", 0, [],
-                       f"Scanned {len(_INJECTION_COMPILED)} patterns — none matched.", t))
+
+    # Use SemanticInjectionDetector when available, fall through to legacy regex
+    inj_detector = gov_modules.injection_detector if (
+        settings.modules_enabled and settings.injection_detector_enabled
+    ) else None
+
+    injection_blocked = False
+
+    if inj_detector is not None:
+        payload = _flatten_payload(action)
+        inj_result = inj_detector.analyze(payload)
+        if inj_result.is_injection:
+            cats = ", ".join(inj_result.categories_detected) if inj_result.categories_detected else "unknown"
+            reason = (
+                f"Semantic injection detected (similarity={inj_result.max_similarity:.2f}, "
+                f"categories={cats})"
+            )
+            inj_matched = [m.pattern_id for m in inj_result.matches[:5]]
+            trace.append(_step(2, "Injection Firewall (Semantic)", "firewall", "block",
+                               95, inj_matched, reason, t))
+            return ActionDecision(
+                decision="block", risk_score=95,
+                explanation=reason,
+                policy_ids=["injection-firewall"],
+                execution_trace=trace,
+            )
+        # Semantic pass — also run legacy regex as fallback (defense-in-depth)
+        triggered, reason, inj_matched = _run_injection_firewall(action)
+        if triggered:
+            trace.append(_step(2, "Injection Firewall", "firewall", "block", 95,
+                               inj_matched, reason, t))
+            return ActionDecision(
+                decision="block", risk_score=95,
+                explanation=reason or "Injection firewall blocked this action.",
+                policy_ids=["injection-firewall"], execution_trace=trace,
+            )
+        trace.append(_step(
+            2, "Injection Firewall (Semantic+Regex)", "firewall", "pass", 0, [],
+            f"Semantic scan OK (max_similarity={inj_result.max_similarity:.2f}, "
+            f"{inj_detector.pattern_count} patterns) + "
+            f"{len(_INJECTION_COMPILED)} legacy patterns — all clear.", t,
+        ))
+    else:
+        # Legacy regex firewall only
+        triggered, reason, inj_matched = _run_injection_firewall(action)
+        if triggered:
+            trace.append(_step(2, "Injection Firewall", "firewall", "block", 95,
+                               inj_matched, reason, t))
+            return ActionDecision(
+                decision="block", risk_score=95,
+                explanation=reason or "Injection firewall blocked this action.",
+                policy_ids=["injection-firewall"], execution_trace=trace,
+            )
+        trace.append(_step(2, "Injection Firewall", "firewall", "pass", 0, [],
+                           f"Scanned {len(_INJECTION_COMPILED)} patterns — none matched.", t))
+
+    # ── Layer 2.5: PII scan (advisory — adds risk boost) ─────────────
+    pii_risk_boost = 0
+    pii_count = 0
+    pii_scanner = gov_modules.pii_scanner if (
+        settings.modules_enabled and settings.pii_scanner_enabled
+    ) else None
+
+    if pii_scanner is not None:
+        t = time.perf_counter()
+        try:
+            pii_result = pii_scanner.scan_input(action.tool, action.args)
+            if pii_result.has_pii:
+                pii_risk_boost = int(pii_result.risk_boost)
+                pii_count = len(pii_result.findings)
+                _log.info("PII detected: %d findings, risk_boost=%d", pii_count, pii_risk_boost)
+            pii_detail = (
+                f"PII found: {pii_count} entities, risk_boost={pii_risk_boost}."
+                if pii_result.has_pii
+                else "No PII detected in input."
+            )
+        except Exception as exc:
+            _log.warning("PII scan error: %s", exc)
+            pii_detail = f"PII scan error: {exc}"
+        trace.append(_step(
+            2, "PII Scanner", "pii", "pass", pii_risk_boost,
+            [f"pii:{pii_count}"] if pii_count else [],
+            pii_detail, t,
+        ))
 
     # ── Layer 3: Scope enforcement ────────────────────────────────────
     t = time.perf_counter()
@@ -228,6 +306,10 @@ def evaluate_action(action: ActionInput) -> ActionDecision:
 
     neural_risk = estimate_neural_risk(action)
 
+    # Apply PII risk boost from Layer 2.5
+    if pii_risk_boost:
+        neural_risk = min(100, neural_risk + pii_risk_boost)
+
     # Chain escalation check against persistent history
     chain = check_chain_escalation(history)
     chain_boost = 0
@@ -280,4 +362,5 @@ def evaluate_action(action: ActionInput) -> ActionDecision:
         chain_pattern=chain.pattern if chain.triggered else None,
         chain_description=chain.description if chain.triggered else None,
         session_depth=len(history),
+        pii_findings_count=pii_count,
     )

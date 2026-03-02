@@ -40,6 +40,49 @@ class Settings(BaseSettings):
     surge_governance_fee_enabled: bool = False
     surge_wallet_address: str = ""
 
+    # ── Compliance modules ──────────────────────────────────────────
+    modules_enabled: bool = True                       # Master toggle for all optional modules
+
+    # Injection detector (replaces legacy regex firewall)
+    injection_detector_enabled: bool = True
+    injection_similarity_threshold: float = 0.25
+
+    # PII scanner
+    pii_scanner_enabled: bool = True
+    pii_risk_boost_per_finding: float = 15.0
+    pii_max_risk_boost: float = 50.0
+    pii_min_confidence: float = 0.60
+
+    # Budget enforcer
+    budget_enforcer_enabled: bool = True
+    budget_max_evals_per_session: int = 500
+    budget_max_evals_per_hour: int = 1000
+    budget_max_evals_per_day: int = 10000
+    budget_circuit_breaker_cooldown: float = 300.0
+
+    # Metrics (Prometheus + JSON)
+    metrics_enabled: bool = True
+
+    # Compliance exporter
+    compliance_exporter_enabled: bool = True
+
+    # Agent fingerprinting
+    fingerprinting_enabled: bool = True
+
+    # SURGE v2
+    surge_v2_enabled: bool = False                     # Opt-in: replaces v1 receipts
+    surge_v2_org: str = "openclaw"
+    surge_v2_checkpoint_interval: int = 100
+
+    # Impact assessment
+    impact_assessment_enabled: bool = True
+
+    # SIEM integration
+    siem_enabled: bool = False                         # Opt-in: requires target URL
+    siem_target_url: str = ""
+    siem_auth_header: str = ""
+    siem_min_severity: str = "medium"                   # low | medium | high | critical
+
     # Encryption key for notification channel secrets (Fernet key)
     # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     encryption_key: str = ""

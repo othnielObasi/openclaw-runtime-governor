@@ -17,6 +17,7 @@ from .auth.seed import seed_admin
 from .escalation.routes import router as escalation_router
 from .escalation import models as _escalation_models  # noqa: F401 — register tables
 from . import verification as _verification_models  # noqa: F401 — register VerificationLog table
+from .modules import modules as gov_modules
 
 # ---------------------------------------------------------------------------
 # Structured logging
@@ -150,6 +151,46 @@ app.include_router(routes_notifications.router)
 app.include_router(routes_verify.router)
 app.include_router(routes_conversations.router)
 
+# ---------------------------------------------------------------------------
+# Optional module routers (loaded by GovernorModules registry)
+# ---------------------------------------------------------------------------
+def _mount_module_routers() -> None:
+    """Mount API routers from optional modules that loaded successfully."""
+    _log = logging.getLogger("governor.modules")
+
+    if settings.modules_enabled:
+        if settings.metrics_enabled and gov_modules.metrics_router:
+            app.include_router(gov_modules.metrics_router)
+            _log.info("Mounted /metrics router")
+
+        if settings.compliance_exporter_enabled and gov_modules.compliance_router:
+            app.include_router(gov_modules.compliance_router)
+            _log.info("Mounted /compliance router")
+
+        if settings.pii_scanner_enabled and gov_modules.pii_router:
+            app.include_router(gov_modules.pii_router)
+            _log.info("Mounted /pii router")
+
+        if settings.fingerprinting_enabled and gov_modules.fingerprint_router:
+            app.include_router(gov_modules.fingerprint_router)
+            _log.info("Mounted /fingerprint router")
+
+        if settings.surge_v2_enabled and gov_modules.surge_router:
+            app.include_router(gov_modules.surge_router, prefix="/surge/v2")
+            _log.info("Mounted /surge/v2 router")
+
+        if settings.impact_assessment_enabled and gov_modules.impact_router:
+            app.include_router(gov_modules.impact_router, prefix="/impact")
+            _log.info("Mounted /impact router")
+
+    _log.info("Module status: %s", gov_modules.status())
+
+
+try:
+    _mount_module_routers()
+except Exception as exc:
+    logging.getLogger("governor.modules").warning("Module router mount failed: %s", exc)
+
 
 @app.get("/", tags=["meta"])
 def root() -> dict:
@@ -165,3 +206,9 @@ def health() -> dict:
 def healthz() -> dict:
     """Lightweight health check for Fly.io / load balancer probes."""
     return {"status": "ok"}
+
+
+@app.get("/modules/status", tags=["meta"])
+def modules_status() -> dict:
+    """Report which optional compliance/governance modules are loaded."""
+    return gov_modules.status()

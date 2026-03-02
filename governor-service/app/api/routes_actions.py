@@ -1,24 +1,29 @@
 from __future__ import annotations
 
 import json
+import logging
 import secrets
+import time as _time
 from datetime import datetime, timezone
 from typing import List
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy import select
 
 from ..auth.dependencies import require_any, require_operator
+from ..config import settings
 from ..database import db_session
 from ..escalation.engine import handle_post_evaluation
 from ..event_bus import ActionEvent, action_bus
 from ..models import ActionLog, TraceSpan, User
+from ..modules import modules as gov_modules
 from ..policies.engine import evaluate_action
 from ..schemas import ActionInput, ActionDecision, ActionLogRead
 from ..telemetry.logger import log_action
 from .routes_surge import create_governance_receipt, check_wallet_balance
 
 router = APIRouter(prefix="/actions", tags=["actions"])
+_log = logging.getLogger("governor.actions")
 
 
 def _create_governance_span(
@@ -95,13 +100,50 @@ def evaluate_action_route(
 
     If SURGE fee gating is enabled, the agent's wallet balance is checked
     before evaluation. Returns 402 Payment Required if balance ≤ 0.
+
+    Pre-evaluation gates:
+      - Budget enforcer: blocks if agent has blown through eval quotas.
+    Post-evaluation hooks:
+      - Metrics recording (Prometheus counters + latency histogram)
+      - Agent fingerprinting (record + deviation check)
+      - Impact assessment recording
+      - SIEM dispatch for high-severity events
     """
-    # Check SURGE wallet balance before evaluation (402 if empty)
     ctx = action.context or {}
-    check_wallet_balance(ctx.get("agent_id"))
+    agent_id = ctx.get("agent_id")
+    session_id = ctx.get("session_id")
+
+    # ── Pre-eval gate: Budget enforcer ────────────────────────────
+    budget_enforcer = gov_modules.budget_enforcer if (
+        settings.modules_enabled and settings.budget_enforcer_enabled
+    ) else None
+
+    if budget_enforcer is not None:
+        try:
+            budget_status = budget_enforcer.check_budget(
+                agent_id=agent_id or "anonymous",
+                session_id=session_id or "default",
+            )
+            if budget_status.exceeded:
+                # Record metric
+                if gov_modules.metrics:
+                    gov_modules.metrics.record_budget_exceeded(budget_status.reason or "quota")
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Budget exceeded: {budget_status.reason}",
+                )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            _log.warning("Budget check error (non-blocking): %s", exc)
+
+    # Check SURGE wallet balance before evaluation (402 if empty)
+    check_wallet_balance(agent_id)
 
     eval_start = datetime.now(timezone.utc)
+    t0 = _time.perf_counter()
     decision = evaluate_action(action)
+    latency_ms = (_time.perf_counter() - t0) * 1000
     log_action(action, decision)
 
     # Auto-create governance span if trace_id in context
@@ -116,23 +158,46 @@ def evaluate_action_route(
             risk_score=decision.risk_score,
             explanation=decision.explanation,
             policy_ids=decision.policy_ids,
-            agent_id=ctx.get("agent_id"),
-            session_id=ctx.get("session_id"),
+            agent_id=agent_id,
+            session_id=session_id,
             user_id=ctx.get("user_id"),
             channel=ctx.get("channel"),
             chain_pattern=decision.chain_pattern,
         )
     )
 
-    # Generate SURGE governance receipt
-    create_governance_receipt(
-        tool=action.tool,
-        decision=decision.decision,
-        risk_score=decision.risk_score,
-        policy_ids=decision.policy_ids,
-        chain_pattern=decision.chain_pattern,
-        agent_id=ctx.get("agent_id"),
-    )
+    # Generate SURGE governance receipt (v2 when enabled, v1 fallback)
+    if settings.surge_v2_enabled and gov_modules.surge_engine:
+        try:
+            gov_modules.surge_engine.issue(
+                tool=action.tool,
+                decision=decision.decision,
+                risk_score=decision.risk_score,
+                explanation=decision.explanation or "",
+                policy_ids=decision.policy_ids or [],
+                chain_pattern=decision.chain_pattern,
+                agent_id=agent_id,
+                session_id=session_id,
+            )
+        except Exception as exc:
+            _log.warning("SURGE v2 receipt error (falling back to v1): %s", exc)
+            create_governance_receipt(
+                tool=action.tool,
+                decision=decision.decision,
+                risk_score=decision.risk_score,
+                policy_ids=decision.policy_ids,
+                chain_pattern=decision.chain_pattern,
+                agent_id=agent_id,
+            )
+    else:
+        create_governance_receipt(
+            tool=action.tool,
+            decision=decision.decision,
+            risk_score=decision.risk_score,
+            policy_ids=decision.policy_ids,
+            chain_pattern=decision.chain_pattern,
+            agent_id=agent_id,
+        )
 
     # ── Escalation: review queue + auto-kill-switch + webhooks ──
     escalation = handle_post_evaluation(
@@ -142,14 +207,150 @@ def evaluate_action_route(
         explanation=decision.explanation,
         policy_ids=decision.policy_ids,
         chain_pattern=decision.chain_pattern,
-        agent_id=ctx.get("agent_id"),
-        session_id=ctx.get("session_id"),
+        agent_id=agent_id,
+        session_id=session_id,
     )
     decision.escalation_id = escalation.get("escalation_id")
     decision.auto_ks_triggered = escalation.get("auto_ks_triggered", False)
     decision.escalation_severity = escalation.get("severity")
 
+    # ── Post-eval hooks: Compliance modules ────────────────────────
+    _run_post_eval_hooks(action, decision, latency_ms)
+
     return decision
+
+
+def _run_post_eval_hooks(
+    action: ActionInput,
+    decision: ActionDecision,
+    latency_ms: float,
+) -> None:
+    """Fire-and-forget post-evaluation hooks.  Errors are logged, never raised."""
+    ctx = action.context or {}
+    agent_id = ctx.get("agent_id", "anonymous")
+    session_id = ctx.get("session_id", "default")
+
+    # ── Metrics ──
+    if settings.modules_enabled and settings.metrics_enabled and gov_modules.metrics:
+        try:
+            gov_modules.metrics.record_evaluation(
+                decision=decision.decision,
+                latency_ms=latency_ms,
+                tool=action.tool,
+                policy_ids=decision.policy_ids or None,
+            )
+            if decision.chain_pattern:
+                gov_modules.metrics.record_chain_detection(decision.chain_pattern)
+        except Exception as exc:
+            _log.warning("Metrics recording error: %s", exc)
+
+    # ── Budget: record the evaluation cost ──
+    if settings.modules_enabled and settings.budget_enforcer_enabled and gov_modules.budget_enforcer:
+        try:
+            gov_modules.budget_enforcer.record_evaluation(
+                agent_id=agent_id,
+                session_id=session_id,
+                decision=decision.decision,
+                cost=0.0,
+            )
+        except Exception as exc:
+            _log.warning("Budget record error: %s", exc)
+
+    # ── Agent fingerprinting ──
+    if settings.modules_enabled and settings.fingerprinting_enabled and gov_modules.fingerprint_engine:
+        try:
+            deviations = gov_modules.fingerprint_engine.check(
+                agent_id=agent_id,
+                tool=action.tool,
+                args=action.args,
+                session_id=session_id,
+            )
+            if deviations:
+                decision.deviation_count = len(deviations)
+                decision.deviation_types = [d.deviation_type for d in deviations]
+
+            gov_modules.fingerprint_engine.record(
+                agent_id=agent_id,
+                tool=action.tool,
+                args=action.args,
+                decision=decision.decision,
+                risk_score=decision.risk_score,
+                latency_ms=latency_ms,
+                session_id=session_id,
+            )
+        except Exception as exc:
+            _log.warning("Fingerprinting error: %s", exc)
+
+    # ── Impact assessment ──
+    if settings.modules_enabled and settings.impact_assessment_enabled and gov_modules.impact_engine:
+        try:
+            gov_modules.impact_engine.record(
+                tool=action.tool,
+                decision=decision.decision,
+                risk_score=decision.risk_score,
+                agent_id=agent_id,
+                session_id=session_id,
+                policy_ids=decision.policy_ids or [],
+                chain_pattern=decision.chain_pattern,
+                deviation_types=decision.deviation_types or [],
+                explanation=decision.explanation or "",
+            )
+        except Exception as exc:
+            _log.warning("Impact assessment error: %s", exc)
+
+    # ── SIEM dispatch ──
+    if settings.modules_enabled and settings.siem_enabled and gov_modules.siem_dispatcher:
+        try:
+            from siem_webhook import GovernanceEvent, compute_severity
+            severity = compute_severity(
+                decision.decision, decision.risk_score,
+                decision.chain_pattern, decision.deviation_types or [],
+            )
+            siem_event = GovernanceEvent(
+                event_id=f"gov-{__import__('secrets').token_hex(8)}",
+                timestamp=__import__('datetime').datetime.now(
+                    __import__('datetime').timezone.utc
+                ).isoformat(),
+                event_type="evaluation",
+                tool=action.tool,
+                decision=decision.decision,
+                risk_score=decision.risk_score,
+                explanation=decision.explanation or "",
+                agent_id=agent_id,
+                session_id=session_id,
+                policy_ids=decision.policy_ids or [],
+                chain_pattern=decision.chain_pattern,
+                severity=severity,
+            )
+            gov_modules.siem_dispatcher.dispatch(siem_event)
+        except Exception as exc:
+            _log.warning("SIEM dispatch error: %s", exc)
+
+    # ── Escalation connector ──
+    if settings.modules_enabled and gov_modules.escalation_connector:
+        try:
+            from escalation import EscalationEvent
+            # Only escalate for block/review decisions or high risk
+            if decision.decision in ("block", "review") or decision.risk_score >= 70:
+                esc_event = EscalationEvent(
+                    event_id=f"esc-{__import__('secrets').token_hex(8)}",
+                    timestamp=__import__('datetime').datetime.now(
+                        __import__('datetime').timezone.utc
+                    ).isoformat(),
+                    tool=action.tool,
+                    decision=decision.decision,
+                    risk_score=decision.risk_score,
+                    explanation=decision.explanation or "",
+                    agent_id=agent_id,
+                    session_id=session_id,
+                    policy_ids=decision.policy_ids or [],
+                    chain_pattern=decision.chain_pattern,
+                    deviations=[{"type": d} for d in (decision.deviation_types or [])],
+                    is_kill_switch=(decision.decision == "block" and decision.risk_score >= 90),
+                )
+                gov_modules.escalation_connector.escalate(esc_event)
+        except Exception as exc:
+            _log.warning("Escalation connector error: %s", exc)
 
 
 @router.get("", response_model=List[ActionLogRead])

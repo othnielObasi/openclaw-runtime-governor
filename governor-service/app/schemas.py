@@ -88,6 +88,20 @@ class ActionDecision(BaseModel):
         default=None,
         description="Escalation severity: critical | high | medium | low (if escalated).",
     )
+    # Fingerprinting fields — populated by post-eval hooks
+    deviation_count: int = Field(
+        default=0,
+        description="Number of behavioural deviations detected by fingerprint engine.",
+    )
+    deviation_types: List[str] = Field(
+        default_factory=list,
+        description="Types of deviations detected (e.g. tool_frequency, arg_anomaly).",
+    )
+    # PII scan summary — populated by Layer 2.5
+    pii_findings_count: int = Field(
+        default=0,
+        description="Number of PII entities detected in this action's payload.",
+    )
 
 
 # ---------------------------------------------------------------------------
