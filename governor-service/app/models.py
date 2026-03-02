@@ -67,6 +67,85 @@ class PolicyModel(Base):
     )
 
 
+# ---------------------------------------------------------------------------
+# Agent Fingerprinting — DB-persisted behavioural profiles
+# ---------------------------------------------------------------------------
+
+class FingerprintState(Base):
+    """Persisted agent fingerprint state — survives restarts.
+
+    Stores the full serialized AgentFingerprint as JSON so that
+    behavioural baselines accumulate across deployments.
+    """
+
+    __tablename__ = "fingerprint_states"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    agent_id: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    state_json: Mapped[str] = mapped_column(Text)
+    total_evaluations: Mapped[int] = mapped_column(Integer, default=0)
+    maturity: Mapped[str] = mapped_column(String(32), default="learning")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
+# ---------------------------------------------------------------------------
+# SURGE v2 — DB-persisted governance receipts + Merkle checkpoints
+# ---------------------------------------------------------------------------
+
+class SurgeV2Receipt(Base):
+    """Persisted SURGE v2 governance receipt for tamper-evident audit chain.
+
+    Every governance decision is cryptographically hashed and chained.
+    Persisting to DB ensures the chain survives restarts / redeployments.
+    """
+
+    __tablename__ = "surge_v2_receipts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    receipt_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    sequence: Mapped[int] = mapped_column(Integer, index=True)
+    timestamp: Mapped[str] = mapped_column(String(64))
+    tool: Mapped[str] = mapped_column(String(128), index=True)
+    decision: Mapped[str] = mapped_column(String(32), index=True)
+    risk_score: Mapped[int] = mapped_column(Integer)
+    explanation: Mapped[str] = mapped_column(Text, default="")
+    policy_ids_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    chain_pattern: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    agent_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
+    session_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    sovereign_json: Mapped[str] = mapped_column(Text)
+    compliance_json: Mapped[str] = mapped_column(Text)
+    digest: Mapped[str] = mapped_column(String(64), index=True)
+    previous_digest: Mapped[str] = mapped_column(String(64))
+    merkle_root: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc), index=True
+    )
+
+
+class SurgeV2Checkpoint(Base):
+    """Persisted SURGE v2 Merkle checkpoint for batch verification."""
+
+    __tablename__ = "surge_v2_checkpoints"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    checkpoint_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    timestamp: Mapped[str] = mapped_column(String(64))
+    sequence_start: Mapped[int] = mapped_column(Integer)
+    sequence_end: Mapped[int] = mapped_column(Integer)
+    receipt_count: Mapped[int] = mapped_column(Integer)
+    merkle_root: Mapped[str] = mapped_column(String(64))
+    leaf_digests_json: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc), index=True
+    )
+
+
 class PolicyVersion(Base):
     """
     Immutable snapshot of a policy at a specific version.

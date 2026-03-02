@@ -403,12 +403,19 @@ class ImpactAssessmentEngine:
     """
     Aggregates governance data into structured impact assessments.
 
-    Reads from in-memory evaluation records. In production, replace
-    with database queries against the ActionLog table.
+    Supports two modes:
+    - In-memory: records stored in self._records (for tests / standalone)
+    - DB-backed: query_backend callable returns records from ActionLog
 
     Usage:
         engine = ImpactAssessmentEngine()
+
+        # Mode 1: In-memory
         engine.record(tool, decision, risk_score, agent_id, ...)
+        report = engine.assess(period=AssessmentPeriod.LAST_30D)
+
+        # Mode 2: DB-backed
+        engine.set_query_backend(db_query_fn)
         report = engine.assess(period=AssessmentPeriod.LAST_30D)
     """
 
@@ -416,6 +423,16 @@ class ImpactAssessmentEngine:
         self._records: List[EvaluationRecord] = []
         self._max_records = max_records
         self._all_policy_ids: Set[str] = set()
+        self._query_backend: Optional[Any] = None
+
+    def set_query_backend(self, backend_fn):
+        """Set a DB query backend.
+
+        backend_fn(period: AssessmentPeriod) -> List[EvaluationRecord]
+
+        When set, _filter_by_period uses the backend instead of _records.
+        """
+        self._query_backend = backend_fn
 
     def record(
         self,
@@ -456,7 +473,13 @@ class ImpactAssessmentEngine:
         self._all_policy_ids.add(policy_id)
 
     def _filter_by_period(self, period: AssessmentPeriod) -> List[EvaluationRecord]:
-        """Filter records by time period."""
+        """Filter records by time period. Uses DB backend when available."""
+        if self._query_backend:
+            try:
+                return self._query_backend(period)
+            except Exception:
+                pass  # Fall back to in-memory
+
         cutoff_secs = PERIOD_SECONDS.get(period)
         if cutoff_secs is None:
             return list(self._records)

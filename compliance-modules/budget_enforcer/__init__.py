@@ -2,7 +2,11 @@
 NOVTIA Governor — Evaluation Budget Enforcer
 ==============================================
 Per-agent, per-session evaluation budgets with circuit breaker.
-In-memory store for dev, Redis-compatible interface for production.
+Supports DB-backed hydration: on startup the governor-service replays
+recent ActionLog rows into the enforcer so counters survive restarts.
+
+Circuit breaker state is persisted via save/load callbacks so that a
+mid-cooldown restart doesn't reset the breaker prematurely.
 
 Integration:
     from budget_enforcer import BudgetEnforcer, BudgetConfig
@@ -13,9 +17,10 @@ Integration:
 """
 from __future__ import annotations
 
+import json
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 from collections import defaultdict
 from threading import Lock
 
@@ -122,6 +127,28 @@ class BudgetEnforcer:
         self._agent_configs: Dict[str, BudgetConfig] = {}
         self._buckets: Dict[str, _AgentBucket] = defaultdict(_AgentBucket)
         self._lock = Lock()
+        self._hydrated = False
+
+        # Persistence callbacks (set by governor-service for DB-backed state)
+        self._cb_save: Optional[Callable] = None      # fn(agent_id, until, blocks)
+        self._cb_load: Optional[Callable] = None      # fn(agent_id) -> (until, blocks) | None
+
+    def set_persistence(
+        self,
+        save_cb: Optional[Callable] = None,
+        load_cb: Optional[Callable] = None,
+    ):
+        """Set callbacks for circuit-breaker state persistence.
+
+        save_cb(agent_id: str, until: float, blocks: int)
+        load_cb(agent_id: str) -> Optional[Tuple[float, int]]
+        """
+        self._cb_save = save_cb
+        self._cb_load = load_cb
+
+    def mark_hydrated(self):
+        """Mark that the enforcer has been hydrated from DB."""
+        self._hydrated = True
 
     def set_agent_config(self, agent_id: str, config: BudgetConfig):
         """Set custom budget config for a specific agent."""
@@ -166,7 +193,15 @@ class BudgetEnforcer:
                 session_cost=session_cost,
             )
 
-            # Check circuit breaker
+            # Check circuit breaker (load persisted state if available)
+            if bucket.circuit_breaker_until == 0.0 and self._cb_load:
+                try:
+                    persisted = self._cb_load(agent_id)
+                    if persisted:
+                        bucket.circuit_breaker_until, bucket.consecutive_blocks = persisted
+                except Exception:
+                    pass
+
             if bucket.circuit_breaker_until > now:
                 status.exceeded = True
                 status.reason = f"Circuit breaker engaged until {bucket.circuit_breaker_until:.0f} ({bucket.consecutive_blocks} consecutive blocks)"
@@ -228,6 +263,13 @@ class BudgetEnforcer:
                 bucket.consecutive_blocks += 1
                 if bucket.consecutive_blocks >= config.max_blocked_consecutive:
                     bucket.circuit_breaker_until = now + config.circuit_breaker_cooldown_sec
+                    # Persist circuit breaker state
+                    if self._cb_save:
+                        try:
+                            self._cb_save(agent_id, bucket.circuit_breaker_until,
+                                          bucket.consecutive_blocks)
+                        except Exception:
+                            pass  # best-effort persistence
             else:
                 bucket.consecutive_blocks = 0
 

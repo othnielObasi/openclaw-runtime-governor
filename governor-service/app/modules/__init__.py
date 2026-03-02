@@ -6,6 +6,12 @@ properties.  The registry gracefully degrades: if a module directory is
 missing or an import fails the property returns ``None`` so the core
 evaluation pipeline never crashes.
 
+On first access of persistence-backed modules (budget_enforcer,
+fingerprint_engine, surge_engine, impact_engine) the registry:
+  1. Instantiates the module
+  2. Hydrates it from the DB (replaying state)
+  3. Wires persistence callbacks so future state changes are saved
+
 Usage
 -----
     from app.modules import modules          # singleton
@@ -19,10 +25,13 @@ Usage
 
 from __future__ import annotations
 
+import json
 import logging
 import sys
+import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
     pass  # type stubs only
@@ -53,6 +62,282 @@ for _d in _MODULE_DIRS:
     if _str not in sys.path and _d.is_dir():
         sys.path.insert(0, _str)
         log.debug("Added %s to sys.path", _str)
+
+
+# ---------------------------------------------------------------------------
+# Registry singleton
+# ---------------------------------------------------------------------------
+
+# ── DB-backed persistence helpers ──────────────────────────────────────────
+# These functions connect module persistence hooks to SQLAlchemy models.
+# They are called lazily when the module is first accessed.
+
+def _hydrate_budget_enforcer(enforcer) -> None:
+    """Wire budget enforcer to DB-backed circuit breaker persistence.
+
+    - Circuit breaker state is persisted into GovernorState KV table.
+    - On load, recent ActionLog rows are replayed to rebuild budget counters.
+    """
+    from ..database import db_session
+    from ..models import GovernorState, ActionLog
+
+    # 1. Provide circuit-breaker save/load callbacks
+    def cb_save(agent_id: str, until: float, blocks: int):
+        try:
+            with db_session() as sess:
+                key = f"cb:{agent_id}"
+                row = sess.query(GovernorState).filter_by(key=key).first()
+                payload = json.dumps({"until": until, "blocks": blocks})
+                if row:
+                    row.value = payload
+                else:
+                    sess.add(GovernorState(key=key, value=payload))
+        except Exception as exc:
+            log.warning("Budget CB save error (%s): %s", agent_id, exc)
+
+    def cb_load(agent_id: str):
+        try:
+            with db_session() as sess:
+                key = f"cb:{agent_id}"
+                row = sess.query(GovernorState).filter_by(key=key).first()
+                if row and row.value:
+                    data = json.loads(row.value)
+                    return (data["until"], data["blocks"])
+        except Exception as exc:
+            log.warning("Budget CB load error (%s): %s", agent_id, exc)
+        return None
+
+    enforcer.set_persistence(save_cb=cb_save, load_cb=cb_load)
+
+    # 2. Replay recent ActionLog entries (last 24h) to rebuild evaluation counts
+    try:
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        with db_session() as sess:
+            rows = (
+                sess.query(ActionLog)
+                .filter(ActionLog.created_at >= cutoff)
+                .order_by(ActionLog.created_at.asc())
+                .all()
+            )
+            for row in rows:
+                agent_id = row.agent_id or "anonymous"
+                session_id = row.session_id or "default"
+                enforcer.record_evaluation(
+                    agent_id=agent_id,
+                    session_id=session_id,
+                    decision=row.decision,
+                    cost=0.0,
+                )
+            enforcer.mark_hydrated()
+            log.info("Budget enforcer hydrated — replayed %d recent evaluations", len(rows))
+    except Exception as exc:
+        log.warning("Budget enforcer hydration failed: %s", exc)
+        enforcer.mark_hydrated()  # Mark anyway so it doesn't block
+
+
+def _hydrate_fingerprint_engine(engine) -> None:
+    """Wire fingerprint engine to DB persistence.
+
+    - Loads all FingerprintState rows and imports them.
+    - Sets a save callback that upserts into FingerprintState.
+    """
+    from ..database import db_session
+    from ..models import FingerprintState
+
+    # 1. Load existing states from DB
+    try:
+        with db_session() as sess:
+            rows = sess.query(FingerprintState).all()
+            if rows:
+                states = {row.agent_id: row.state_json for row in rows}
+                engine.import_states(states)
+                log.info("Fingerprint engine hydrated — loaded %d agent profiles", len(rows))
+    except Exception as exc:
+        log.warning("Fingerprint hydration failed: %s", exc)
+
+    # 2. Save callback: upsert FingerprintState on flush
+    def fp_save(agent_id: str, state_json_str: str):
+        try:
+            with db_session() as sess:
+                row = sess.query(FingerprintState).filter_by(agent_id=agent_id).first()
+                # Extract metadata from JSON for indexed columns
+                try:
+                    data = json.loads(state_json_str)
+                    total = data.get("total_evaluations", 0)
+                    maturity = data.get("maturity", "learning")
+                except Exception:
+                    total, maturity = 0, "learning"
+
+                if row:
+                    row.state_json = state_json_str
+                    row.total_evaluations = total
+                    row.maturity = maturity
+                    row.updated_at = datetime.now(timezone.utc)
+                else:
+                    sess.add(FingerprintState(
+                        agent_id=agent_id,
+                        state_json=state_json_str,
+                        total_evaluations=total,
+                        maturity=maturity,
+                    ))
+        except Exception as exc:
+            log.warning("Fingerprint save error (%s): %s", agent_id, exc)
+
+    engine.set_persistence(save_fn=fp_save, interval=10)
+
+
+def _hydrate_surge_engine(engine) -> None:
+    """Wire SURGE v2 engine to DB persistence.
+
+    - Loads all SurgeV2Receipt and SurgeV2Checkpoint rows.
+    - Calls load_chain() to rebuild hash chain state.
+    - Sets callbacks for receipt/checkpoint insertion.
+    """
+    from ..database import db_session
+    from ..models import SurgeV2Receipt, SurgeV2Checkpoint
+
+    # 1. Load existing chain from DB
+    try:
+        with db_session() as sess:
+            receipt_rows = (
+                sess.query(SurgeV2Receipt)
+                .order_by(SurgeV2Receipt.sequence.asc())
+                .all()
+            )
+            checkpoint_rows = (
+                sess.query(SurgeV2Checkpoint)
+                .order_by(SurgeV2Checkpoint.sequence_start.asc())
+                .all()
+            )
+
+            receipts = []
+            for r in receipt_rows:
+                receipts.append({
+                    "receipt_id": r.receipt_id,
+                    "sequence": r.sequence,
+                    "timestamp": r.timestamp,
+                    "tool": r.tool,
+                    "decision": r.decision,
+                    "risk_score": r.risk_score,
+                    "explanation": r.explanation or "",
+                    "policy_ids": json.loads(r.policy_ids_json) if r.policy_ids_json else [],
+                    "chain_pattern": r.chain_pattern,
+                    "agent_id": r.agent_id,
+                    "session_id": r.session_id,
+                    "sovereign": json.loads(r.sovereign_json) if r.sovereign_json else {},
+                    "compliance": json.loads(r.compliance_json) if r.compliance_json else {},
+                    "digest": r.digest,
+                    "previous_digest": r.previous_digest,
+                    "merkle_root": r.merkle_root,
+                })
+
+            checkpoints = []
+            for c in checkpoint_rows:
+                checkpoints.append({
+                    "checkpoint_id": c.checkpoint_id,
+                    "timestamp": c.timestamp,
+                    "sequence_start": c.sequence_start,
+                    "sequence_end": c.sequence_end,
+                    "receipt_count": c.receipt_count,
+                    "merkle_root": c.merkle_root,
+                    "leaf_digests": json.loads(c.leaf_digests_json) if c.leaf_digests_json else [],
+                })
+
+            if receipts or checkpoints:
+                engine.load_chain(receipts, checkpoints)
+                log.info(
+                    "SURGE v2 hydrated — loaded %d receipts, %d checkpoints",
+                    len(receipts), len(checkpoints),
+                )
+    except Exception as exc:
+        log.warning("SURGE v2 hydration failed: %s", exc)
+
+    # 2. Persistence callbacks
+    def on_receipt(receipt):
+        try:
+            with db_session() as sess:
+                sess.add(SurgeV2Receipt(
+                    receipt_id=receipt.receipt_id,
+                    sequence=receipt.sequence,
+                    timestamp=receipt.timestamp,
+                    tool=receipt.tool,
+                    decision=receipt.decision,
+                    risk_score=receipt.risk_score,
+                    explanation=receipt.explanation or "",
+                    policy_ids_json=json.dumps(receipt.policy_ids or []),
+                    chain_pattern=receipt.chain_pattern,
+                    agent_id=receipt.agent_id,
+                    session_id=receipt.session_id,
+                    sovereign_json=json.dumps(receipt.sovereign or {}),
+                    compliance_json=json.dumps(receipt.compliance or {}),
+                    digest=receipt.digest,
+                    previous_digest=receipt.previous_digest,
+                    merkle_root=receipt.merkle_root,
+                ))
+        except Exception as exc:
+            log.warning("SURGE receipt persist error: %s", exc)
+
+    def on_checkpoint(cp):
+        try:
+            with db_session() as sess:
+                sess.add(SurgeV2Checkpoint(
+                    checkpoint_id=cp.checkpoint_id,
+                    timestamp=cp.timestamp,
+                    sequence_start=cp.sequence_start,
+                    sequence_end=cp.sequence_end,
+                    receipt_count=cp.receipt_count,
+                    merkle_root=cp.merkle_root,
+                    leaf_digests_json=json.dumps(cp.leaf_digests or []),
+                ))
+        except Exception as exc:
+            log.warning("SURGE checkpoint persist error: %s", exc)
+
+    engine.set_persistence(on_receipt=on_receipt, on_checkpoint=on_checkpoint)
+
+
+def _hydrate_impact_engine(engine) -> None:
+    """Wire impact engine to DB-backed query backend.
+
+    Provides a function that queries ActionLog for a given assessment period,
+    converting rows into EvaluationRecord objects.
+    """
+    from ..database import db_session
+    from ..models import ActionLog
+
+    def query_backend(period):
+        """Query ActionLog for the given AssessmentPeriod, return EvaluationRecords."""
+        # Import here to avoid circular dependency
+        from impact_assessment import AssessmentPeriod, EvaluationRecord, PERIOD_SECONDS
+
+        try:
+            with db_session() as sess:
+                q = sess.query(ActionLog)
+                period_secs = PERIOD_SECONDS.get(period)
+                if period_secs is not None:
+                    cutoff = datetime.now(timezone.utc) - timedelta(seconds=period_secs)
+                    q = q.filter(ActionLog.created_at >= cutoff)
+                rows = q.order_by(ActionLog.created_at.asc()).all()
+
+                records = []
+                for r in rows:
+                    records.append(EvaluationRecord(
+                        timestamp=r.created_at.timestamp() if r.created_at else time.time(),
+                        tool=r.tool or "unknown",
+                        decision=r.decision or "allow",
+                        risk_score=r.risk_score or 0,
+                        agent_id=r.agent_id or "anonymous",
+                        session_id=r.session_id or "default",
+                        policy_ids=r.policy_ids.split(",") if r.policy_ids else [],
+                        chain_pattern=r.chain_pattern,
+                        explanation=r.explanation or "",
+                    ))
+                return records
+        except Exception as exc:
+            log.warning("Impact query backend error: %s", exc)
+            return []
+
+    engine.set_query_backend(query_backend)
+    log.info("Impact assessment wired to DB query backend")
 
 
 # ---------------------------------------------------------------------------
@@ -119,6 +404,11 @@ class GovernorModules:
                 "BudgetEnforcer",
                 "Budget enforcer",
             )
+            if self._budget_enforcer is not None:
+                try:
+                    _hydrate_budget_enforcer(self._budget_enforcer)
+                except Exception as exc:
+                    log.warning("Budget enforcer hydration error: %s", exc)
         return self._budget_enforcer
 
     # ── Compliance: Metrics ─────────────────────────────────────────
@@ -172,6 +462,11 @@ class GovernorModules:
                 "FingerprintEngine",
                 "Fingerprint engine",
             )
+            if self._fingerprint_engine is not None:
+                try:
+                    _hydrate_fingerprint_engine(self._fingerprint_engine)
+                except Exception as exc:
+                    log.warning("Fingerprint hydration error: %s", exc)
         return self._fingerprint_engine
 
     @property
@@ -201,6 +496,10 @@ class GovernorModules:
                     checkpoint_interval=_s.surge_v2_checkpoint_interval,
                 )
                 log.info("✓ Loaded SURGE v2 engine (org=%s)", _s.surge_v2_org)
+                try:
+                    _hydrate_surge_engine(self._surge_engine)
+                except Exception as exc:
+                    log.warning("SURGE v2 hydration error: %s", exc)
             except Exception as exc:
                 log.warning("✗ Could not load SURGE v2 engine: %s", exc)
                 self._surge_engine = None
@@ -235,6 +534,11 @@ class GovernorModules:
                 "ImpactAssessmentEngine",
                 "Impact assessment engine",
             )
+            if self._impact_engine is not None:
+                try:
+                    _hydrate_impact_engine(self._impact_engine)
+                except Exception as exc:
+                    log.warning("Impact engine hydration error: %s", exc)
         return self._impact_engine
 
     @property

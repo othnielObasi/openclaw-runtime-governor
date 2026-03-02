@@ -24,12 +24,13 @@ Integration:
 """
 from __future__ import annotations
 
+import json
 import math
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from threading import Lock
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 
 # ═══════════════════════════════════════════════════════════
@@ -145,6 +146,83 @@ class AgentFingerprint:
         else:
             return "mature"         # High confidence baselines
 
+    # ─── Serialization ───
+
+    def to_json(self) -> Dict[str, Any]:
+        """Serialize full fingerprint state to a JSON-safe dict."""
+        return {
+            "agent_id": self.agent_id,
+            "created_at": self.created_at,
+            "last_updated": self.last_updated,
+            "total_evaluations": self.total_evaluations,
+            "tool_counts": dict(self.tool_counts),
+            "tool_first_seen": dict(self.tool_first_seen),
+            "tool_last_seen": dict(self.tool_last_seen),
+            "session_lengths": self.session_lengths[-500:],
+            "eval_timestamps": self.eval_timestamps[-500:],
+            "avg_latency_ms": self.avg_latency_ms,
+            "_latency_sum": self._latency_sum,
+            "_latency_count": self._latency_count,
+            "risk_scores": self.risk_scores[-500:],
+            "block_count": self.block_count,
+            "review_count": self.review_count,
+            "allow_count": self.allow_count,
+            "tool_arg_keys": {t: dict(v) for t, v in self.tool_arg_keys.items()},
+            "tool_arg_values": {
+                t: {k: dict(vv) for k, vv in v.items()}
+                for t, v in self.tool_arg_values.items()
+            },
+            "tool_transitions": {t: dict(v) for t, v in self.tool_transitions.items()},
+            "_last_tool": self._last_tool,
+            "target_domains": dict(self.target_domains),
+            "target_paths": dict(self.target_paths),
+        }
+
+    @classmethod
+    def from_json(cls, data: Dict[str, Any]) -> "AgentFingerprint":
+        """Reconstruct an AgentFingerprint from a serialized dict."""
+        fp = cls(agent_id=data["agent_id"])
+        fp.created_at = data.get("created_at", time.time())
+        fp.last_updated = data.get("last_updated", time.time())
+        fp.total_evaluations = data.get("total_evaluations", 0)
+
+        fp.tool_counts = defaultdict(int, data.get("tool_counts", {}))
+        fp.tool_first_seen = data.get("tool_first_seen", {})
+        fp.tool_last_seen = data.get("tool_last_seen", {})
+        fp.session_lengths = data.get("session_lengths", [])
+        fp.eval_timestamps = data.get("eval_timestamps", [])
+        fp.avg_latency_ms = data.get("avg_latency_ms", 0.0)
+        fp._latency_sum = data.get("_latency_sum", 0.0)
+        fp._latency_count = data.get("_latency_count", 0)
+        fp.risk_scores = data.get("risk_scores", [])
+        fp.block_count = data.get("block_count", 0)
+        fp.review_count = data.get("review_count", 0)
+        fp.allow_count = data.get("allow_count", 0)
+
+        fp.tool_arg_keys = defaultdict(
+            lambda: defaultdict(int),
+            {t: defaultdict(int, v) for t, v in data.get("tool_arg_keys", {}).items()},
+        )
+        raw_av = data.get("tool_arg_values", {})
+        fp.tool_arg_values = defaultdict(
+            lambda: defaultdict(lambda: defaultdict(int)),
+            {
+                t: defaultdict(
+                    lambda: defaultdict(int),
+                    {k: defaultdict(int, vv) for k, vv in v.items()},
+                )
+                for t, v in raw_av.items()
+            },
+        )
+        fp.tool_transitions = defaultdict(
+            lambda: defaultdict(int),
+            {t: defaultdict(int, v) for t, v in data.get("tool_transitions", {}).items()},
+        )
+        fp._last_tool = data.get("_last_tool")
+        fp.target_domains = defaultdict(int, data.get("target_domains", {}))
+        fp.target_paths = defaultdict(int, data.get("target_paths", {}))
+        return fp
+
 
 # ═══════════════════════════════════════════════════════════
 # FINGERPRINT ENGINE
@@ -197,6 +275,49 @@ class FingerprintEngine:
         self.arg_anomaly_severity = arg_anomaly_severity
         self.velocity_spike_severity = velocity_spike_severity
         self.target_anomaly_severity = target_anomaly_severity
+
+        # Persistence callbacks
+        self._persist_save: Optional[Callable] = None   # fn(agent_id, state_json_str)
+        self._persist_dirty: Dict[str, int] = {}        # agent_id -> evals since last save
+        self._persist_interval: int = 10                 # Save every N evals
+
+    def set_persistence(
+        self,
+        save_fn: Optional[Callable] = None,
+        interval: int = 10,
+    ):
+        """Set persistence save callback.
+
+        save_fn(agent_id: str, state_json: str, total_evals: int, maturity: str)
+        """
+        self._persist_save = save_fn
+        self._persist_interval = interval
+
+    def import_states(self, states: Dict[str, str]):
+        """Bulk-load fingerprint states from persistence.
+
+        Args:
+            states: {agent_id: json_string} from DB
+        """
+        with self._lock:
+            loaded = 0
+            for agent_id, json_str in states.items():
+                try:
+                    data = json.loads(json_str)
+                    fp = AgentFingerprint.from_json(data)
+                    self._fingerprints[agent_id] = fp
+                    loaded += 1
+                except Exception:
+                    pass  # skip corrupt entries
+            return loaded
+
+    def export_states(self) -> Dict[str, str]:
+        """Export all fingerprint states as {agent_id: json_string}."""
+        with self._lock:
+            return {
+                aid: json.dumps(fp.to_json())
+                for aid, fp in self._fingerprints.items()
+            }
 
     def _get_or_create(self, agent_id: str) -> AgentFingerprint:
         if agent_id not in self._fingerprints:
@@ -270,6 +391,21 @@ class FingerprintEngine:
 
             # Target tracking (extract domains/paths from args)
             self._extract_targets(fp, args)
+
+            # Periodic persistence flush
+            if self._persist_save:
+                self._persist_dirty[agent_id] = self._persist_dirty.get(agent_id, 0) + 1
+                if self._persist_dirty[agent_id] >= self._persist_interval:
+                    self._persist_dirty[agent_id] = 0
+                    try:
+                        self._persist_save(
+                            agent_id,
+                            json.dumps(fp.to_json()),
+                            fp.total_evaluations,
+                            fp._maturity_level(),
+                        )
+                    except Exception:
+                        pass  # best-effort
 
     def _extract_targets(self, fp: AgentFingerprint, args: Dict[str, Any]):
         """Extract domains and paths from tool arguments."""

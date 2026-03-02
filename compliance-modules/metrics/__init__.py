@@ -175,27 +175,13 @@ class GovernorMetrics:
             lines.append(f"governor_kill_switch_activations_total {self._kill_switch_activations}")
 
             # Latency histogram
+            # NOTE: record_evaluation() stores cumulative counts — each bucket
+            # holds the number of observations <= that bucket threshold.
+            # We output them directly (no running sum needed).
             lines.append("# HELP governor_evaluation_latency_ms Evaluation latency in milliseconds")
             lines.append("# TYPE governor_evaluation_latency_ms histogram")
-            cumulative = 0
             for bucket in self._latency_buckets:
-                cumulative += self._latency_counts.get(str(bucket), 0) - cumulative
-                # Actually need cumulative counts
-            # Recompute cumulative
-            cum = 0
-            for bucket in self._latency_buckets:
-                # Count how many are <= this bucket
-                cum = sum(1 for b in self._latency_buckets if b <= bucket
-                          and self._latency_counts.get(str(b), 0) > 0)
-                # Simpler: just use the running total approach
-                pass
-
-            # Simplified histogram output
-            running = 0
-            for bucket in self._latency_buckets:
-                running += self._latency_counts.get(str(bucket), 0)
-                lines.append(f'governor_evaluation_latency_ms_bucket{{le="{bucket}"}} {running}')
-            running += self._latency_counts.get("+Inf", 0) - running
+                lines.append(f'governor_evaluation_latency_ms_bucket{{le="{bucket}"}} {self._latency_counts.get(str(bucket), 0)}')
             lines.append(f'governor_evaluation_latency_ms_bucket{{le="+Inf"}} {self._latency_count}')
             lines.append(f"governor_evaluation_latency_ms_sum {self._latency_sum:.2f}")
             lines.append(f"governor_evaluation_latency_ms_count {self._latency_count}")

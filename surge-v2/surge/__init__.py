@@ -426,6 +426,73 @@ class SurgeEngine:
         self._last_digest: str = GENESIS_DIGEST
         self._last_checkpoint_seq: int = 0
 
+        # Persistence callbacks (set by governor-service)
+        self._on_receipt: Optional[Any] = None     # fn(receipt: GovernanceReceipt)
+        self._on_checkpoint: Optional[Any] = None  # fn(checkpoint: MerkleCheckpoint)
+
+    def set_persistence(self, on_receipt=None, on_checkpoint=None):
+        """Set callbacks invoked after each receipt/checkpoint for DB persistence."""
+        self._on_receipt = on_receipt
+        self._on_checkpoint = on_checkpoint
+
+    def load_chain(self, receipts: List[Dict], checkpoints: List[Dict]):
+        """Rebuild chain state from persisted data (DB rows).
+
+        receipts: list of dicts with receipt fields (ordered by sequence ASC)
+        checkpoints: list of dicts with checkpoint fields (ordered by sequence_start ASC)
+
+        This MUST be called before any new issue() calls to ensure
+        the hash chain continues correctly from persisted state.
+        """
+        self._receipts = []
+        self._checkpoints = []
+
+        for rd in receipts:
+            r = GovernanceReceipt(
+                receipt_id=rd["receipt_id"],
+                sequence=rd["sequence"],
+                timestamp=rd["timestamp"],
+                tool=rd["tool"],
+                decision=rd["decision"],
+                risk_score=rd["risk_score"],
+                explanation=rd.get("explanation", ""),
+                policy_ids=rd.get("policy_ids", []),
+                chain_pattern=rd.get("chain_pattern"),
+                agent_id=rd.get("agent_id"),
+                session_id=rd.get("session_id"),
+                sovereign=rd.get("sovereign", self.config.to_dict()),
+                compliance=rd.get("compliance", {}),
+                digest=rd["digest"],
+                previous_digest=rd["previous_digest"],
+                merkle_root=rd.get("merkle_root"),
+            )
+            self._receipts.append(r)
+
+        for cd in checkpoints:
+            cp = MerkleCheckpoint(
+                checkpoint_id=cd["checkpoint_id"],
+                timestamp=cd["timestamp"],
+                sequence_start=cd["sequence_start"],
+                sequence_end=cd["sequence_end"],
+                receipt_count=cd["receipt_count"],
+                merkle_root=cd["merkle_root"],
+                leaf_digests=cd.get("leaf_digests", []),
+            )
+            self._checkpoints.append(cp)
+
+        if self._receipts:
+            last = self._receipts[-1]
+            self._sequence = last.sequence + 1
+            self._last_digest = last.digest
+        else:
+            self._sequence = 0
+            self._last_digest = GENESIS_DIGEST
+
+        if self._checkpoints:
+            self._last_checkpoint_seq = self._checkpoints[-1].sequence_end + 1
+        else:
+            self._last_checkpoint_seq = 0
+
     # ─── ISSUE ───
 
     def issue(
@@ -480,6 +547,13 @@ class SurgeEngine:
         self._last_digest = receipt.digest
         self._sequence += 1
 
+        # Persist to DB
+        if self._on_receipt:
+            try:
+                self._on_receipt(receipt)
+            except Exception:
+                pass  # best-effort
+
         # Auto-checkpoint
         if self.checkpoint_interval > 0:
             since_last = self._sequence - self._last_checkpoint_seq
@@ -523,6 +597,13 @@ class SurgeEngine:
 
         self._checkpoints.append(cp)
         self._last_checkpoint_seq = self._sequence
+
+        # Persist to DB
+        if self._on_checkpoint:
+            try:
+                self._on_checkpoint(cp)
+            except Exception:
+                pass  # best-effort
 
         return cp
 

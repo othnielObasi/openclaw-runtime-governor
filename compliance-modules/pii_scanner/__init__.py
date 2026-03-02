@@ -31,6 +31,10 @@ class PIIEntityType(str, Enum):
     AWS_KEY = "aws_key"
     JWT_TOKEN = "jwt_token"
     PRIVATE_KEY = "private_key"
+    DATE_OF_BIRTH = "date_of_birth"
+    PERSON_NAME = "person_name"
+    ADDRESS = "address"
+    MEDICAL_ID = "medical_id"
 
 
 @dataclass
@@ -130,6 +134,24 @@ _p(r'\b(eyJ[a-zA-Z0-9_-]{10,}\.eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,})\b', 0.
 
 # Private Key markers
 _p(r'(-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----)', 0.99, PIIEntityType.PRIVATE_KEY)
+
+# Date of Birth — context-required patterns
+_p(r'(?:(?:dob|date\s*of\s*birth|birth\s*date|born)\s*[:=]?\s*)(\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4})', 0.85, PIIEntityType.DATE_OF_BIRTH)
+_p(r'(?:(?:dob|date\s*of\s*birth|birth\s*date|born)\s*[:=]?\s*)(\d{4}[/.-]\d{1,2}[/.-]\d{1,2})', 0.85, PIIEntityType.DATE_OF_BIRTH)
+
+# Person Name — context-required (keyword + capitalized words)
+_p(r'(?:(?:patient|customer|client|employee|applicant|user|name|full\s*name|first\s*name|last\s*name)\s*[:=]?\s*)([A-Z][a-z]+ [A-Z][a-z]+(?:\s[A-Z][a-z]+)?)', 0.70, PIIEntityType.PERSON_NAME)
+_p(r'(?:(?:name|patient|customer)\s*[:=]?\s*)((?:Mr|Mrs|Ms|Dr|Prof)\.?\s+[A-Z][a-z]+ [A-Z][a-z]+)', 0.80, PIIEntityType.PERSON_NAME)
+
+# Address — context-required (keyword + number + street pattern)
+_p(r'(?:(?:address|residence|home|street|location)\s*[:=]?\s*)(\d{1,5}\s+[A-Z][a-zA-Z]+(?:\s[A-Z]?[a-zA-Z]+){1,4})', 0.65, PIIEntityType.ADDRESS)
+_p(r'(?:(?:address|residence|home)\s*[:=]?\s*)(\d{1,5}\s+\w+\s+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Way|Court|Ct|Place|Pl)\.?)', 0.80, PIIEntityType.ADDRESS)
+
+# Medical/Health ID (US Medicare, Medicaid, generic medical record)
+_p(r'(?:(?:medical\s*record|mrn|patient\s*id|health\s*id|medicare|medicaid)\s*[:=]?\s*)([A-Z0-9]{6,15})', 0.70, PIIEntityType.MEDICAL_ID)
+
+# Phone context-boosted: higher confidence when preceded by keyword
+_p(r'(?:(?:phone|tel|telephone|mobile|cell|fax)\s*[:=]?\s*)(\+?1?[\s.-]?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4})', 0.90, PIIEntityType.PHONE)
 
 
 def _redact(value: str) -> str:
