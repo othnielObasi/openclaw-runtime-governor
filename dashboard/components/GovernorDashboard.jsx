@@ -5131,8 +5131,8 @@ function ComplianceHubTab() {
       if (verR?.ok) setChainVerify(await verR.json());
       if (impR?.ok) setImpactReport(await impR.json());
       if (escR?.ok) setEscalationStats(await escR.json());
-      if (agR?.ok) setAgents(await agR.json());
-      if (piiR?.ok) setPiiEntities(await piiR.json());
+      if (agR?.ok) { const agD = await agR.json(); setAgents(Array.isArray(agD) ? agD : agD?.agents || []); }
+      if (piiR?.ok) { const piiD = await piiR.json(); setPiiEntities(Array.isArray(piiD) ? piiD : piiD?.entities || []); }
     } catch (e) { setErr(e.message); }
     setLoading(false);
   };
@@ -5333,7 +5333,11 @@ function ReceiptsSubTab({ API_BASE, headers }) {
     Promise.all([
       fetch(`${API_BASE}/surge/v2/receipts?limit=50`, { headers: headers() }).then(r => r.ok ? r.json() : []),
       fetch(`${API_BASE}/surge/v2/checkpoints`, { headers: headers() }).then(r => r.ok ? r.json() : []),
-    ]).then(([r, c]) => { setReceipts(r); setCheckpoints(c); setLoading(false); })
+    ]).then(([r, c]) => {
+      setReceipts(Array.isArray(r) ? r : []);
+      setCheckpoints(Array.isArray(c) ? c : []);
+      setLoading(false);
+    })
       .catch(() => setLoading(false));
   }, [API_BASE]);
 
@@ -5477,27 +5481,31 @@ function AgentFingerprintsSubTab({ API_BASE, headers, agents, reload }) {
           <>
             <PanelHd title={`Agent: ${selected}`} tag={detail.maturity || "—"} tagColor={C.green}/>
             {/* Tool usage pattern */}
-            {detail.tool_frequencies && (
+            {detail.tool_distribution_pct && (
               <div style={{ marginBottom:14 }}>
                 <div style={{ fontFamily:mono, fontSize:11, color:C.p3, letterSpacing:1.5,
                   textTransform:"uppercase", marginBottom:6 }}>TOOL USAGE PATTERN</div>
                 <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-                  {Object.entries(detail.tool_frequencies).sort((a,b)=>b[1]-a[1]).slice(0,15).map(([tool, count]) => (
+                  {Object.entries(detail.tool_distribution_pct).sort((a,b)=>b[1]-a[1]).slice(0,15).map(([tool, pct]) => (
                     <span key={tool} style={{ fontFamily:mono, fontSize:11, padding:"3px 8px",
                       border:`1px solid ${C.line2}`, color:C.p1, background:C.bg0 }}>
-                      {tool}: <span style={{ color:C.green, fontWeight:600 }}>{count}</span>
+                      {tool}: <span style={{ color:C.green, fontWeight:600 }}>{typeof pct === "number" ? pct.toFixed(1) + "%" : pct}</span>
                     </span>
                   ))}
                 </div>
               </div>
             )}
             {/* Behavioural stats */}
-            {detail.behavioral_stats && (
+            {(detail.avg_risk_score != null || detail.block_rate_pct != null) && (
               <div style={{ marginBottom:14 }}>
                 <div style={{ fontFamily:mono, fontSize:11, color:C.p3, letterSpacing:1.5,
                   textTransform:"uppercase", marginBottom:6 }}>BEHAVIOURAL STATISTICS</div>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(160px, 1fr))", gap:8 }}>
-                  {Object.entries(detail.behavioral_stats).map(([k, v]) => (
+                  {Object.entries({ avg_risk_score: detail.avg_risk_score, block_rate_pct: detail.block_rate_pct,
+                    avg_session_length: detail.avg_session_length, avg_latency_ms: detail.avg_latency_ms,
+                    unique_tools: detail.unique_tools, known_transitions: detail.known_transitions,
+                    total_evaluations: detail.total_evaluations, age_hours: detail.age_hours,
+                  }).filter(([,v]) => v != null).map(([k, v]) => (
                     <div key={k} style={{ background:C.bg0, padding:"8px 12px" }}>
                       <div style={{ fontFamily:mono, fontSize:10, color:C.p3, letterSpacing:1,
                         textTransform:"uppercase" }}>{k.replace(/_/g," ")}</div>
@@ -5524,7 +5532,7 @@ function AgentFingerprintsSubTab({ API_BASE, headers, agents, reload }) {
               </div>
             )}
             {/* Raw JSON fallback */}
-            {!detail.tool_frequencies && !detail.behavioral_stats && (
+            {!detail.tool_distribution_pct && detail.avg_risk_score == null && (
               <pre style={{ fontFamily:mono, fontSize:11, color:C.p2, background:C.bg0,
                 padding:12, overflow:"auto", maxHeight:400 }}>
                 {JSON.stringify(detail, null, 2)}
@@ -5577,14 +5585,14 @@ function ImpactSubTab({ API_BASE, headers, impactReport }) {
             </div>
 
             {/* Tool risk table */}
-            {impactReport.tool_risks && (
+            {impactReport.top_risk_tools?.length > 0 && (
               <div>
                 <div style={{ fontFamily:mono, fontSize:11, color:C.p3, letterSpacing:1.5,
                   textTransform:"uppercase", marginBottom:6 }}>TOOL RISK BREAKDOWN</div>
                 <table style={{ width:"100%", borderCollapse:"collapse" }}>
                   <thead>
                     <tr>
-                      {["Tool","Avg Risk","Count","Blocked"].map(h => (
+                      {["Tool","Avg Risk","Evaluations","Block Rate","Agents"].map(h => (
                         <th key={h} style={{ fontFamily:mono, fontSize:11, color:C.p3, letterSpacing:1.5,
                           textTransform:"uppercase", textAlign:"left", padding:"6px 8px",
                           borderBottom:`1px solid ${C.line2}` }}>{h}</th>
@@ -5592,15 +5600,14 @@ function ImpactSubTab({ API_BASE, headers, impactReport }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {Object.entries(impactReport.tool_risks).sort((a,b) =>
-                      (b[1].avg_risk||0) - (a[1].avg_risk||0)
-                    ).slice(0, 20).map(([tool, data]) => (
-                      <tr key={tool} style={{ borderBottom:`1px solid ${C.line}` }}>
-                        <td style={{ fontFamily:mono, fontSize:13, fontWeight:600, color:C.p1, padding:"6px 8px" }}>{tool}</td>
+                    {impactReport.top_risk_tools.slice(0, 20).map((t, i) => (
+                      <tr key={i} style={{ borderBottom:`1px solid ${C.line}` }}>
+                        <td style={{ fontFamily:mono, fontSize:13, fontWeight:600, color:C.p1, padding:"6px 8px" }}>{t.tool}</td>
                         <td style={{ fontFamily:mono, fontSize:14, fontWeight:600,
-                          color:riskColor(data.avg_risk||0), padding:"6px 8px" }}>{(data.avg_risk||0).toFixed(1)}</td>
-                        <td style={{ fontFamily:mono, fontSize:12, color:C.p2, padding:"6px 8px" }}>{data.count||0}</td>
-                        <td style={{ fontFamily:mono, fontSize:12, color:C.red, padding:"6px 8px" }}>{data.blocked||0}</td>
+                          color:riskColor(t.avg_risk||0), padding:"6px 8px" }}>{(t.avg_risk||0).toFixed(1)}</td>
+                        <td style={{ fontFamily:mono, fontSize:12, color:C.p2, padding:"6px 8px" }}>{t.evaluations||0}</td>
+                        <td style={{ fontFamily:mono, fontSize:12, color:C.red, padding:"6px 8px" }}>{(t.block_rate_pct||0).toFixed(1)}%</td>
+                        <td style={{ fontFamily:mono, fontSize:12, color:C.p2, padding:"6px 8px" }}>{t.agents_using||0}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -5609,20 +5616,20 @@ function ImpactSubTab({ API_BASE, headers, impactReport }) {
             )}
 
             {/* Agent risk table */}
-            {impactReport.agent_risks && (
+            {impactReport.top_risk_agents?.length > 0 && (
               <div style={{ marginTop:14 }}>
                 <div style={{ fontFamily:mono, fontSize:11, color:C.p3, letterSpacing:1.5,
                   textTransform:"uppercase", marginBottom:6 }}>AGENT RISK PROFILES · CLICK TO DRILL DOWN</div>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(200px, 1fr))", gap:8 }}>
-                  {Object.entries(impactReport.agent_risks).map(([agId, data]) => (
-                    <div key={agId} onClick={() => loadAgent(agId)} style={{
-                      background:selectedAgent===agId?C.accentDim:C.bg0, padding:"10px 14px",
-                      cursor:"pointer", border:`1px solid ${selectedAgent===agId?C.accent:C.line2}`,
+                  {impactReport.top_risk_agents.map(a => (
+                    <div key={a.agent_id} onClick={() => loadAgent(a.agent_id)} style={{
+                      background:selectedAgent===a.agent_id?C.accentDim:C.bg0, padding:"10px 14px",
+                      cursor:"pointer", border:`1px solid ${selectedAgent===a.agent_id?C.accent:C.line2}`,
                     }}>
-                      <div style={{ fontFamily:mono, fontSize:13, color:C.p1, fontWeight:600 }}>{agId}</div>
+                      <div style={{ fontFamily:mono, fontSize:13, color:C.p1, fontWeight:600 }}>{a.agent_id}</div>
                       <div style={{ fontFamily:mono, fontSize:11, color:C.p3, marginTop:3 }}>
-                        risk: <span style={{ color:riskColor(data.avg_risk||0) }}>
-                          {(data.avg_risk||0).toFixed(1)}</span> · {data.count||0} actions
+                        risk: <span style={{ color:riskColor(a.avg_risk||0) }}>
+                          {(a.avg_risk||0).toFixed(1)}</span> · {a.evaluations||0} evals
                       </div>
                     </div>
                   ))}
@@ -5656,7 +5663,7 @@ function EscalationSubTab({ API_BASE, headers }) {
     setLoading(true);
     try {
       const r = await fetch(`${API_BASE}/escalation/queue?status=${filter}&limit=50`, { headers: headers() });
-      if (r.ok) setEvents(await r.json());
+      if (r.ok) { const d = await r.json(); setEvents(Array.isArray(d) ? d : []); }
     } catch {}
     setLoading(false);
   };
@@ -5667,7 +5674,7 @@ function EscalationSubTab({ API_BASE, headers }) {
     try {
       await fetch(`${API_BASE}/escalation/queue/${eventId}/resolve`, {
         method:"POST", headers:headers(),
-        body:JSON.stringify({ resolution, resolved_by:"dashboard_user" }),
+        body:JSON.stringify({ status: resolution, note: "Resolved via dashboard" }),
       });
       load();
     } catch {}
@@ -5710,7 +5717,7 @@ function EscalationSubTab({ API_BASE, headers }) {
                 return (
                   <tr key={i} style={{ borderBottom:`1px solid ${C.line}` }}>
                     <td style={{ fontFamily:mono, fontSize:10, color:C.p3, padding:"6px 8px" }}>
-                      {(ev.event_id || ev.id || "").slice(0, 12)}…
+                      {String(ev.id ?? "").slice(0, 12)}
                     </td>
                     <td style={{ fontFamily:mono, fontSize:12, color:C.p2, padding:"6px 8px" }}>{ev.agent_id || "—"}</td>
                     <td style={{ fontFamily:mono, fontSize:13, fontWeight:600, color:C.p1, padding:"6px 8px" }}>{ev.tool || "—"}</td>
@@ -5734,8 +5741,8 @@ function EscalationSubTab({ API_BASE, headers }) {
                     <td style={{ padding:"5px 6px" }}>
                       {ev.status === "pending" && (
                         <div style={{ display:"flex", gap:4 }}>
-                          <Btn variant="green" onClick={() => resolve(ev.event_id || ev.id, "approved")} style={{ fontSize:10, padding:"2px 6px" }}>✓</Btn>
-                          <Btn variant="red" onClick={() => resolve(ev.event_id || ev.id, "rejected")} style={{ fontSize:10, padding:"2px 6px" }}>✗</Btn>
+                          <Btn variant="green" onClick={() => resolve(ev.id, "approved")} style={{ fontSize:10, padding:"2px 6px" }}>✓</Btn>
+                          <Btn variant="red" onClick={() => resolve(ev.id, "rejected")} style={{ fontSize:10, padding:"2px 6px" }}>✗</Btn>
                         </div>
                       )}
                     </td>
