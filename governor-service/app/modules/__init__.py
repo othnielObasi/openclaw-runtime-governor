@@ -33,12 +33,19 @@ log = logging.getLogger("governor.modules")
 # Ensure sibling module directories are importable
 # ---------------------------------------------------------------------------
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]          # openclaw-runtime-governor/
+_CONTAINER_MODULES = Path("/modules")                         # Docker container fallback
 _MODULE_DIRS = [
     _PROJECT_ROOT / "compliance-modules",
     _PROJECT_ROOT / "agent-fingerprinting",
     _PROJECT_ROOT / "surge-v2",
     _PROJECT_ROOT / "integrations",
     _PROJECT_ROOT / "impact-assessment",
+    # Container deployment paths (Dockerfile copies modules here)
+    _CONTAINER_MODULES / "compliance-modules",
+    _CONTAINER_MODULES / "agent-fingerprinting",
+    _CONTAINER_MODULES / "surge-v2",
+    _CONTAINER_MODULES / "integrations",
+    _CONTAINER_MODULES / "impact-assessment",
 ]
 
 for _d in _MODULE_DIRS:

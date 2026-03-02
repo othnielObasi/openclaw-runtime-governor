@@ -3,9 +3,11 @@
 ## Governor Service → Fly.io
 
 ```bash
-cd governor-service
-fly launch        # first time only
-fly deploy
+# Deploy from repo root (includes compliance modules)
+fly deploy            # uses root fly.toml + Dockerfile
+
+# Or legacy (governor-service only, modules gracefully disabled):
+# cd governor-service && fly deploy
 ```
 
 Set secrets on Fly:
