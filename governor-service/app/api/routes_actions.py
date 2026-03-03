@@ -110,8 +110,12 @@ def evaluate_action_route(
       - SIEM dispatch for high-severity events
     """
     ctx = action.context or {}
-    agent_id = ctx.get("agent_id")
-    session_id = ctx.get("session_id")
+    # Merge top-level parameters into args
+    if action.parameters:
+        action.args = {**action.args, **(action.parameters or {})}
+    # Prefer top-level agent_id/session_id, fall back to context
+    agent_id = action.agent_id or ctx.get("agent_id")
+    session_id = action.session_id or ctx.get("session_id")
 
     # ── Pre-eval gate: Budget enforcer ────────────────────────────
     budget_enforcer = gov_modules.budget_enforcer if (

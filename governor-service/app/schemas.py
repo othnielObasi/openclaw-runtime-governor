@@ -15,6 +15,9 @@ class ActionInput(BaseModel):
 
     tool: str = Field(..., description="Name of the tool the agent wants to call.")
     args: Dict[str, Any] = Field(default_factory=dict, description="Arguments passed to the tool.")
+    parameters: Optional[Dict[str, Any]] = Field(default=None, description="Alias for args — merged into args if both are present.")
+    agent_id: Optional[str] = Field(default=None, max_length=128, description="Agent identifier (top-level convenience; also accepted inside context).")
+    session_id: Optional[str] = Field(default=None, max_length=256, description="Session identifier (top-level convenience; also accepted inside context).")
     context: Optional[Dict[str, Any]] = Field(
         default=None,
         description=(
