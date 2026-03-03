@@ -7987,6 +7987,69 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
     riskSum:0, riskHist:[], session:0, topTool:{}, log:[], autoEvents:[],
   });
 
+  // ── HYDRATE gs FROM BACKEND ON MOUNT ──────────────────────
+  // Fetches persisted summary + recent actions so the dashboard
+  // survives page reloads instead of resetting to zeros.
+  useEffect(() => {
+    if (!API_BASE_ROOT) return;
+    const h = headersRoot();
+    (async () => {
+      try {
+        const [sumRes, actRes] = await Promise.all([
+          fetch(`${API_BASE_ROOT}/summary/moltbook`, { headers: h }),
+          fetch(`${API_BASE_ROOT}/actions?limit=60`, { headers: h }),
+        ]);
+        const summary = sumRes.ok ? await sumRes.json() : null;
+        const actions = actRes.ok ? await actRes.json() : [];
+
+        // Build topTool map from actions
+        const topTool = {};
+        actions.forEach(a => { topTool[a.tool] = (topTool[a.tool] || 0) + 1; });
+
+        // Build riskHist from last 20 actions (most recent first)
+        const riskHist = actions.slice(0, 20).map(a => a.risk_score).reverse();
+
+        // Build log entries matching the shape onResult produces
+        const log = actions.slice(0, 60).map(a => ({
+          tool: a.tool,
+          agent: a.agent_id || "unknown",
+          decision: a.decision,
+          risk: a.risk_score,
+          policy: (a.policy_ids || []).join(", "),
+          expl: a.explanation || "",
+          autoMsg: "",
+          trustTier: "internal",
+          trace: [],
+          layerHit: null,
+          chainAlert: a.chain_pattern ? { triggered: true, pattern: a.chain_pattern } : null,
+          piiHits: [],
+          deviation_count: 0,
+          deviation_types: [],
+          pii_findings_count: 0,
+          time: new Date(a.created_at).toLocaleTimeString(),
+        }));
+
+        if (summary) {
+          setGs(prev => ({
+            total:      summary.total_actions   || 0,
+            allowed:    summary.allowed         || 0,
+            blocked:    summary.blocked          || 0,
+            review:     summary.under_review     || 0,
+            high:       summary.high_risk_count  || 0,
+            riskSum:    Math.round((summary.avg_risk || 0) * (summary.total_actions || 0)),
+            riskHist,
+            session:    0,       // session counter stays at 0 until new actions evaluated
+            topTool,
+            log,
+            autoEvents: prev.autoEvents,  // keep any autoEvents from current session
+          }));
+        }
+      } catch (e) {
+        console.warn("[Governor] Failed to hydrate dashboard from backend:", e);
+      }
+    })();
+  }, [API_BASE_ROOT]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // AUDIT — immutable append-only log of all governance events
   const [auditLog, setAuditLog] = useState([]);
   const addAudit = (type, data) => {
