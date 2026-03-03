@@ -516,10 +516,13 @@ class GovernorModules:
                 "SURGE v2 router",
             )
             # Inject the shared engine into the router module
-            if self._surge_router is not None and self._surge_engine is not _SENTINEL and self._surge_engine is not None:
+            # Use self.surge_engine (property) instead of self._surge_engine
+            # to ensure the engine is lazily initialised before we inject it.
+            _engine = self.surge_engine
+            if self._surge_router is not None and _engine is not None:
                 try:
                     import surge.router as _sr
-                    _sr.set_engine(self._surge_engine)
+                    _sr.set_engine(_engine)
                     log.info("Injected shared SURGE engine into router")
                 except Exception as exc:
                     log.warning("Could not inject SURGE engine into router: %s", exc)
