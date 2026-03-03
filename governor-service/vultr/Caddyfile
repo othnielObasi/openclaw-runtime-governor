@@ -16,6 +16,12 @@
 #   /notifications/* → Governor backend
 #   /summary/*   → Governor backend
 #   /escalations/* → Governor backend
+#   /impact/*    → Governor backend
+#   /fingerprints/* → Governor backend
+#   /compliance/* → Governor backend
+#   /metrics*    → Governor backend
+#   /pii/*       → Governor backend
+#   /modules/*   → Governor backend
 #   /*           → Dashboard          (port 3000)
 # --------------------------------------------------------------------------
 
@@ -58,6 +64,24 @@
         reverse_proxy governor:8000
     }
     handle /escalations/* {
+        reverse_proxy governor:8000
+    }
+    handle /impact/* {
+        reverse_proxy governor:8000
+    }
+    handle /fingerprints/* {
+        reverse_proxy governor:8000
+    }
+    handle /compliance/* {
+        reverse_proxy governor:8000
+    }
+    handle /metrics* {
+        reverse_proxy governor:8000
+    }
+    handle /pii/* {
+        reverse_proxy governor:8000
+    }
+    handle /modules/* {
         reverse_proxy governor:8000
     }
 

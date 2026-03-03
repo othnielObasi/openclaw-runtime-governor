@@ -17,6 +17,9 @@ COPY surge-v2/ /modules/surge-v2/
 COPY integrations/ /modules/integrations/
 COPY impact-assessment/ /modules/impact-assessment/
 
+# Add modules to PYTHONPATH so the module registry can import them
+ENV PYTHONPATH="/modules/compliance-modules:/modules/agent-fingerprinting:/modules/surge-v2:/modules/impact-assessment:/modules/integrations"
+
 # Run as non-root user
 RUN adduser --disabled-password --gecos '' appuser && chown -R appuser /app /modules
 USER appuser
