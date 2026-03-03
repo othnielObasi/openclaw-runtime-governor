@@ -5092,6 +5092,171 @@ function ModuleHealthStrip() {
 }
 
 // ═══════════════════════════════════════════════════════════
+// OPERATIONS HUB — Agent Demo + Action Tester + Conversations
+// ═══════════════════════════════════════════════════════════
+function OperationsHubTab({ killSwitch, extraPolicies, sessionMemory, onResult, userRole }) {
+  const [subTab, setSubTab] = useState("agent");
+  const SUBS = [
+    { id:"agent", label:"Agent Demo", icon:"🤖" },
+    { id:"tester", label:"Action Tester", icon:"▶" },
+    { id:"conversations", label:"Conversations", icon:"💬" },
+  ];
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:1, background:C.line, minHeight:"100%" }}>
+      <div style={{ display:"flex", gap:0, background:C.bg1, borderBottom:`1px solid ${C.line}` }}>
+        {SUBS.map(t => (
+          <button key={t.id} onClick={() => setSubTab(t.id)} style={{
+            fontFamily:mono, fontSize:12, letterSpacing:1, padding:"10px 16px",
+            border:"none", cursor:"pointer", textTransform:"uppercase",
+            background:subTab===t.id ? C.accentDim : "transparent",
+            color:subTab===t.id ? C.accent : C.p3,
+            borderBottom:subTab===t.id ? `2px solid ${C.accent}` : "2px solid transparent",
+            transition:"all 0.12s",
+          }}>
+            <span style={{ marginRight:6 }}>{t.icon}</span>{t.label}
+          </button>
+        ))}
+      </div>
+      {subTab==="agent" && <AgentRunner onResult={onResult}/>}
+      {subTab==="tester" && <ActionTesterTab killSwitch={killSwitch} extraPolicies={extraPolicies} sessionMemory={sessionMemory} onResult={onResult}/>}
+      {subTab==="conversations" && <ConversationsTab/>}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+// POLICY HUB — Policy Editor + Review Queue + Drift Detection
+// ═══════════════════════════════════════════════════════════
+function PolicyHubTab({ extraPolicies, setExtraPolicies, policySnapshots, onRestore, userRole }) {
+  const [subTab, setSubTab] = useState("editor");
+  const SUBS = [
+    { id:"editor", label:"Policy Editor", icon:"◆" },
+    { id:"review", label:"Review Queue", icon:"◎" },
+    { id:"drift", label:"Drift Detection", icon:"📈" },
+  ];
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:1, background:C.line, minHeight:"100%" }}>
+      <div style={{ display:"flex", gap:0, background:C.bg1, borderBottom:`1px solid ${C.line}` }}>
+        {SUBS.map(t => (
+          <button key={t.id} onClick={() => setSubTab(t.id)} style={{
+            fontFamily:mono, fontSize:12, letterSpacing:1, padding:"10px 16px",
+            border:"none", cursor:"pointer", textTransform:"uppercase",
+            background:subTab===t.id ? C.accentDim : "transparent",
+            color:subTab===t.id ? C.accent : C.p3,
+            borderBottom:subTab===t.id ? `2px solid ${C.accent}` : "2px solid transparent",
+            transition:"all 0.12s",
+          }}>
+            <span style={{ marginRight:6 }}>{t.icon}</span>{t.label}
+          </button>
+        ))}
+      </div>
+      {subTab==="editor" && <PolicyEditorTab extraPolicies={extraPolicies} setExtraPolicies={setExtraPolicies} policySnapshots={policySnapshots} onRestore={onRestore}/>}
+      {subTab==="review" && <ReviewQueueTab/>}
+      {subTab==="drift" && <DriftTab/>}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+// AUDIT & TRACES HUB — Audit Trail + Traces + Chain Analysis + Verification
+// ═══════════════════════════════════════════════════════════
+function AuditTracesHubTab({ auditLog, policySnapshots }) {
+  const [subTab, setSubTab] = useState("audit");
+  const SUBS = [
+    { id:"audit", label:"Audit Trail", icon:"☰" },
+    { id:"traces", label:"Traces", icon:"⧉" },
+    { id:"chains", label:"Chain Analysis", icon:"⛓" },
+    { id:"verification", label:"Verification", icon:"✅" },
+  ];
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:1, background:C.line, minHeight:"100%" }}>
+      <div style={{ display:"flex", gap:0, background:C.bg1, borderBottom:`1px solid ${C.line}` }}>
+        {SUBS.map(t => (
+          <button key={t.id} onClick={() => setSubTab(t.id)} style={{
+            fontFamily:mono, fontSize:12, letterSpacing:1, padding:"10px 16px",
+            border:"none", cursor:"pointer", textTransform:"uppercase",
+            background:subTab===t.id ? C.accentDim : "transparent",
+            color:subTab===t.id ? C.accent : C.p3,
+            borderBottom:subTab===t.id ? `2px solid ${C.accent}` : "2px solid transparent",
+            transition:"all 0.12s",
+          }}>
+            <span style={{ marginRight:6 }}>{t.icon}</span>{t.label}
+          </button>
+        ))}
+      </div>
+      {subTab==="audit" && <AuditTrailTab auditLog={auditLog} policySnapshots={policySnapshots}/>}
+      {subTab==="traces" && <TracesTab/>}
+      {subTab==="chains" && <ChainAnalysisTab/>}
+      {subTab==="verification" && <VerificationTab/>}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+// INFRASTRUCTURE HUB — Topology + API Keys
+// ═══════════════════════════════════════════════════════════
+function InfrastructureHubTab({ gs, killSwitch, degraded }) {
+  const [subTab, setSubTab] = useState("topology");
+  const SUBS = [
+    { id:"topology", label:"Topology", icon:"◎" },
+    { id:"apikeys", label:"API Keys", icon:"🔑" },
+  ];
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:1, background:C.line, minHeight:"100%" }}>
+      <div style={{ display:"flex", gap:0, background:C.bg1, borderBottom:`1px solid ${C.line}` }}>
+        {SUBS.map(t => (
+          <button key={t.id} onClick={() => setSubTab(t.id)} style={{
+            fontFamily:mono, fontSize:12, letterSpacing:1, padding:"10px 16px",
+            border:"none", cursor:"pointer", textTransform:"uppercase",
+            background:subTab===t.id ? C.accentDim : "transparent",
+            color:subTab===t.id ? C.accent : C.p3,
+            borderBottom:subTab===t.id ? `2px solid ${C.accent}` : "2px solid transparent",
+            transition:"all 0.12s",
+          }}>
+            <span style={{ marginRight:6 }}>{t.icon}</span>{t.label}
+          </button>
+        ))}
+      </div>
+      {subTab==="topology" && <TopologyTab gs={gs} killSwitch={killSwitch} degraded={degraded}/>}
+      {subTab==="apikeys" && <ApiKeysTab/>}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+// SETTINGS HUB — Settings + User Management
+// ═══════════════════════════════════════════════════════════
+function SettingsHubTab({ onConfigSaved, onRestartTour, userRole }) {
+  const [subTab, setSubTab] = useState("settings");
+  const SUBS = [
+    { id:"settings", label:"Settings", icon:"⚙" },
+    ...(userRole === "superadmin" ? [{ id:"users", label:"User Management", icon:"👥" }] : []),
+  ];
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:1, background:C.line, minHeight:"100%" }}>
+      {SUBS.length > 1 && (
+        <div style={{ display:"flex", gap:0, background:C.bg1, borderBottom:`1px solid ${C.line}` }}>
+          {SUBS.map(t => (
+            <button key={t.id} onClick={() => setSubTab(t.id)} style={{
+              fontFamily:mono, fontSize:12, letterSpacing:1, padding:"10px 16px",
+              border:"none", cursor:"pointer", textTransform:"uppercase",
+              background:subTab===t.id ? C.accentDim : "transparent",
+              color:subTab===t.id ? C.accent : C.p3,
+              borderBottom:subTab===t.id ? `2px solid ${C.accent}` : "2px solid transparent",
+              transition:"all 0.12s",
+            }}>
+              <span style={{ marginRight:6 }}>{t.icon}</span>{t.label}
+            </button>
+          ))}
+        </div>
+      )}
+      {subTab==="settings" && <SettingsTab onConfigSaved={onConfigSaved} onRestartTour={onRestartTour}/>}
+      {subTab==="users" && userRole==="superadmin" && <AdminUserManagementTab/>}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
 // COMPLIANCE HUB TAB — unified view of all governance modules
 // ═══════════════════════════════════════════════════════════
 function ComplianceHubTab() {
@@ -7455,30 +7620,21 @@ function ReviewQueueTab() {
 // ROLE_TABS + ALL_TABS (SURGE + Topology added)
 // ═══════════════════════════════════════════════════════════
 const ROLE_TABS = {
-  superadmin: ["dashboard","agent","tester","policies","review","compliance","audit","conversations","verification","drift","chains","traces","topology","apikeys","settings","users","docs"],
-  admin:    ["dashboard","agent","tester","policies","review","compliance","audit","conversations","verification","drift","chains","traces","topology","apikeys","settings","docs"],
-  operator: ["dashboard","agent","tester","policies","review","compliance","audit","conversations","verification","drift","chains","traces","topology","apikeys","settings","docs"],
-  auditor:  ["dashboard","agent","compliance","audit","conversations","verification","drift","chains","traces","topology","apikeys","docs"],
+  superadmin: ["dashboard","operations","policyHub","compliance","auditTraces","infra","settingsHub","docs"],
+  admin:    ["dashboard","operations","policyHub","compliance","auditTraces","infra","settingsHub","docs"],
+  operator: ["dashboard","operations","policyHub","compliance","auditTraces","infra","settingsHub","docs"],
+  auditor:  ["dashboard","operations","compliance","auditTraces","infra","docs"],
 };
 
 const ALL_TABS = [
-  { id:"dashboard", label:"Dashboard",        icon:"◈" },
-  { id:"agent",     label:"Agent Demo",        icon:"🤖" },
-  { id:"tester",    label:"Action Tester",     icon:"▶" },
-  { id:"policies",  label:"Policy Editor",     icon:"◆" },
-  { id:"review",    label:"Review Queue",      icon:"◎" },
-  { id:"compliance", label:"Compliance Hub",    icon:"🛡" },
-  { id:"audit",     label:"Audit Trail",       icon:"☰" },
-  { id:"conversations", label:"Conversations", icon:"💬" },
-  { id:"verification", label:"Verification",  icon:"✅" },
-  { id:"drift",     label:"Drift Detection",   icon:"📈" },
-  { id:"chains",    label:"Chain Analysis",    icon:"⛓" },
-  { id:"traces",    label:"Traces",            icon:"⧉" },
-  { id:"topology",  label:"Topology",          icon:"◎" },
-  { id:"apikeys",   label:"API Keys",          icon:"🔑" },
-  { id:"settings",  label:"Settings",          icon:"⚙" },
-  { id:"users",     label:"User Management",   icon:"👥", superadminOnly:true },
-  { id:"docs",      label:"Documentation",     icon:"📖" },
+  { id:"dashboard",    label:"Dashboard",        icon:"◈" },
+  { id:"operations",   label:"Operations",       icon:"▶" },
+  { id:"policyHub",    label:"Policies",         icon:"◆" },
+  { id:"compliance",   label:"Compliance",       icon:"🛡" },
+  { id:"auditTraces",  label:"Audit & Traces",   icon:"☰" },
+  { id:"infra",        label:"Infrastructure",   icon:"◎" },
+  { id:"settingsHub",  label:"Settings",         icon:"⚙" },
+  { id:"docs",         label:"Documentation",    icon:"📖" },
 ];
 
 export default function GovernorDashboard({ userRole="operator", userName="", onLogout=()=>{} }) {
@@ -7925,8 +8081,8 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
         {/* Content area — full width, no persistent sidebar */}
         <div style={{flex:1, overflow:"auto", background:C.bg0}}>
           {tab==="dashboard" && <DashboardTab gs={gs}/>}
-          {tab==="tester"    && (userRole==="superadmin"||userRole==="admin"||userRole==="operator") && <ActionTesterTab killSwitch={killSwitch} extraPolicies={extraPols} sessionMemory={sessionMemory} onResult={onResult}/>}
-          {tab==="policies"  && (userRole==="superadmin"||userRole==="admin"||userRole==="operator") && <PolicyEditorTab extraPolicies={extraPols} setExtraPolicies={setEPWithAudit} policySnapshots={policySnapshots} onRestore={snap => {
+          {tab==="operations" && <OperationsHubTab killSwitch={killSwitch} extraPolicies={extraPols} sessionMemory={sessionMemory} onResult={onResult} userRole={userRole}/>}
+          {tab==="policyHub" && (userRole==="superadmin"||userRole==="admin"||userRole==="operator") && <PolicyHubTab extraPolicies={extraPols} setExtraPolicies={setEPWithAudit} policySnapshots={policySnapshots} onRestore={snap => {
               const rebuilt = snap.policies
                 .filter(p => p.source === "runtime")
                 .map(p => {
@@ -7942,20 +8098,11 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
                   };
                 });
               setEPWithAudit(rebuilt, `Rollback to: ${snap.label}`);
-            }}/>}
-          {tab==="agent"     && <AgentRunner onResult={onResult}/>}
-          {tab==="review"    && (userRole==="superadmin"||userRole==="admin"||userRole==="operator") && <ReviewQueueTab/>}
+            }} userRole={userRole}/>}
           {tab==="compliance" && <ComplianceHubTab/>}
-          {tab==="audit"     && <AuditTrailTab auditLog={auditLog} policySnapshots={policySnapshots}/>}
-          {tab==="conversations" && <ConversationsTab/>}
-          {tab==="verification" && <VerificationTab/>}
-          {tab==="drift"     && <DriftTab/>}
-          {tab==="chains"    && <ChainAnalysisTab/>}
-          {tab==="traces"    && <TracesTab/>}
-          {tab==="topology"  && <TopologyTab gs={gs} killSwitch={killSwitch} degraded={degraded}/>}
-          {tab==="apikeys"   && <ApiKeysTab/>}
-          {tab==="settings"  && (userRole==="superadmin"||userRole==="admin"||userRole==="operator") && <SettingsTab onConfigSaved={refreshEscalationConfig} onRestartTour={()=>setShowOnboarding(true)}/>}
-          {tab==="users"     && userRole==="superadmin" && <AdminUserManagementTab/>}
+          {tab==="auditTraces" && <AuditTracesHubTab auditLog={auditLog} policySnapshots={policySnapshots}/>}
+          {tab==="infra" && <InfrastructureHubTab gs={gs} killSwitch={killSwitch} degraded={degraded}/>}
+          {tab==="settingsHub" && (userRole==="superadmin"||userRole==="admin"||userRole==="operator") && <SettingsHubTab onConfigSaved={refreshEscalationConfig} onRestartTour={()=>setShowOnboarding(true)} userRole={userRole}/>}
           {tab==="docs"      && <DocsTab/>}
         </div>
       </div>
