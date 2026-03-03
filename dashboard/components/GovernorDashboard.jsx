@@ -5310,6 +5310,7 @@ function ComplianceHubTab() {
     { id:"agents",   label:"Agent Fingerprints", icon:"🤖" },
     { id:"impact",   label:"Impact Assessment", icon:"📊" },
     { id:"escalation", label:"Escalation Queue", icon:"🔔" },
+    { id:"clauses",  label:"Regulatory Clauses", icon:"📜" },
   ];
 
   // Stat cards helper
@@ -5483,6 +5484,9 @@ function ComplianceHubTab() {
 
       {/* ── ESCALATION QUEUE SUB-TAB ── */}
       {subTab === "escalation" && <EscalationSubTab API_BASE={API_BASE} headers={headers}/>}
+
+      {/* ── REGULATORY CLAUSES SUB-TAB ── */}
+      {subTab === "clauses" && <RegulatoryClausesSubTab API_BASE={API_BASE} headers={headers}/>}
     </div>
   );
 }
@@ -5495,6 +5499,9 @@ function ReceiptsSubTab({ API_BASE, headers }) {
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(null);
   const [checkpointMsg, setCheckpointMsg] = useState(null);
+  const [clauseMap, setClauseMap] = useState({});       // key=article_id → {title, clause_text, framework}
+  const [hoveredClause, setHoveredClause] = useState(null); // article_id currently hovered
+  const rowRefs = useRef({});                             // digest → DOM element ref
 
   const load = () => {
     if (!API_BASE) return;
@@ -5511,6 +5518,33 @@ function ReceiptsSubTab({ API_BASE, headers }) {
     }).catch(() => setLoading(false));
   };
   useEffect(load, [API_BASE]);
+
+  // Load regulatory clause database for hover tooltips
+  useEffect(() => {
+    if (!API_BASE) return;
+    fetch(`${API_BASE}/compliance/clauses`, { headers: headers() })
+      .then(r => r.ok ? r.json() : [])
+      .then(clauses => {
+        const map = {};
+        (Array.isArray(clauses) ? clauses : []).forEach(c => {
+          map[c.article_id] = { title: c.title, clause_text: c.clause_text, framework: c.framework };
+        });
+        setClauseMap(map);
+      })
+      .catch(() => {});
+  }, [API_BASE]);
+
+  // Navigate to a receipt by its digest (chain link click)
+  const navigateToDigest = (digest) => {
+    if (!digest) return;
+    const idx = receipts.findIndex(r => r.digest === digest);
+    if (idx === -1) return;
+    setExpanded(idx);
+    setTimeout(() => {
+      const el = rowRefs.current[digest];
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 80);
+  };
 
   const createCheckpoint = async () => {
     try {
@@ -5618,7 +5652,7 @@ function ReceiptsSubTab({ API_BASE, headers }) {
               const ds = decisionStyle(r.decision);
               const isExpanded = expanded === i;
               return (
-                <div key={i}>
+                <div key={i} ref={el => { if (r.digest) rowRefs.current[r.digest] = el; }}>
                   <div onClick={() => setExpanded(isExpanded ? null : i)} style={{
                     display:"grid", gridTemplateColumns:"120px 1fr 80px 50px 120px 100px 160px", gap:0,
                     padding:"7px 8px", cursor:"pointer", transition:"background 0.15s",
@@ -5676,9 +5710,19 @@ function ReceiptsSubTab({ API_BASE, headers }) {
                         <div>
                           <div style={{ fontFamily:mono, fontSize:10, color:C.p3, letterSpacing:1.5,
                             textTransform:"uppercase", marginBottom:3 }}>PREVIOUS DIGEST (CHAIN LINK)</div>
-                          <div style={{ fontFamily:mono, fontSize:11, color:C.p2, wordBreak:"break-all" }}>
-                            {r.previous_digest || "— (genesis)"}
-                          </div>
+                          {r.previous_digest ? (
+                            <div onClick={(e) => { e.stopPropagation(); navigateToDigest(r.previous_digest); }}
+                              title="Click to navigate to linked receipt"
+                              style={{ fontFamily:mono, fontSize:11, color:C.accent, wordBreak:"break-all",
+                                cursor:"pointer", textDecoration:"underline", textDecorationStyle:"dotted",
+                                textUnderlineOffset:3, transition:"color 0.2s" }}
+                              onMouseEnter={e => e.currentTarget.style.color = C.green}
+                              onMouseLeave={e => e.currentTarget.style.color = C.accent}>
+                              🔗 {r.previous_digest}
+                            </div>
+                          ) : (
+                            <div style={{ fontFamily:mono, fontSize:11, color:C.p3 }}>— (genesis)</div>
+                          )}
                         </div>
                       </div>
                       {/* Sovereign attestation */}
@@ -5697,7 +5741,7 @@ function ReceiptsSubTab({ API_BASE, headers }) {
                           </div>
                         </div>
                       )}
-                      {/* Compliance mapping */}
+                      {/* Compliance mapping with hover tooltips */}
                       {r.compliance && (
                         <div>
                           <div style={{ fontFamily:mono, fontSize:10, color:C.p3, letterSpacing:1.5,
@@ -5709,12 +5753,44 @@ function ReceiptsSubTab({ API_BASE, headers }) {
                                   {framework.toUpperCase().replace(/_/g, " ")}
                                 </div>
                                 <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
-                                  {articles.map(a => (
-                                    <span key={a} style={{ fontFamily:mono, fontSize:11, padding:"2px 6px",
-                                      border:`1px solid ${C.green}40`, color:C.green, background:`${C.green}10` }}>
-                                      {a}
-                                    </span>
-                                  ))}
+                                  {articles.map(a => {
+                                    const clause = clauseMap[a];
+                                    const isHovered = hoveredClause === `${framework}-${a}`;
+                                    return (
+                                      <span key={a} style={{ position:"relative", display:"inline-block" }}
+                                        onMouseEnter={() => setHoveredClause(`${framework}-${a}`)}
+                                        onMouseLeave={() => setHoveredClause(null)}>
+                                        <span style={{ fontFamily:mono, fontSize:11, padding:"2px 6px",
+                                          border:`1px solid ${clause ? C.green : C.green + "40"}`,
+                                          color:C.green, background:`${C.green}${clause ? "20" : "10"}`,
+                                          cursor: clause ? "help" : "default",
+                                          borderBottom: clause ? `2px solid ${C.green}` : undefined }}>
+                                          {a}{clause ? " ℹ" : ""}
+                                        </span>
+                                        {/* Tooltip */}
+                                        {isHovered && clause && (
+                                          <div style={{ position:"absolute", bottom:"calc(100% + 6px)", left:0,
+                                            zIndex:999, width:360, padding:"10px 12px",
+                                            background:C.bg0, border:`1px solid ${C.accent}`,
+                                            boxShadow:`0 4px 20px rgba(0,0,0,0.6)`,
+                                            pointerEvents:"none" }}>
+                                            <div style={{ fontFamily:mono, fontSize:11, fontWeight:700,
+                                              color:C.accent, marginBottom:4 }}>
+                                              {clause.title}
+                                            </div>
+                                            <div style={{ fontFamily:mono, fontSize:10, color:C.p3,
+                                              marginBottom:4, textTransform:"uppercase", letterSpacing:1 }}>
+                                              {clause.framework?.toUpperCase().replace(/_/g, " ")} — {a}
+                                            </div>
+                                            <div style={{ fontFamily:mono, fontSize:11, color:C.p1,
+                                              lineHeight:"1.5", maxHeight:160, overflowY:"auto" }}>
+                                              {clause.clause_text}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </span>
+                                    );
+                                  })}
                                 </div>
                               </div>
                             ))}
@@ -5733,6 +5809,225 @@ function ReceiptsSubTab({ API_BASE, headers }) {
                           Chain: <span style={{ color:C.amber }}>{r.chain_pattern}</span>
                         </span>}
                       </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Regulatory Clauses sub-tab (admin/superadmin CRUD) ──
+function RegulatoryClausesSubTab({ API_BASE, headers }) {
+  const [clauses, setClauses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState("all");
+  const [editing, setEditing] = useState(null);       // clause id being edited
+  const [editForm, setEditForm] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [creating, setCreating] = useState(false);
+  const [newForm, setNewForm] = useState({ framework:"eu_ai_act", article_id:"", title:"", clause_text:"" });
+
+  const load = () => {
+    if (!API_BASE) return;
+    setLoading(true);
+    fetch(`${API_BASE}/compliance/clauses`, { headers: headers() })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => { setClauses(Array.isArray(d) ? d : []); setLoading(false); })
+      .catch(() => setLoading(false));
+  };
+  useEffect(load, [API_BASE]);
+
+  const flash = (text, ok=true) => { setMsg({ text, ok }); setTimeout(() => setMsg(null), 3000); };
+
+  const saveEdit = async (id) => {
+    setSaving(true);
+    try {
+      const r = await fetch(`${API_BASE}/compliance/clauses/${id}`, {
+        method:"PUT", headers: headers(), body: JSON.stringify(editForm) });
+      if (r.ok) { flash("Clause updated"); setEditing(null); load(); }
+      else { const e = await r.json().catch(()=>({})); flash(e.detail || "Save failed", false); }
+    } catch (e) { flash(e.message, false); }
+    setSaving(false);
+  };
+
+  const createClause = async () => {
+    if (!newForm.article_id || !newForm.title) { flash("Article ID and Title required", false); return; }
+    setSaving(true);
+    try {
+      const r = await fetch(`${API_BASE}/compliance/clauses`, {
+        method:"POST", headers: headers(), body: JSON.stringify(newForm) });
+      if (r.ok) { flash("Clause created"); setCreating(false);
+        setNewForm({ framework:"eu_ai_act", article_id:"", title:"", clause_text:"" }); load(); }
+      else { const e = await r.json().catch(()=>({})); flash(e.detail || "Create failed", false); }
+    } catch (e) { flash(e.message, false); }
+    setSaving(false);
+  };
+
+  const reseed = async () => {
+    setSaving(true);
+    try {
+      const r = await fetch(`${API_BASE}/compliance/clauses/seed`, { method:"POST", headers: headers() });
+      if (r.ok) { const d = await r.json(); flash(`Re-seeded: ${d.seeded} new clauses`); load(); }
+      else flash("Re-seed failed", false);
+    } catch (e) { flash(e.message, false); }
+    setSaving(false);
+  };
+
+  const FRAMEWORKS = ["all", "eu_ai_act", "nist_ai_rmf", "owasp_llm_top10"];
+  const filtered = filter === "all" ? clauses : clauses.filter(c => c.framework === filter);
+
+  const inputStyle = { fontFamily:mono, fontSize:12, padding:"6px 10px", background:C.bg0,
+    border:`1px solid ${C.line2}`, color:C.p1, width:"100%" };
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:1, background:C.line }}>
+      {/* Header */}
+      <div style={{ background:C.bg1, padding:14 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+          <PanelHd title="Regulatory Clause Database" tag={`${clauses.length} CLAUSES`} tagColor={C.accent}/>
+          <div style={{ display:"flex", gap:8 }}>
+            <button onClick={() => setCreating(!creating)} style={{ fontFamily:mono, fontSize:11, padding:"5px 14px",
+              background:creating ? C.line2 : C.accent, color:creating ? C.p1 : "#000", border:"none",
+              cursor:"pointer", fontWeight:600, letterSpacing:1 }}>
+              {creating ? "✕ CANCEL" : "+ NEW CLAUSE"}
+            </button>
+            <button onClick={reseed} disabled={saving} style={{ fontFamily:mono, fontSize:11, padding:"5px 14px",
+              background:C.bg0, color:C.p2, border:`1px solid ${C.line2}`,
+              cursor:"pointer", letterSpacing:1 }}>
+              ↻ RE-SEED
+            </button>
+          </div>
+        </div>
+
+        {msg && (
+          <div style={{ fontFamily:mono, fontSize:11, color: msg.ok ? C.green : C.red,
+            padding:"4px 0", marginBottom:6 }}>{msg.text}</div>
+        )}
+
+        {/* Framework filter */}
+        <div style={{ display:"flex", gap:6, marginBottom:10 }}>
+          {FRAMEWORKS.map(f => (
+            <button key={f} onClick={() => setFilter(f)} style={{
+              fontFamily:mono, fontSize:11, padding:"4px 12px", letterSpacing:1,
+              background: filter === f ? C.accent : "transparent",
+              color: filter === f ? "#000" : C.p3,
+              border:`1px solid ${filter === f ? C.accent : C.line2}`,
+              cursor:"pointer", textTransform:"uppercase", fontWeight: filter === f ? 700 : 400
+            }}>
+              {f === "all" ? "ALL" : f.replace(/_/g, " ")}
+            </button>
+          ))}
+        </div>
+
+        {/* Create form */}
+        {creating && (
+          <div style={{ background:C.bg0, padding:12, marginBottom:10, border:`1px solid ${C.accent}`,
+            display:"flex", flexDirection:"column", gap:8 }}>
+            <div style={{ fontFamily:mono, fontSize:11, color:C.accent, fontWeight:700,
+              textTransform:"uppercase", letterSpacing:1.5, marginBottom:2 }}>Create New Clause</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 2fr", gap:8 }}>
+              <select value={newForm.framework} onChange={e => setNewForm({...newForm, framework:e.target.value})}
+                style={{ ...inputStyle }}>
+                <option value="eu_ai_act">EU AI Act</option>
+                <option value="nist_ai_rmf">NIST AI RMF</option>
+                <option value="owasp_llm_top10">OWASP LLM Top 10</option>
+              </select>
+              <input placeholder="Article ID (e.g. Art.15)" value={newForm.article_id}
+                onChange={e => setNewForm({...newForm, article_id:e.target.value})} style={inputStyle}/>
+              <input placeholder="Title" value={newForm.title}
+                onChange={e => setNewForm({...newForm, title:e.target.value})} style={inputStyle}/>
+            </div>
+            <textarea placeholder="Full clause text…" rows={3} value={newForm.clause_text}
+              onChange={e => setNewForm({...newForm, clause_text:e.target.value})}
+              style={{ ...inputStyle, resize:"vertical" }}/>
+            <div style={{ display:"flex", justifyContent:"flex-end" }}>
+              <button onClick={createClause} disabled={saving} style={{ fontFamily:mono, fontSize:11,
+                padding:"5px 20px", background:C.green, color:"#000", border:"none",
+                cursor:"pointer", fontWeight:600 }}>
+                {saving ? "SAVING…" : "CREATE CLAUSE"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Clause list */}
+      <div style={{ background:C.bg1, padding:14 }}>
+        {loading ? (
+          <div style={{ fontFamily:mono, fontSize:12, color:C.muted, padding:10 }}>Loading clauses…</div>
+        ) : filtered.length === 0 ? (
+          <div style={{ fontFamily:mono, fontSize:12, color:C.muted, padding:10 }}>
+            No clauses found. Click RE-SEED to populate the database.
+          </div>
+        ) : (
+          <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
+            {filtered.map(c => {
+              const isEditing = editing === c.id;
+              return (
+                <div key={c.id} style={{ background:C.bg0, padding:"10px 14px",
+                  borderLeft:`3px solid ${c.framework === "eu_ai_act" ? C.accent : c.framework === "nist_ai_rmf" ? C.green : C.amber}` }}>
+                  {isEditing ? (
+                    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 2fr", gap:8 }}>
+                        <input value={editForm.title || ""} onChange={e => setEditForm({...editForm, title:e.target.value})}
+                          placeholder="Title" style={inputStyle}/>
+                        <div style={{ fontFamily:mono, fontSize:10, color:C.p3, alignSelf:"center" }}>
+                          {c.framework.toUpperCase().replace(/_/g," ")} — {c.article_id}
+                        </div>
+                      </div>
+                      <textarea rows={4} value={editForm.clause_text || ""}
+                        onChange={e => setEditForm({...editForm, clause_text:e.target.value})}
+                        placeholder="Clause text…" style={{ ...inputStyle, resize:"vertical" }}/>
+                      <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+                        <button onClick={() => setEditing(null)} style={{ fontFamily:mono, fontSize:11,
+                          padding:"4px 14px", background:"transparent", color:C.p3,
+                          border:`1px solid ${C.line2}`, cursor:"pointer" }}>CANCEL</button>
+                        <button onClick={() => saveEdit(c.id)} disabled={saving} style={{ fontFamily:mono,
+                          fontSize:11, padding:"4px 14px", background:C.accent, color:"#000",
+                          border:"none", cursor:"pointer", fontWeight:600 }}>
+                          {saving ? "SAVING…" : "SAVE"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+                        <div style={{ flex:1 }}>
+                          <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:4 }}>
+                            <span style={{ fontFamily:mono, fontSize:12, fontWeight:700, color:C.accent }}>
+                              {c.article_id}
+                            </span>
+                            <span style={{ fontFamily:mono, fontSize:10, padding:"1px 8px",
+                              border:`1px solid ${C.line2}`, color:C.p3, textTransform:"uppercase",
+                              letterSpacing:1 }}>
+                              {c.framework.replace(/_/g," ")}
+                            </span>
+                          </div>
+                          <div style={{ fontFamily:mono, fontSize:13, fontWeight:600, color:C.p1, marginBottom:4 }}>
+                            {c.title}
+                          </div>
+                          <div style={{ fontFamily:mono, fontSize:11, color:C.p2, lineHeight:"1.6" }}>
+                            {c.clause_text || "No clause text provided."}
+                          </div>
+                        </div>
+                        <button onClick={() => { setEditing(c.id); setEditForm({ title:c.title, clause_text:c.clause_text }); }}
+                          style={{ fontFamily:mono, fontSize:10, padding:"3px 10px", marginLeft:12,
+                            background:"transparent", color:C.p3, border:`1px solid ${C.line2}`,
+                            cursor:"pointer", whiteSpace:"nowrap" }}>
+                          ✎ EDIT
+                        </button>
+                      </div>
+                      {c.updated_by && (
+                        <div style={{ fontFamily:mono, fontSize:9, color:C.p3, marginTop:6 }}>
+                          Last updated by {c.updated_by} • {c.updated_at || ""}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

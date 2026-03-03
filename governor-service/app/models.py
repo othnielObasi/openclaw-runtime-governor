@@ -400,3 +400,30 @@ class SurgeWallet(Base):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
+
+
+# ---------------------------------------------------------------------------
+# Regulatory Clauses — editable compliance article database
+# ---------------------------------------------------------------------------
+
+class RegulatoryClause(Base):
+    """Stores regulatory framework articles with clause text.
+
+    Pre-populated with EU AI Act, NIST AI RMF, and OWASP LLM Top 10.
+    Only superadmins can edit clause text via the API.
+    """
+
+    __tablename__ = "regulatory_clauses"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    framework: Mapped[str] = mapped_column(String(64), index=True)       # e.g. "eu_ai_act", "nist_ai_rmf", "owasp_llm"
+    article_id: Mapped[str] = mapped_column(String(32), index=True)      # e.g. "Art.9", "MAP-1.1", "LLM02"
+    title: Mapped[str] = mapped_column(String(256))                       # Short title
+    clause_text: Mapped[str] = mapped_column(Text)                        # Full clause summary
+    updated_by: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )

@@ -11,7 +11,7 @@ from slowapi.errors import RateLimitExceeded
 from .config import settings
 from .database import Base, engine
 from .rate_limit import limiter
-from .api import routes_actions, routes_policies, routes_summary, routes_admin, routes_surge, routes_stream, routes_traces, routes_notifications, routes_verify, routes_conversations
+from .api import routes_actions, routes_policies, routes_summary, routes_admin, routes_surge, routes_stream, routes_traces, routes_notifications, routes_verify, routes_conversations, routes_clauses
 from .auth.routes_auth import router as auth_router
 from .auth.seed import seed_admin
 from .escalation.routes import router as escalation_router
@@ -114,6 +114,15 @@ except Exception as exc:
 # Seed default admin if no users exist
 seed_admin()
 
+# Seed regulatory clause database (EU AI Act, NIST AI RMF, OWASP LLM Top 10)
+try:
+    from .api.routes_clauses import seed_regulatory_clauses
+    _seeded = seed_regulatory_clauses()
+    if _seeded:
+        logging.getLogger("governor.clauses").info("Seeded %d regulatory clauses", _seeded)
+except Exception as exc:
+    logging.getLogger("governor.clauses").warning("Clause seeding failed: %s", exc)
+
 app = FastAPI(
     title="OpenClaw Governor",
     version="0.4.0",
@@ -150,6 +159,7 @@ app.include_router(escalation_router)
 app.include_router(routes_notifications.router)
 app.include_router(routes_verify.router)
 app.include_router(routes_conversations.router)
+app.include_router(routes_clauses.router)
 
 # ---------------------------------------------------------------------------
 # Optional module routers (loaded by GovernorModules registry)
