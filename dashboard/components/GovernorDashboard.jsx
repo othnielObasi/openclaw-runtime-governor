@@ -5879,7 +5879,7 @@ function RegulatoryClausesSubTab({ API_BASE, headers }) {
     setSaving(false);
   };
 
-  const FRAMEWORKS = ["all", "eu_ai_act", "nist_ai_rmf", "owasp_llm_top10"];
+  const FRAMEWORKS = ["all", "eu_ai_act", "nist_ai_rmf", "owasp_llm"];
   const filtered = filter === "all" ? clauses : clauses.filter(c => c.framework === filter);
 
   const inputStyle = { fontFamily:mono, fontSize:12, padding:"6px 10px", background:C.bg0,
@@ -5936,7 +5936,7 @@ function RegulatoryClausesSubTab({ API_BASE, headers }) {
                 style={{ ...inputStyle }}>
                 <option value="eu_ai_act">EU AI Act</option>
                 <option value="nist_ai_rmf">NIST AI RMF</option>
-                <option value="owasp_llm_top10">OWASP LLM Top 10</option>
+                <option value="owasp_llm">OWASP LLM Top 10</option>
               </select>
               <input placeholder="Article ID (e.g. Art.15)" value={newForm.article_id}
                 onChange={e => setNewForm({...newForm, article_id:e.target.value})} style={inputStyle}/>
