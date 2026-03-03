@@ -178,11 +178,11 @@ def _mount_module_routers() -> None:
             _log.info("Mounted /compliance router")
 
         if settings.pii_scanner_enabled and gov_modules.pii_router:
-            app.include_router(gov_modules.pii_router)
+            app.include_router(gov_modules.pii_router, prefix="/pii")
             _log.info("Mounted /pii router")
 
         if settings.fingerprinting_enabled and gov_modules.fingerprint_router:
-            app.include_router(gov_modules.fingerprint_router)
+            app.include_router(gov_modules.fingerprint_router, prefix="/fingerprint")
             _log.info("Mounted /fingerprint router")
 
         if settings.surge_v2_enabled and gov_modules.surge_router:
