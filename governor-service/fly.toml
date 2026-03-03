@@ -6,6 +6,7 @@ app = "openclaw-governor"
 [env]
   PORT = "8000"
   GOVERNOR_SURGE_V2_ENABLED = "true"
+  GOVERNOR_SURGE_V2_CHECKPOINT_INTERVAL = "25"
 
 [http_service]
   internal_port = 8000

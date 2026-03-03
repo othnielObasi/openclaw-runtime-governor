@@ -5326,42 +5326,101 @@ function ComplianceHubTab() {
 function ReceiptsSubTab({ API_BASE, headers }) {
   const [receipts, setReceipts] = useState([]);
   const [checkpoints, setCheckpoints] = useState([]);
+  const [chainVerify, setChainVerify] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(null);
+  const [checkpointMsg, setCheckpointMsg] = useState(null);
 
-  useEffect(() => {
+  const load = () => {
     if (!API_BASE) return;
+    setLoading(true);
     Promise.all([
       fetch(`${API_BASE}/surge/v2/receipts?limit=50`, { headers: headers() }).then(r => r.ok ? r.json() : []),
       fetch(`${API_BASE}/surge/v2/checkpoints`, { headers: headers() }).then(r => r.ok ? r.json() : []),
-    ]).then(([r, c]) => {
+      fetch(`${API_BASE}/surge/v2/verify`, { headers: headers() }).then(r => r.ok ? r.json() : null),
+    ]).then(([r, c, v]) => {
       setReceipts(Array.isArray(r) ? r : []);
       setCheckpoints(Array.isArray(c) ? c : []);
+      setChainVerify(v);
       setLoading(false);
-    })
-      .catch(() => setLoading(false));
-  }, [API_BASE]);
+    }).catch(() => setLoading(false));
+  };
+  useEffect(load, [API_BASE]);
+
+  const createCheckpoint = async () => {
+    try {
+      setCheckpointMsg("Creating…");
+      const r = await fetch(`${API_BASE}/surge/v2/checkpoint`, { method:"POST", headers: headers() });
+      if (r.ok) { setCheckpointMsg("✓ Checkpoint created"); load(); }
+      else { const e = await r.json().catch(() => ({})); setCheckpointMsg(`Error: ${e.detail || r.status}`); }
+    } catch (e) { setCheckpointMsg(`Error: ${e.message}`); }
+    setTimeout(() => setCheckpointMsg(null), 4000);
+  };
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:1, background:C.line }}>
+      {/* Chain integrity banner */}
+      {chainVerify && (
+        <div style={{ background: chainVerify.valid ? "rgba(0,200,100,0.08)" : "rgba(255,60,60,0.12)",
+          padding:"10px 14px", display:"flex", alignItems:"center", gap:12, borderLeft:`3px solid ${chainVerify.valid ? C.green : C.red}` }}>
+          <span style={{ fontFamily:mono, fontSize:13, fontWeight:700,
+            color: chainVerify.valid ? C.green : C.red }}>
+            {chainVerify.valid ? "◉ CHAIN INTACT" : "◉ CHAIN BROKEN"}
+          </span>
+          <span style={{ fontFamily:mono, fontSize:11, color:C.p2 }}>
+            {chainVerify.receipts_checked} receipts verified
+          </span>
+          {chainVerify.first_broken_at != null && (
+            <span style={{ fontFamily:mono, fontSize:11, color:C.red }}>
+              First break at sequence #{chainVerify.first_broken_at}
+            </span>
+          )}
+          {(chainVerify.errors || []).length > 0 && (
+            <span style={{ fontFamily:mono, fontSize:10, color:C.red }}>
+              {chainVerify.errors.length} error(s)
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Checkpoints */}
       <div style={{ background:C.bg1, padding:14 }}>
-        <PanelHd title="Merkle Checkpoints" tag={`${checkpoints.length} CHECKPOINTS`} tagColor={C.green}/>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+          <PanelHd title="Merkle Checkpoints" tag={`${checkpoints.length} CHECKPOINTS`} tagColor={C.green}/>
+          <button onClick={createCheckpoint} style={{ fontFamily:mono, fontSize:11, padding:"5px 14px",
+            background:C.accent, color:"#000", border:"none", cursor:"pointer", fontWeight:600,
+            letterSpacing:1 }}>
+            + CREATE CHECKPOINT
+          </button>
+        </div>
+        {checkpointMsg && (
+          <div style={{ fontFamily:mono, fontSize:11, color: checkpointMsg.startsWith("✓") ? C.green : C.amber,
+            padding:"4px 0", marginBottom:4 }}>{checkpointMsg}</div>
+        )}
         {checkpoints.length === 0 ? (
-          <div style={{ fontFamily:mono, fontSize:12, color:C.muted, padding:"10px 0" }}>No checkpoints yet.</div>
+          <div style={{ fontFamily:mono, fontSize:12, color:C.muted, padding:"10px 0" }}>
+            No checkpoints yet. Checkpoints are created automatically every 100 receipts, or manually above.
+          </div>
         ) : (
           <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-            {checkpoints.slice(0, 10).map((cp, i) => (
+            {checkpoints.slice(0, 20).map((cp, i) => (
               <div key={i} style={{ display:"grid", gridTemplateColumns:"auto 1fr auto auto", gap:12,
-                padding:"6px 10px", background:C.bg0, alignItems:"center" }}>
+                padding:"8px 10px", background:C.bg0, alignItems:"center" }}>
                 <span style={{ fontFamily:mono, fontSize:11, color:C.green, fontWeight:600 }}>
-                  #{cp.checkpoint_id || cp.sequence || i + 1}
+                  CP-{cp.checkpoint_id || cp.seq || i + 1}
                 </span>
-                <span style={{ fontFamily:mono, fontSize:11, color:C.p2, overflow:"hidden",
-                  textOverflow:"ellipsis" }}>
-                  root: {cp.merkle_root || cp.root || "—"}
-                </span>
-                <span style={{ fontFamily:mono, fontSize:10, color:C.p3 }}>
-                  {cp.receipt_count || cp.leaf_count || "?"} receipts
+                <div style={{ overflow:"hidden" }}>
+                  <div style={{ fontFamily:mono, fontSize:10, color:C.p3, marginBottom:2 }}>MERKLE ROOT</div>
+                  <div style={{ fontFamily:mono, fontSize:11, color:C.accent, overflow:"hidden",
+                    textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                    {cp.merkle_root || cp.root || "—"}
+                  </div>
+                </div>
+                <span style={{ fontFamily:mono, fontSize:11, color:C.p2, whiteSpace:"nowrap" }}>
+                  {cp.receipt_count || cp.leaf_count || cp.leaves || "?"} receipts
+                  {cp.start_seq != null && cp.end_seq != null && (
+                    <span style={{ color:C.p3 }}> (#{cp.start_seq}–#{cp.end_seq})</span>
+                  )}
                 </span>
                 <span style={{ fontFamily:mono, fontSize:10, color:C.p3 }}>
                   {cp.timestamp || cp.created_at || ""}
@@ -5380,49 +5439,141 @@ function ReceiptsSubTab({ API_BASE, headers }) {
             {loading ? "Loading receipts…" : "No receipts issued yet."}
           </div>
         ) : (
-          <table style={{ width:"100%", borderCollapse:"collapse" }}>
-            <thead>
-              <tr>
-                {["ID","Tool","Decision","Risk","Policy","Agent","Time"].map(h => (
-                  <th key={h} style={{ fontFamily:mono, fontSize:11, color:C.p3, letterSpacing:1.5,
-                    textTransform:"uppercase", textAlign:"left", padding:"6px 8px",
-                    borderBottom:`1px solid ${C.line2}` }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {receipts.slice(0, 30).map((r, i) => {
-                const ds = decisionStyle(r.decision);
-                return (
-                  <tr key={i} style={{ borderBottom:`1px solid ${C.line}` }}>
-                    <td style={{ fontFamily:mono, fontSize:10, color:C.p3, padding:"6px 8px" }}>
+          <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
+            {/* Header row */}
+            <div style={{ display:"grid", gridTemplateColumns:"120px 1fr 80px 50px 120px 100px 160px", gap:0,
+              padding:"6px 8px", borderBottom:`1px solid ${C.line2}` }}>
+              {["ID","Tool","Decision","Risk","Policy","Agent","Time"].map(h => (
+                <span key={h} style={{ fontFamily:mono, fontSize:11, color:C.p3, letterSpacing:1.5,
+                  textTransform:"uppercase" }}>{h}</span>
+              ))}
+            </div>
+            {/* Receipt rows */}
+            {receipts.slice(0, 50).map((r, i) => {
+              const ds = decisionStyle(r.decision);
+              const isExpanded = expanded === i;
+              return (
+                <div key={i}>
+                  <div onClick={() => setExpanded(isExpanded ? null : i)} style={{
+                    display:"grid", gridTemplateColumns:"120px 1fr 80px 50px 120px 100px 160px", gap:0,
+                    padding:"7px 8px", cursor:"pointer", transition:"background 0.15s",
+                    background: isExpanded ? C.accentDim : "transparent",
+                    borderLeft: isExpanded ? `3px solid ${C.accent}` : "3px solid transparent",
+                    borderBottom:`1px solid ${C.line}`,
+                  }}>
+                    <span style={{ fontFamily:mono, fontSize:10, color:C.p3 }}>
                       {(r.receipt_id || r.id || "").slice(0, 16)}…
-                    </td>
-                    <td style={{ fontFamily:mono, fontSize:13, fontWeight:600, color:C.p1, padding:"6px 8px" }}>
+                    </span>
+                    <span style={{ fontFamily:mono, fontSize:13, fontWeight:600, color:C.p1 }}>
                       {r.tool}
-                    </td>
-                    <td style={{ padding:"5px 6px" }}>
-                      <span style={{ fontFamily:mono, fontSize:11, letterSpacing:1, padding:"3px 7px",
+                    </span>
+                    <span style={{ padding:"0 2px" }}>
+                      <span style={{ fontFamily:mono, fontSize:11, letterSpacing:1, padding:"2px 6px",
                         border:"1px solid", textTransform:"uppercase", ...ds }}>{r.decision}</span>
-                    </td>
-                    <td style={{ fontFamily:mono, fontSize:14, fontWeight:600,
-                      color:riskColor(r.risk_score || r.risk || 0), padding:"6px 8px" }}>
+                    </span>
+                    <span style={{ fontFamily:mono, fontSize:14, fontWeight:600,
+                      color:riskColor(r.risk_score ?? r.risk ?? 0) }}>
                       {r.risk_score ?? r.risk ?? "—"}
-                    </td>
-                    <td style={{ fontFamily:mono, fontSize:11, color:C.p2, padding:"6px 8px" }}>
+                    </span>
+                    <span style={{ fontFamily:mono, fontSize:11, color:C.p2, overflow:"hidden",
+                      textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                       {(r.policy_ids || []).join(", ") || r.policy || "—"}
-                    </td>
-                    <td style={{ fontFamily:mono, fontSize:10.5, color:C.p2, padding:"6px 8px" }}>
+                    </span>
+                    <span style={{ fontFamily:mono, fontSize:10.5, color:C.p2, overflow:"hidden",
+                      textOverflow:"ellipsis" }}>
                       {r.agent_id || "—"}
-                    </td>
-                    <td style={{ fontFamily:mono, fontSize:9.5, color:C.p3, padding:"6px 8px" }}>
+                    </span>
+                    <span style={{ fontFamily:mono, fontSize:9.5, color:C.p3 }}>
                       {r.timestamp || r.ts || ""}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    </span>
+                  </div>
+                  {/* ── Expanded receipt detail ── */}
+                  {isExpanded && (
+                    <div style={{ padding:"12px 16px", background:C.bg0, borderLeft:`3px solid ${C.accent}`,
+                      borderBottom:`1px solid ${C.line}`, display:"flex", flexDirection:"column", gap:10 }}>
+                      {/* Explanation */}
+                      <div>
+                        <div style={{ fontFamily:mono, fontSize:10, color:C.p3, letterSpacing:1.5,
+                          textTransform:"uppercase", marginBottom:3 }}>EXPLANATION</div>
+                        <div style={{ fontFamily:mono, fontSize:12, color:C.p1 }}>
+                          {r.explanation || "No explanation provided."}
+                        </div>
+                      </div>
+                      {/* Hash chain */}
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                        <div>
+                          <div style={{ fontFamily:mono, fontSize:10, color:C.p3, letterSpacing:1.5,
+                            textTransform:"uppercase", marginBottom:3 }}>RECEIPT DIGEST</div>
+                          <div style={{ fontFamily:mono, fontSize:11, color:C.green, wordBreak:"break-all" }}>
+                            {r.digest || "—"}
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ fontFamily:mono, fontSize:10, color:C.p3, letterSpacing:1.5,
+                            textTransform:"uppercase", marginBottom:3 }}>PREVIOUS DIGEST (CHAIN LINK)</div>
+                          <div style={{ fontFamily:mono, fontSize:11, color:C.p2, wordBreak:"break-all" }}>
+                            {r.previous_digest || "— (genesis)"}
+                          </div>
+                        </div>
+                      </div>
+                      {/* Sovereign attestation */}
+                      {r.sovereign && (
+                        <div>
+                          <div style={{ fontFamily:mono, fontSize:10, color:C.p3, letterSpacing:1.5,
+                            textTransform:"uppercase", marginBottom:3 }}>SOVEREIGN ATTESTATION</div>
+                          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                            {Object.entries(r.sovereign).map(([k, v]) => (
+                              <span key={k} style={{ fontFamily:mono, fontSize:11, padding:"2px 8px",
+                                border:`1px solid ${C.line2}`, background:C.bg1 }}>
+                                <span style={{ color:C.p3 }}>{k}:</span>{" "}
+                                <span style={{ color:C.accent, fontWeight:600 }}>{v}</span>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {/* Compliance mapping */}
+                      {r.compliance && (
+                        <div>
+                          <div style={{ fontFamily:mono, fontSize:10, color:C.p3, letterSpacing:1.5,
+                            textTransform:"uppercase", marginBottom:3 }}>COMPLIANCE MAPPING</div>
+                          <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
+                            {Object.entries(r.compliance).filter(([,v]) => Array.isArray(v) && v.length > 0).map(([framework, articles]) => (
+                              <div key={framework}>
+                                <div style={{ fontFamily:mono, fontSize:10, color:C.p3, marginBottom:2 }}>
+                                  {framework.toUpperCase().replace(/_/g, " ")}
+                                </div>
+                                <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+                                  {articles.map(a => (
+                                    <span key={a} style={{ fontFamily:mono, fontSize:11, padding:"2px 6px",
+                                      border:`1px solid ${C.green}40`, color:C.green, background:`${C.green}10` }}>
+                                      {a}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {/* Metadata row */}
+                      <div style={{ display:"flex", gap:16, flexWrap:"wrap" }}>
+                        <span style={{ fontFamily:mono, fontSize:10, color:C.p3 }}>
+                          Seq: <span style={{ color:C.p1, fontWeight:600 }}>#{r.sequence}</span>
+                        </span>
+                        {r.session_id && <span style={{ fontFamily:mono, fontSize:10, color:C.p3 }}>
+                          Session: <span style={{ color:C.p2 }}>{r.session_id}</span>
+                        </span>}
+                        {r.chain_pattern && <span style={{ fontFamily:mono, fontSize:10, color:C.p3 }}>
+                          Chain: <span style={{ color:C.amber }}>{r.chain_pattern}</span>
+                        </span>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
     </div>
