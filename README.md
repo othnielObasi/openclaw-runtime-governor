@@ -109,6 +109,8 @@ The Governor doesn't try to make the AI "behave better." It operates at the **ex
 | [`governor_agent.py`](governor_agent.py) | Autonomous governance agent (observe → reason → act loop) | — |
 | [`demo_agent.py`](demo_agent.py) | DeFi Research Agent — live end-to-end governance demo (5 phases, 17 tool calls) | — |
 | [`docs/`](docs/) | Architecture docs, SDK comparison | — |
+| [`agent-fingerprinting/`](agent-fingerprinting/) | Agent fingerprinting module — behavioral & capability fingerprinting, lightweight heuristics and tests | 0.1.0 |
+| [`compliance-modules/`](compliance-modules/) | Collection of plug-in compliance modules (PII scanner, metrics, injection detector, budget enforcer) | 0.1.0 |
 
 ---
 
@@ -628,6 +630,12 @@ cd openclaw-skills/governed-tools/js-client && npm test
 
 # Java SDK — 11 tests
 cd openclaw-skills/governed-tools/java-client && mvn test
+
+# Agent Fingerprinting — tests
+cd agent-fingerprinting && pytest -q
+
+# Compliance Modules — tests
+cd compliance-modules && pytest -q
 ```
 
 ---
