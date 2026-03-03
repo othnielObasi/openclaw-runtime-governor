@@ -10,4 +10,4 @@ dashboard/.next/
 **/target/
 .vercel
 .env*.local
-governor-service/_modules/
+

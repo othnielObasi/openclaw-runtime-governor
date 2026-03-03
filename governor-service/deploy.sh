@@ -19,9 +19,15 @@ for mod in compliance-modules agent-fingerprinting surge-v2 impact-assessment in
   fi
 done
 
-echo "▸ Deploying to Fly.io..."
+echo "▸ Building and deploying to Fly.io..."
 cd "$SCRIPT_DIR"
-fly deploy --remote-only "$@"
+
+# Build locally & push — avoids Depot remote builder ignoring _modules/ via .gitignore
+IMAGE_TAG="registry.fly.io/openclaw-governor:deploy-$(date +%s)"
+docker build -t "$IMAGE_TAG" .
+fly auth docker
+docker push "$IMAGE_TAG"
+fly deploy --image "$IMAGE_TAG" "$@"
 
 echo "▸ Cleaning up vendored modules..."
 rm -rf "$SCRIPT_DIR/_modules"
