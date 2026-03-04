@@ -88,7 +88,7 @@ The agent runs **17 tool calls** across **5 phases**, escalating from harmless t
 python demo_agent.py
 
 # Against production
-python demo_agent.py --url https://openclaw-governor.fly.dev
+python demo_agent.py --url https://openclaw-governor-demo.fly.dev
 
 # Verbose (show pipeline layer details)
 python demo_agent.py --verbose

@@ -639,7 +639,7 @@ python demo_agent.py --fee-gating # enable SURGE fee depletion`}</CodeBlock>
           <CodeBlock title="python">{`import governor_client
 from governor_client import evaluate_action, GovernorBlockedError
 
-governor_client.GOVERNOR_URL = "https://openclaw-governor.fly.dev"
+governor_client.GOVERNOR_URL = "https://openclaw-governor-demo.fly.dev"
 governor_client.GOVERNOR_API_KEY = "ocg_your_key_here"
 
 try:
@@ -656,7 +656,7 @@ except GovernorBlockedError as e:
           <CodeBlock title="typescript">{`import { GovernorClient, GovernorBlockedError } from "@openclaw/governor-client";
 
 const gov = new GovernorClient({
-  baseUrl: "https://openclaw-governor.fly.dev",
+  baseUrl: "https://openclaw-governor-demo.fly.dev",
   apiKey: "ocg_your_key_here",
 });
 
@@ -674,7 +674,7 @@ try {
 
           <SubHeading>Java · dev.openclaw:governor-client:0.3.0</SubHeading>
           <CodeBlock title="java">{`GovernorClient gov = new GovernorClient.Builder()
-    .baseUrl("https://openclaw-governor.fly.dev")
+    .baseUrl("https://openclaw-governor-demo.fly.dev")
     .apiKey("ocg_your_key_here")
     .build();
 
@@ -686,7 +686,7 @@ try {
 }`}</CodeBlock>
 
           <SubHeading>Direct HTTP (No SDK)</SubHeading>
-          <CodeBlock title="bash">{`curl -s -X POST https://openclaw-governor.fly.dev/actions/evaluate \\
+          <CodeBlock title="bash">{`curl -s -X POST https://openclaw-governor-demo.fly.dev/actions/evaluate \\
   -H "X-API-Key: ocg_your_key_here" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -879,7 +879,7 @@ curl -N -H "Authorization: Bearer $TOKEN" \\
 
 # JavaScript
 const es = new EventSource(
-  "https://openclaw-governor.fly.dev/actions/stream?token=" + jwt
+  "https://openclaw-governor-demo.fly.dev/actions/stream?token=" + jwt
 );
 es.addEventListener("action_evaluated", (e) => {
   const { tool, decision, risk_score } = JSON.parse(e.data);
@@ -1057,7 +1057,7 @@ curl -s -X PATCH http://localhost:8000/policies/block-external-uploads/toggle \\
           <Table
             headers={["Component", "Platform", "URL"]}
             rows={[
-              ["Backend (primary)", "Fly.io", "openclaw-governor.fly.dev"],
+              ["Backend (primary)", "Fly.io", "openclaw-governor-demo.fly.dev"],
               ["Backend (standby)", "Vultr VPS", "45.76.141.204:8000"],
               ["Dashboard (primary)", "Vercel", "openclaw-runtime-governor.vercel.app"],
               ["Dashboard (mirror)", "Vercel", "openclaw-runtime-governor-j9py.vercel.app"],

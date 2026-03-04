@@ -176,7 +176,7 @@ Drift scores are persisted per verification log and visible in the dashboard's *
 
 ## Production Audit Results (2026-03-01)
 
-### Fly.io (`openclaw-governor.fly.dev`)
+### Fly.io (`openclaw-governor-demo.fly.dev`)
 | Metric | Value |
 |--------|-------|
 | Health | ✅ OK |

@@ -17,7 +17,7 @@ npm install @openclaw/governor-client
 import { GovernorClient, GovernorBlockedError } from "@openclaw/governor-client";
 
 const gov = new GovernorClient({
-  baseUrl: "https://openclaw-governor.fly.dev",
+  baseUrl: "https://openclaw-governor-demo.fly.dev",
   apiKey: "ocg_your_key_here",
 });
 

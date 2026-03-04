@@ -1,4 +1,4 @@
-app = "openclaw-governor"
+app = "openclaw-governor-demo"
 
 [build]
   dockerfile = "Dockerfile"

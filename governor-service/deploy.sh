@@ -23,7 +23,9 @@ echo "▸ Building and deploying to Fly.io..."
 cd "$SCRIPT_DIR"
 
 # Build locally & push — avoids Depot remote builder ignoring _modules/ via .gitignore
-IMAGE_TAG="registry.fly.io/openclaw-governor:deploy-$(date +%s)"
+# Read app name from fly.toml
+APP_NAME=$(grep '^app' fly.toml | head -1 | sed 's/.*= *"\(.*\)"/\1/')
+IMAGE_TAG="registry.fly.io/${APP_NAME}:deploy-$(date +%s)"
 docker build -t "$IMAGE_TAG" .
 fly auth docker
 docker push "$IMAGE_TAG"

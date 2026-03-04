@@ -4704,14 +4704,14 @@ function ApiKeysTab() {
 
 from governor_client import GovernorClient
 client = GovernorClient(
-    base_url="${API_BASE || "https://openclaw-governor.fly.dev"}",
+    base_url="${API_BASE || "https://openclaw-governor-demo.fly.dev"}",
     api_key="${apiKey ? apiKey.slice(0,8)+"…" : "ocg_your_key_here"}"
 )`}
             </pre>
             <div style={{fontFamily:mono,fontSize:12,color:C.p3,marginBottom:8}}>cURL</div>
             <pre style={{background:C.bg0,border:`1px solid ${C.line2}`,padding:14,
               fontFamily:mono,fontSize:13,color:C.p1,overflow:"auto",lineHeight:1.6}}>
-{`curl ${API_BASE || "https://openclaw-governor.fly.dev"}/evaluate \\
+{`curl ${API_BASE || "https://openclaw-governor-demo.fly.dev"}/evaluate \\
   -H "X-API-Key: ${apiKey ? apiKey.slice(0,8)+"…" : "ocg_your_key_here"}" \\
   -H "Content-Type: application/json" \\
   -d '{"tool":"shell","args":{"cmd":"ls -la"}}'`}

@@ -386,7 +386,7 @@ Three official SDKs — authenticate with `X-API-Key`, throw on `block` decision
 import governor_client
 from governor_client import evaluate_action, GovernorBlockedError
 
-governor_client.GOVERNOR_URL = "https://openclaw-governor.fly.dev"
+governor_client.GOVERNOR_URL = "https://openclaw-governor-demo.fly.dev"
 governor_client.GOVERNOR_API_KEY = "ocg_your_key_here"
 
 try:
@@ -407,7 +407,7 @@ except GovernorBlockedError as e:
 import { GovernorClient, GovernorBlockedError } from "@openclaw/governor-client";
 
 const gov = new GovernorClient({
-  baseUrl: "https://openclaw-governor.fly.dev",
+  baseUrl: "https://openclaw-governor-demo.fly.dev",
   apiKey: "ocg_your_key_here",
 });
 
@@ -428,7 +428,7 @@ try {
 
 ```java
 GovernorClient gov = new GovernorClient.Builder()
-    .baseUrl("https://openclaw-governor.fly.dev")
+    .baseUrl("https://openclaw-governor-demo.fly.dev")
     .apiKey("ocg_your_key_here")
     .build();
 
@@ -443,7 +443,7 @@ try {
 #### Environment Variables (all SDKs)
 
 ```bash
-export GOVERNOR_URL=https://openclaw-governor.fly.dev
+export GOVERNOR_URL=https://openclaw-governor-demo.fly.dev
 export GOVERNOR_API_KEY=ocg_your_key_here
 ```
 
@@ -454,7 +454,7 @@ All SDKs read these automatically when explicit configuration is not provided.
 No SDK needed — just `POST /actions/evaluate` with JSON:
 
 ```bash
-curl -s -X POST https://openclaw-governor.fly.dev/actions/evaluate \
+curl -s -X POST https://openclaw-governor-demo.fly.dev/actions/evaluate \
   -H "X-API-Key: ocg_your_key_here" \
   -H "Content-Type: application/json" \
   -d '{
@@ -765,7 +765,7 @@ curl -N -H "X-API-Key: ocg_your_key" \
 
 ```javascript
 const es = new EventSource(
-  "https://openclaw-governor.fly.dev/actions/stream?token=" + jwt
+  "https://openclaw-governor-demo.fly.dev/actions/stream?token=" + jwt
 );
 es.addEventListener("action_evaluated", (e) => {
   const { tool, decision, risk_score } = JSON.parse(e.data);
@@ -985,7 +985,7 @@ curl -s -X PUT http://localhost:8000/escalation/events/42/approve \
 
 | Component | Platform | URL |
 |-----------|----------|-----|
-| Backend (primary) | Fly.io | `https://openclaw-governor.fly.dev` |
+| Backend (primary) | Fly.io | `https://openclaw-governor-demo.fly.dev` |
 | Backend (standby) | Vultr VPS | `http://45.76.141.204:8000` |
 | Dashboard (primary) | Vercel | `https://openclaw-runtime-governor.vercel.app` |
 | Dashboard (mirror) | Vercel | `https://openclaw-runtime-governor-j9py.vercel.app` |
@@ -1024,7 +1024,7 @@ The Vultr stack includes: Governor + PostgreSQL 16 + Dashboard (Next.js standalo
 
 1. Import the repo into Vercel
 2. Set root directory to `dashboard`
-3. Set env var: `NEXT_PUBLIC_GOVERNOR_API=https://openclaw-governor.fly.dev`
+3. Set env var: `NEXT_PUBLIC_GOVERNOR_API=https://openclaw-governor-demo.fly.dev`
 4. Deploy
 
 ### Failover
