@@ -7915,10 +7915,10 @@ function ReviewQueueTab() {
 // ROLE_TABS + ALL_TABS (SURGE + Topology added)
 // ═══════════════════════════════════════════════════════════
 const ROLE_TABS = {
-  superadmin: ["dashboard","agent","tester","policyEditor","reviewQueue","surge","auditTrail","conversations","verification","drift","chains","traces","topology","apikeys","settings","users","docs"],
-  admin:    ["dashboard","agent","tester","policyEditor","reviewQueue","surge","auditTrail","conversations","verification","drift","chains","traces","topology","apikeys","settings","docs"],
-  operator: ["dashboard","agent","tester","policyEditor","reviewQueue","surge","auditTrail","conversations","verification","drift","chains","traces","topology","apikeys","settings","docs"],
-  auditor:  ["dashboard","auditTrail","traces","chains","verification","topology","docs"],
+  superadmin: ["dashboard","agent","tester","policyEditor","reviewQueue","surge","auditTrail","conversations","traces","topology","apikeys","settings","users"],
+  admin:    ["dashboard","agent","tester","policyEditor","reviewQueue","surge","auditTrail","conversations","traces","topology","apikeys","settings"],
+  operator: ["dashboard","agent","tester","policyEditor","reviewQueue","surge","auditTrail","conversations","traces","topology","apikeys","settings"],
+  auditor:  ["dashboard","auditTrail","traces","topology"],
 };
 
 const ALL_TABS = [
@@ -7930,15 +7930,11 @@ const ALL_TABS = [
   { id:"surge",        label:"SURGE",             icon:"⚡" },
   { id:"auditTrail",   label:"Audit Trail",       icon:"☰" },
   { id:"conversations",label:"Conversations",     icon:"💬" },
-  { id:"verification", label:"Verification",      icon:"✅" },
-  { id:"drift",        label:"Drift Detection",   icon:"📈" },
-  { id:"chains",       label:"Chain Analysis",    icon:"⛓" },
   { id:"traces",       label:"Traces",            icon:"⧉" },
   { id:"topology",     label:"Topology",          icon:"◎" },
   { id:"apikeys",      label:"API Keys",          icon:"🔑" },
   { id:"settings",     label:"Settings",          icon:"⚙" },
   { id:"users",        label:"User Management",   icon:"👥" },
-  { id:"docs",         label:"Documentation",     icon:"📖" },
 ];
 
 export default function GovernorDashboard({ userRole="operator", userName="", onLogout=()=>{} }) {
@@ -8439,8 +8435,7 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
           </div>
         </div>
 
-        {/* Module Health Strip */}
-        <ModuleHealthStrip/>
+
 
         {/* Narrative */}
         <NarrativeBar message={narr}/>
@@ -8471,15 +8466,12 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
           {tab==="surge" && <SurgeTab receipts={surgeReceipts} stakedPolicies={stakedPolicies} setStaked={setStakedPolicies} userRole={userRole}/>}
           {tab==="auditTrail" && <AuditTrailTab auditLog={auditLog} policySnapshots={policySnapshots}/>}
           {tab==="conversations" && <ConversationsTab/>}
-          {tab==="verification" && <VerificationTab/>}
-          {tab==="drift" && <DriftTab/>}
-          {tab==="chains" && <ChainAnalysisTab/>}
+
           {tab==="traces" && <TracesTab/>}
           {tab==="topology" && <TopologyTab gs={gs} killSwitch={killSwitch} degraded={degraded}/>}
           {tab==="apikeys" && <ApiKeysTab/>}
           {tab==="settings" && (userRole==="superadmin"||userRole==="admin"||userRole==="operator") && <SettingsTab onConfigSaved={refreshEscalationConfig} onRestartTour={()=>setShowOnboarding(true)}/>}
           {tab==="users" && userRole==="superadmin" && <AdminUserManagementTab/>}
-          {tab==="docs"      && <DocsTab/>}
         </div>
       </div>
 
