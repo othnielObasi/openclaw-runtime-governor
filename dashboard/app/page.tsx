@@ -13,7 +13,6 @@ import Link from "next/link";
 import { useAuth } from "../components/AuthContext";
 import GovernorLogin from "../components/GovernorLogin";
 import GovernorDashboard from "../components/GovernorDashboard";
-import DemoDashboard from "../components/Governordashboard-demo";
 
 // ── Design tokens ──
 const C = {
@@ -281,8 +280,8 @@ function LandingPage({ onSelect }: { onSelect: (mode: "demo" | "live") => void }
           <p style={{
             fontFamily: sans, fontSize: 14, color: C.p2, margin: "0 0 16px", lineHeight: 1.6,
           }}>
-            Self-contained with simulated agents, tool calls, and policy decisions.
-            No backend required — explore the full governance dashboard instantly.
+            Multi-agent governance lab with real API calls.
+            Run scenarios across 6 agent identities — live policy enforcement.
           </p>
           <div style={{
             fontFamily: mono, fontSize: 11, color: C.p3,
@@ -292,7 +291,7 @@ function LandingPage({ onSelect }: { onSelect: (mode: "demo" | "live") => void }
             <span style={{ color: C.p3 }}>credentials:</span>{" "}
             <span style={{ color: C.p2 }}>admin</span>{" "}
             <span style={{ color: C.p3 }}>/</span>{" "}
-            <span style={{ color: C.p2 }}>govern</span>
+            <span style={{ color: C.p2 }}>Gov3rnor-Pr0d!</span>
           </div>
         </div>
 
@@ -405,13 +404,8 @@ export default function Page() {
     );
   }
 
-  // Demo mode — self-contained, has its own login/logout
-  if (mode === "demo") {
-    return <DemoDashboard onExit={() => setMode("landing")} />;
-  }
-
-  // Live mode — require real authentication
-  if (mode === "live") {
+  // Both demo and live mode use the same dashboard — requires auth
+  if (mode === "demo" || mode === "live") {
     if (!user) {
       return <GovernorLogin onBack={() => setMode("landing")} />;
     }
