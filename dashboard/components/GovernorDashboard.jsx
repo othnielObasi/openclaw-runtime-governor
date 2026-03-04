@@ -7915,21 +7915,30 @@ function ReviewQueueTab() {
 // ROLE_TABS + ALL_TABS (SURGE + Topology added)
 // ═══════════════════════════════════════════════════════════
 const ROLE_TABS = {
-  superadmin: ["dashboard","operations","policyHub","compliance","auditTraces","infra","settingsHub","docs"],
-  admin:    ["dashboard","operations","policyHub","compliance","auditTraces","infra","settingsHub","docs"],
-  operator: ["dashboard","operations","policyHub","compliance","auditTraces","infra","settingsHub","docs"],
-  auditor:  ["dashboard","operations","compliance","auditTraces","infra","docs"],
+  superadmin: ["dashboard","agent","tester","policyEditor","reviewQueue","surge","auditTrail","conversations","verification","drift","chains","traces","topology","apikeys","settings","users","docs"],
+  admin:    ["dashboard","agent","tester","policyEditor","reviewQueue","surge","auditTrail","conversations","verification","drift","chains","traces","topology","apikeys","settings","docs"],
+  operator: ["dashboard","agent","tester","policyEditor","reviewQueue","surge","auditTrail","conversations","verification","drift","chains","traces","topology","apikeys","settings","docs"],
+  auditor:  ["dashboard","auditTrail","traces","chains","verification","topology","docs"],
 };
 
 const ALL_TABS = [
-  { id:"dashboard",    label:"Dashboard",        icon:"◈" },
-  { id:"operations",   label:"Operations",       icon:"▶" },
-  { id:"policyHub",    label:"Policies",         icon:"◆" },
-  { id:"compliance",   label:"Compliance",       icon:"🛡" },
-  { id:"auditTraces",  label:"Audit & Traces",   icon:"☰" },
-  { id:"infra",        label:"Infrastructure",   icon:"◎" },
-  { id:"settingsHub",  label:"Settings",         icon:"⚙" },
-  { id:"docs",         label:"Documentation",    icon:"📖" },
+  { id:"dashboard",    label:"Dashboard",         icon:"◈" },
+  { id:"agent",        label:"Agent Demo",        icon:"🤖" },
+  { id:"tester",       label:"Action Tester",     icon:"▶" },
+  { id:"policyEditor", label:"Policy Editor",     icon:"◆" },
+  { id:"reviewQueue",  label:"Review Queue",      icon:"◎" },
+  { id:"surge",        label:"SURGE",             icon:"⚡" },
+  { id:"auditTrail",   label:"Audit Trail",       icon:"☰" },
+  { id:"conversations",label:"Conversations",     icon:"💬" },
+  { id:"verification", label:"Verification",      icon:"✅" },
+  { id:"drift",        label:"Drift Detection",   icon:"📈" },
+  { id:"chains",       label:"Chain Analysis",    icon:"⛓" },
+  { id:"traces",       label:"Traces",            icon:"⧉" },
+  { id:"topology",     label:"Topology",          icon:"◎" },
+  { id:"apikeys",      label:"API Keys",          icon:"🔑" },
+  { id:"settings",     label:"Settings",          icon:"⚙" },
+  { id:"users",        label:"User Management",   icon:"👥" },
+  { id:"docs",         label:"Documentation",     icon:"📖" },
 ];
 
 export default function GovernorDashboard({ userRole="operator", userName="", onLogout=()=>{} }) {
@@ -8439,8 +8448,9 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
         {/* Content area — full width, no persistent sidebar */}
         <div style={{flex:1, overflow:"auto", background:C.bg0}}>
           {tab==="dashboard" && <DashboardTab gs={gs}/>}
-          {tab==="operations" && <OperationsHubTab killSwitch={killSwitch} extraPolicies={extraPols} sessionMemory={sessionMemory} onResult={onResult} userRole={userRole}/>}
-          {tab==="policyHub" && (userRole==="superadmin"||userRole==="admin"||userRole==="operator") && <PolicyHubTab extraPolicies={extraPols} setExtraPolicies={setEPWithAudit} policySnapshots={policySnapshots} onRestore={snap => {
+          {tab==="agent" && <AgentRunner onResult={onResult}/>}
+          {tab==="tester" && <ActionTesterTab killSwitch={killSwitch} extraPolicies={extraPols} sessionMemory={sessionMemory} onResult={onResult}/>}
+          {tab==="policyEditor" && (userRole==="superadmin"||userRole==="admin"||userRole==="operator") && <PolicyEditorTab extraPolicies={extraPols} setExtraPolicies={setEPWithAudit} policySnapshots={policySnapshots} onRestore={snap => {
               const rebuilt = snap.policies
                 .filter(p => p.source === "runtime")
                 .map(p => {
@@ -8456,11 +8466,19 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
                   };
                 });
               setEPWithAudit(rebuilt, `Rollback to: ${snap.label}`);
-            }} userRole={userRole}/>}
-          {tab==="compliance" && <ComplianceHubTab/>}
-          {tab==="auditTraces" && <AuditTracesHubTab auditLog={auditLog} policySnapshots={policySnapshots}/>}
-          {tab==="infra" && <InfrastructureHubTab gs={gs} killSwitch={killSwitch} degraded={degraded}/>}
-          {tab==="settingsHub" && (userRole==="superadmin"||userRole==="admin"||userRole==="operator") && <SettingsHubTab onConfigSaved={refreshEscalationConfig} onRestartTour={()=>setShowOnboarding(true)} userRole={userRole}/>}
+            }}/>}
+          {tab==="reviewQueue" && <ReviewQueueTab/>}
+          {tab==="surge" && <SurgeTab receipts={surgeReceipts} stakedPolicies={stakedPolicies} setStaked={setStakedPolicies} userRole={userRole}/>}
+          {tab==="auditTrail" && <AuditTrailTab auditLog={auditLog} policySnapshots={policySnapshots}/>}
+          {tab==="conversations" && <ConversationsTab/>}
+          {tab==="verification" && <VerificationTab/>}
+          {tab==="drift" && <DriftTab/>}
+          {tab==="chains" && <ChainAnalysisTab/>}
+          {tab==="traces" && <TracesTab/>}
+          {tab==="topology" && <TopologyTab gs={gs} killSwitch={killSwitch} degraded={degraded}/>}
+          {tab==="apikeys" && <ApiKeysTab/>}
+          {tab==="settings" && (userRole==="superadmin"||userRole==="admin"||userRole==="operator") && <SettingsTab onConfigSaved={refreshEscalationConfig} onRestartTour={()=>setShowOnboarding(true)}/>}
+          {tab==="users" && userRole==="superadmin" && <AdminUserManagementTab/>}
           {tab==="docs"      && <DocsTab/>}
         </div>
       </div>
