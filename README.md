@@ -74,18 +74,18 @@ The pipeline **short-circuits**: a kill switch fires before the injection scan e
 | Output filtering | After LLM response | ❌ Post-hoc | Partially | ❌ | ❌ |
 | Fine-tuning / RLHF | Model weights | ❌ Static | ❌ Probabilistic | ❌ | ❌ |
 | API rate limiting | HTTP layer | ✅ | ✅ | ❌ | Partially |
-| **OpenClaw Governor** | **Tool call interception** | **✅ Real-time** | **✅ 100%** | **✅ 11 patterns** | **✅ Full trace + attestation** |
+| **OpenClaw Governor** | **Tool call interception** | **✅ Real-time** | **✅ 100%** | **✅ Yes** | **✅ Full trace + attestation** |
 
 The Governor doesn't try to make the AI "behave better." It operates at the **execution boundary** — the moment an agent's decision becomes a real-world action — with deterministic, auditable, policy-driven rules that no prompt injection can bypass.
 
 ### Key capabilities:
 
 - **🛡️ Inline enforcement.** This is not passive monitoring. Every tool call is intercepted, evaluated against layered policies, and either allowed or blocked *before it executes*. The dangerous action never fires.
-- **🔥 Prompt injection firewall.** 11 injection patterns scanned on every tool-call payload — catches jailbreaks that survive the LLM layer and reach the tool execution boundary.
+- **🔥 Prompt injection firewall.** Injection patterns scanned on every tool-call payload — catches jailbreaks that survive the LLM layer and reach the tool execution boundary.
 - **📜 Full policy engine.** YAML base policies + dynamic DB policies with CRUD, partial updates (PATCH), active/inactive toggle, and regex validation. Not just alerts — enforceable rules.
 - **🚨 Kill switch.** One API call halts every agent globally. DB-persisted, survives restarts. When things go wrong at 3 AM, you have an instant off switch.
-- **🔗 Multi-step attack detection.** 11 chain patterns evaluated in real-time across a 60-minute session window. Catches credential-then-exfiltration, read-write-execute chains, scope probing, privilege escalation, and data staging that look innocent one step at a time.
-- **🔍 Post-execution verification.** 8-check verification engine inspects tool *results* after execution — credential leak scan, destructive output detection, intent-alignment, diff size anomaly, output injection scan, independent re-verification against policies, and cross-session drift detection. Catches agents that execute blocked actions or produce unsafe output.
+- **🔗 Multi-step attack detection.** Chain patterns evaluated in real-time across session windows. Catches sequences that look innocent one step at a time.
+- **🔍 Post-execution verification.** Verification engine inspects tool *results* after execution — catches agents that execute blocked actions or produce unsafe output.
 - **💬 Conversation logging.** Opt-in capture of agent prompts and reasoning with encrypted-at-rest storage, conversation timelines, and correlation to governance decisions. See what the agent was *thinking* when it made each tool call.
 - **⚡ Real-time streaming.** Server-Sent Events push every governance decision to dashboards within milliseconds. You don't poll for safety — you *watch* it happen.
 - **🔍 Agent trace observability.** Full agent lifecycle tracing: LLM calls, tool invocations, and retrieval steps captured as spans in an OpenTelemetry-inspired trace tree. Governance decisions are auto-injected as child spans — see *exactly* where in the agent's reasoning chain each policy fired.
@@ -101,7 +101,7 @@ The Governor doesn't try to make the AI "behave better." It operates at the **ex
 | Directory | What | Version |
 |-----------|------|---------|
 | [`governor-service/`](governor-service/) | FastAPI backend — 6-layer pipeline, auth, SSE streaming, SURGE, verification, conversations | 0.4.0 |
-| [`dashboard/`](dashboard/) | Next.js control panel — 16 tabs, real-time monitoring, policy editor, verification, traces | 0.3.0 |
+| [`dashboard/`](dashboard/) | Next.js control panel — 13 tabs, real-time monitoring, policy editor, traces | 0.3.0 |
 | [`openclaw-skills/governed-tools/`](openclaw-skills/governed-tools/) | Python SDK (`openclaw-governor-client` on PyPI) | 0.3.0 |
 | [`openclaw-skills/governed-tools/js-client/`](openclaw-skills/governed-tools/js-client/) | TypeScript/JS SDK (`@openclaw/governor-client` on npm) — dual CJS + ESM | 0.3.0 |
 | [`openclaw-skills/governed-tools/java-client/`](openclaw-skills/governed-tools/java-client/) | Java SDK (`dev.openclaw:governor-client` on Maven Central) — zero deps, Java 11+ | 0.3.0 |
@@ -109,8 +109,6 @@ The Governor doesn't try to make the AI "behave better." It operates at the **ex
 | [`governor_agent.py`](governor_agent.py) | Autonomous governance agent (observe → reason → act loop) | — |
 | [`demo_agent.py`](demo_agent.py) | DeFi Research Agent — live end-to-end governance demo (5 phases, 17 tool calls) | — |
 | [`docs/`](docs/) | Architecture docs, SDK comparison | — |
-| [`agent-fingerprinting/`](agent-fingerprinting/) | Agent fingerprinting module — behavioral & capability fingerprinting, lightweight heuristics and tests | 0.1.0 |
-| [`compliance-modules/`](compliance-modules/) | Collection of plug-in compliance modules (PII scanner, metrics, injection detector, budget enforcer) | 0.1.0 |
 
 ---
 
@@ -136,7 +134,7 @@ npm install
 NEXT_PUBLIC_GOVERNOR_API=http://localhost:8000 npm run dev
 ```
 
-Open `http://localhost:3000` — **Demo Mode** (self-contained) or **Live Mode** (connects to backend).
+Open `http://localhost:3000` — connects to the backend for live governance.
 
 ### 3. Evaluate a tool call
 
@@ -276,7 +274,7 @@ The **Traces** tab (available to all roles) shows:
 Global emergency halt. When engaged, **every** evaluation returns `block` immediately. Persisted to database (survives restarts). Admin-only toggle via API or dashboard.
 
 ### Layer 2 — Injection Firewall
-Scans the entire payload (tool name, args, context) against 11 known prompt-injection patterns: jailbreak, override, ignore previous, disable safety, etc. Triggers block with risk score 95.
+Scans the entire payload (tool name, args, context) against known prompt-injection patterns. Triggers block with risk score 95.
 
 ### Layer 3 — Scope Enforcer
 If the calling context includes `allowed_tools`, the requested tool must be in that list. Blocks out-of-scope tools with risk score 90.
@@ -287,48 +285,24 @@ Matches against two policy sources:
 - **Dynamic policies** — created at runtime via API, stored in the database. Each policy has an `is_active` toggle — disable policies without deleting them. Regex patterns (`url_regex`, `args_regex`) are validated at creation and update time. Partial updates via PATCH.
 
 ### Layer 5 — Neuro Risk Estimator + Chain Analysis
-Heuristic risk scorer (0–100) based on tool type, sensitive keywords, and bulk-recipient detection. **Chain analysis** examines session history across a 60-minute window to detect 11 multi-step attack patterns:
-
-| Pattern | Risk Boost | What it catches |
-|---------|------------|-----------------|
-| `browse-then-exfil` | +35 | Data reconnaissance followed by HTTP send |
-| `read-write-exec` | +45 | File read → write → shell execution chain |
-| `repeated-scope-probing` | +60 | Multiple out-of-scope tool attempts |
-| `credential-then-http` | +55 | Credential access then network request |
-| `rapid-tool-switching` | +30 | 5+ distinct tools in quick succession |
-| `block-bypass-retry` | +40 | Retrying a blocked action with variations |
-| `privilege-escalation` | +50 | Sudo/admin access followed by system changes |
-| `data-staging` | +40 | Multiple file reads before a network send |
-| `env-recon` | +35 | Environment/config probing before writes |
-| `multi-cred-harvest` | +60 | Multiple credential-related tool calls |
-| `delayed-exfil` | +45 | Long gap between data access and exfiltration |
+Heuristic risk scorer (0–100) based on tool type, sensitive keywords, and bulk-recipient detection. **Chain analysis** examines session history to detect multi-step attack patterns such as credential-then-exfiltration, privilege escalation, scope probing, and data staging sequences.
 
 ---
 
 ## Post-Execution Verification
 
-The Governor doesn't just gate *intent* — it verifies *results*. After a tool executes, submit the output for an 8-check verification scan:
+The Governor doesn't just gate *intent* — it verifies *results*. After a tool executes, submit the output for a multi-check verification scan:
 
 ```
 Agent executes tool → POST /actions/verify { action_id, result, diff }
                                     │
-                    ┌───────────────┼───────────────────┐
-                    │  8 verification checks:            │
-                    │  ① Credential leak scan            │
-                    │  ② Destructive output detection    │
-                    │  ③ Scope compliance                │
-                    │  ④ Diff size anomaly               │
-                    │  ⑤ Intent-alignment (block bypass) │
-                    │  ⑥ Output injection scan           │
-                    │  ⑦ Independent re-verification     │
-                    │  ⑧ Cross-session drift detection   │
-                    └────────────────────────────────────┘
+                    Verification Engine (multiple checks)
                                     │
                     Verdict: compliant | suspicious | violation
                     + escalation if violation detected
 ```
 
-Each check runs independently and contributes to a risk delta. The intent-alignment check catches agents that **execute actions that were blocked** — a critical policy bypass detection. The drift detector compares per-agent behavior baselines across sessions.
+Checks run independently and contribute to a risk delta. Catches agents that **execute actions that were blocked** — a critical policy bypass detection.
 
 ---
 
@@ -501,7 +475,6 @@ python governor_agent.py --demo   # Single observation cycle
 | 3. Trade Execution | `execute_swap`, `http_request`, `messaging_send` | ⚠️ REVIEW |
 | 4. Dangerous Ops | `shell rm -rf`, `surge_transfer_ownership`, credential exfil | 🚫 BLOCK |
 | 5. Attack Chain | scope violation, injection attempt, `base64_decode` | 🚫 BLOCK + chain detection |
-| 6. Verification | 8 scenarios (compliant + violation) | ✅ 8/8 verified |
 
 Every evaluation includes `trace_id`/`span_id` and `conversation_id`, so the full session appears in the **Trace Viewer** and **Conversations** tab with governance decisions inline.
 
@@ -519,7 +492,7 @@ python demo_agent.py --verbose
 python demo_agent.py --fee-gating
 ```
 
-Sample output: **17 evaluations** → 9 allowed, 2 reviewed, 6 blocked, avg risk 45.9. **8/8 verification scenarios** pass. Chain analysis detects `browse-then-exfil` and `credential-then-http` patterns. 5 conversation turns and 22+ trace spans persisted.
+Sample output: **17 evaluations** → 9 allowed, 2 reviewed, 6 blocked. Chain analysis detects multi-step attack patterns. Conversation turns and trace spans persisted.
 
 ---
 
@@ -620,7 +593,7 @@ Sample output: **17 evaluations** → 9 allowed, 2 reviewed, 6 blocked, avg risk
 ## Testing
 
 ```bash
-# Backend — 246 tests across 8 test files
+# Backend — tests across 8 test files
 cd governor-service && pytest tests/ -v
 # Includes: governance pipeline, conversations, verification, escalation,
 #           policies+versioning, SSE streaming, traces, and notification channels
@@ -630,12 +603,6 @@ cd openclaw-skills/governed-tools/js-client && npm test
 
 # Java SDK — 11 tests
 cd openclaw-skills/governed-tools/java-client && mvn test
-
-# Agent Fingerprinting — tests
-cd agent-fingerprinting && pytest -q
-
-# Compliance Modules — tests
-cd compliance-modules && pytest -q
 ```
 
 ---
@@ -665,7 +632,7 @@ See [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) for the comprehensive g
 | Auth | bcrypt, python-jose (JWT HS256), slowapi rate limiting, RBAC (4 roles) |
 | Database | SQLite (dev) / PostgreSQL 16 (prod) — 17 tables |
 | Encryption | Fernet symmetric (conversation prompts at rest) |
-| Dashboard | Next.js 14.2, React 18.3, TypeScript — 16 tabs |
+| Dashboard | Next.js 14.2, React 18.3, TypeScript — 13 tabs |
 | SDKs | Python (httpx), TypeScript/JS (fetch), Java (HttpClient) |
 | Deployment | Fly.io + Vultr VPS (backend), Vercel × 2 + Vultr (dashboard) |
 | CI/CD | GitHub Actions (dashboard), Docker Compose (Vultr) |
