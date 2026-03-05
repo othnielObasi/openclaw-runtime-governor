@@ -22,66 +22,17 @@ const STORAGE_KEY = "ocg_onboarding_dismissed";
 
 // Each step: { title, body, tabId (optional — highlights that sidebar tab), icon }
 const STEPS = [
-  {
-    title: "Welcome to OpenClaw Governor",
-    body: "Your AI governance control plane. This quick tour will walk you through each hub — you can skip or dismiss at any time.",
-    icon: "🛡",
-    tabId: null,
-  },
-  {
-    title: "Dashboard — Live Overview",
-    body: "Real-time evaluations, allow/review/block counts, risk distribution, and a live action feed — all updating via SSE.",
-    icon: "◈",
-    tabId: "dashboard",
-  },
-  {
-    title: "Operations Hub",
-    body: "Three sub-tabs in one: Agent Demo to run the governed agent, Action Tester to test tool calls against the 6-layer pipeline, and Conversations to view encrypted agent turns.",
-    icon: "▶",
-    tabId: "operations",
-  },
-  {
-    title: "Policy Hub",
-    body: "Create, edit, toggle and version governance policies. Includes the Review Queue for pending escalations and Drift Detection to catch policy violations over time.",
-    icon: "◆",
-    tabId: "policyHub",
-  },
-  {
-    title: "Compliance Hub",
-    body: "Six sub-tabs: Overview dashboard, SURGE Receipts & Chain integrity, Agent Fingerprints, Impact Assessment, Escalation Queue, and Regulatory Clauses database (EU AI Act, NIST, OWASP).",
-    icon: "🛡",
-    tabId: "compliance",
-  },
-  {
-    title: "Audit & Traces Hub",
-    body: "Full governance audit trail with live SSE, distributed Traces with span trees, Chain Analysis for hash-chain verification, and post-execution Verification logs.",
-    icon: "☰",
-    tabId: "auditTraces",
-  },
-  {
-    title: "Infrastructure Hub",
-    body: "Topology view of your deployed modules and their health status, plus API Keys — copy your key and view quick-start code for Python, TypeScript, and Java.",
-    icon: "◎",
-    tabId: "infra",
-  },
-  {
-    title: "Settings Hub",
-    body: "Configure escalation thresholds, kill-switch rules, and notification channels (Email, Slack, WhatsApp, Jira). User Management for RBAC — add admins, operators, auditors.",
-    icon: "⚙",
-    tabId: "settingsHub",
-  },
-  {
-    title: "Documentation",
-    body: "In-app docs covering architecture, SDK integration, governance audit trails, and the SURGE v2 token protocol.",
-    icon: "📖",
-    tabId: "docs",
-  },
-  {
-    title: "You're All Set!",
-    body: "Explore freely. You can re-open this guide anytime from the Settings hub or the ? button in the bottom-right corner.",
-    icon: "🚀",
-    tabId: null,
-  },
+  { title: "Welcome to OpenClaw Governor", body: "Your AI governance control plane. This quick tour will walk you through the key hubs — you can skip or dismiss at any time.", icon: "🛡", tabId: null },
+  { title: "Dashboard — Live Overview", body: "Real-time evaluations, allow/review/block counts, risk distribution, and a live action feed — all updating via SSE.", icon: "◈", tabId: "dashboard" },
+  { title: "Agent Demo", body: "Run a governed agent in the Agent Demo to observe decisions and telemetry in real-time.", icon: "🤖", tabId: "agent" },
+  { title: "Action Tester", body: "Use the Action Tester to simulate tool calls against the 6-layer governance pipeline and inspect evaluation traces.", icon: "▶", tabId: "tester" },
+  { title: "Policy Editor", body: "Create, edit, toggle and version governance policies. Policy changes are applied across evaluations immediately.", icon: "◆", tabId: "policyEditor" },
+  { title: "Review Queue & SURGE", body: "Inspect the Review Queue for pending escalations and view SURGE receipts for cryptographic audit evidence.", icon: "⚡", tabId: "reviewQueue" },
+  { title: "Audit Trail & Traces", body: "Explore the Audit Trail and distributed Traces to review full evaluation histories and span trees.", icon: "☰", tabId: "auditTrail" },
+  { title: "Conversations & Traces", body: "View encrypted Conversations and Traces to investigate agent interactions and post-execution verification logs.", icon: "💬", tabId: "conversations" },
+  { title: "Topology & API Keys", body: "Check the Topology view for deployed module health and copy API Keys to access the Governor programmatically.", icon: "◎", tabId: "topology" },
+  { title: "Settings & Users", body: "Configure escalation thresholds, kill-switch rules, notification channels, and manage users and RBAC.", icon: "⚙", tabId: "settings" },
+  { title: "You're All Set!", body: "Explore freely. Re-open this guide anytime from Settings or the ? button in the bottom-right corner.", icon: "🚀", tabId: null },
 ];
 
 export default function OnboardingGuide({ onNavigateTab, visible, onClose }) {
