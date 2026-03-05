@@ -212,7 +212,7 @@ function LandingPage({ onSelect }: { onSelect: (mode: "demo" | "live") => void }
             boxShadow: "0 12px 40px rgba(0,0,0,0.7)",
             animation: "popupIn 0.2s ease-out",
           }}>
-            <GovernorLogin onBack={() => setShowAuthPopup(false)} />
+            <GovernorLogin inline onBack={() => setShowAuthPopup(false)} />
           </div>
         )}
       </div>
