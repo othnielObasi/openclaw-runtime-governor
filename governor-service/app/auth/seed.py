@@ -31,7 +31,7 @@ def seed_admin() -> None:
     env = os.getenv("GOVERNOR_ENVIRONMENT", "development")
 
     with db_session() as session:
-        existing = session.execute(select(User)).scalar_one_or_none()
+        existing = session.execute(select(User)).scalars().first()
         if existing:
             return  # Users already seeded — don't overwrite
 
