@@ -31,9 +31,8 @@ interface User {
 }
 
 const ROLE_COLOR: Record<string, string> = {
+  superadmin: "#e040fb",
   admin:    C.accent,
-  operator: C.amber,
-  auditor:  C.p2,
 };
 
 function Badge({ children, color }: { children: string; color: string }) {
@@ -110,7 +109,7 @@ export default function UserManagement() {
   const [showCreate, setShowCreate]       = useState(false);
   const [creating, setCreating]           = useState(false);
   const [createErr, setCreateErr]         = useState("");
-  const [form, setForm] = useState({ username:"", name:"", password:"", role:"operator" });
+  const [form, setForm] = useState({ username:"", name:"", password:"", role:"admin" });
 
   const authHeaders = { Authorization: `Bearer ${token}`, "Content-Type":"application/json" };
 
@@ -161,7 +160,7 @@ export default function UserManagement() {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.detail || "Failed to create user.");
       }
-      setForm({ username:"", name:"", password:"", role:"operator" });
+      setForm({ username:"", name:"", password:"", role:"admin" });
       setShowCreate(false);
       fetchUsers();
     } catch (e: any) {
@@ -191,7 +190,7 @@ export default function UserManagement() {
           </div>
         </div>
         <Btn variant="accent" onClick={() => setShowCreate(s => !s)}>
-          {showCreate ? "✕ CANCEL" : "+ ADD OPERATOR"}
+          {showCreate ? "✕ CANCEL" : "+ ADD USER"}
         </Btn>
       </div>
 
@@ -203,7 +202,7 @@ export default function UserManagement() {
           borderTop:`2px solid ${C.accent}`,
         }}>
           <div style={{ fontSize:9, color:C.accent, letterSpacing:2, marginBottom:14 }}>
-            NEW OPERATOR ACCOUNT
+            NEW USER ACCOUNT
           </div>
           {createErr && (
             <div style={{
@@ -228,9 +227,8 @@ export default function UserManagement() {
                   background:C.bg0, border:`1px solid ${C.line2}`, color:C.p1,
                   fontFamily:mono, fontSize:10, padding:"7px 8px", outline:"none",
                 }}>
-                <option value="operator">operator</option>
-                <option value="auditor">auditor</option>
                 <option value="admin">admin</option>
+                <option value="superadmin">superadmin</option>
               </select>
             </Fld>
           </div>
@@ -259,7 +257,7 @@ export default function UserManagement() {
             gap:8, padding:"6px 12px", marginBottom:4,
             borderBottom:`1px solid ${C.line}`,
           }}>
-            {["OPERATOR","USERNAME","ROLE","STATUS","ACTIONS"].map(h => (
+            {["USER","USERNAME","ROLE","STATUS","ACTIONS"].map(h => (
               <div key={h} style={{ fontSize:8, color:C.p3, letterSpacing:1.5, textTransform:"uppercase" }}>
                 {h}
               </div>

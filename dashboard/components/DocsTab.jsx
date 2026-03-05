@@ -449,7 +449,7 @@ python demo_agent.py --fee-gating # enable SURGE fee depletion`}</CodeBlock>
           rows={[
             ["action_logs","Every evaluation (tool, args, decision, risk, chain_pattern)"],
             ["policy_models","Dynamic policies created via API"],
-            ["users","RBAC accounts (superadmin / admin / operator / auditor)"],
+            ["users","RBAC accounts (superadmin / admin)"],
             ["governor_state","Key-value store (kill switch state)"],
             ["conversation_turns","Agent conversation turns (encrypted at rest)"],
             ["verification_logs","Post-execution verification results (8 checks)"],
@@ -491,8 +491,6 @@ python demo_agent.py --fee-gating # enable SURGE fee depletion`}</CodeBlock>
           rows={[
             ["superadmin","✅","✅","✅ CRUD","✅","✅","✅ CRUD"],
             ["admin",     "✅","✅","✅ CRUD","✅","✅","✅ CRUD"],
-            ["operator",  "✅","✅","✅ CRUD","—", "✅","—"],
-            ["auditor",   "—", "✅","Read",   "—", "—", "—"],
           ]}
         />
 
@@ -606,7 +604,7 @@ try {
             ["Topology",      "◎", "Agent-to-tool interaction graph"],
             ["API Keys",      "🔑","View / copy / regenerate API key + code samples"],
             ["Settings",      "⚙", "Kill switch, escalation thresholds, notification channels"],
-            ["Users",         "👥","User management — create operators and auditors"],
+            ["Users",         "👥","User management — create and manage users"],
           ]}
         />
 

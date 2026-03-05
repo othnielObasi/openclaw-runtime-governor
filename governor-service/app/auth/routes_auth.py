@@ -68,12 +68,12 @@ class UserCreate(BaseModel):
     username: str
     name: str
     password: str
-    role: str = Field(default="operator", pattern="^(superadmin|admin|operator|auditor)$")
+    role: str = Field(default="admin", pattern="^(superadmin|admin)$")
 
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
-    role: Optional[str] = Field(default=None, pattern="^(superadmin|admin|operator|auditor)$")
+    role: Optional[str] = Field(default=None, pattern="^(superadmin|admin)$")
     is_active: Optional[bool] = None
     password: Optional[str] = None
 
@@ -157,7 +157,7 @@ def signup(request: Request, body: SignupRequest) -> TokenResponse:
             username=body.username,
             name=body.name,
             password_hash=hash_password(body.password),
-            role="operator",
+            role="admin",
             api_key=generate_api_key(),
             is_active=True,
         )

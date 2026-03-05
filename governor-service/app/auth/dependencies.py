@@ -85,12 +85,13 @@ def require_superadmin(current_user: User = Depends(get_current_user)) -> User:
 
 
 def require_operator(current_user: User = Depends(get_current_user)) -> User:
-    if current_user.role not in ("superadmin", "admin", "operator"):
+    """Alias for require_admin — operator/auditor roles removed."""
+    if current_user.role not in ("superadmin", "admin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
-                            detail="Operator or Admin access required.")
+                            detail="Admin access required.")
     return current_user
 
 
 def require_any(current_user: User = Depends(get_current_user)) -> User:
-    """Any authenticated user — admin, operator, or auditor."""
+    """Any authenticated user."""
     return current_user

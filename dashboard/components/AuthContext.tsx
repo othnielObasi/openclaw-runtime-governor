@@ -10,7 +10,7 @@ import {
 } from "react";
 
 // ── Types ────────────────────────────────────────────────────
-export type Role = "superadmin" | "admin" | "operator" | "auditor";
+export type Role = "superadmin" | "admin";
 
 export interface AuthUser {
   username: string;
@@ -28,7 +28,6 @@ interface AuthContextValue {
   logout: () => void;
   isSuperAdmin: boolean;
   isAdmin: boolean;
-  isOperator: boolean;
 }
 
 // ── Context ──────────────────────────────────────────────────
@@ -112,7 +111,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login, signup, logout,
       isSuperAdmin: user?.role === "superadmin",
       isAdmin:    user?.role === "superadmin" || user?.role === "admin",
-      isOperator: user?.role === "superadmin" || user?.role === "admin" || user?.role === "operator",
     }}>
       {children}
     </AuthContext.Provider>

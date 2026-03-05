@@ -44,7 +44,7 @@ const SCAN_STEPS_LOGIN = [
 
 const SCAN_STEPS_SIGNUP = [
   "Validating registration data…",
-  "Provisioning operator account…",
+  "Provisioning account…",
   "Generating API credentials…",
   "Establishing secure session…",
 ];
@@ -627,7 +627,7 @@ export default function GovernorLogin({ onBack, inline = false }: GovernorLoginP
             fontSize:"8.5px", letterSpacing:1.5, color:C.p3, textTransform:"uppercase",
           }}>
             {mode === "signup"
-              ? "New accounts are provisioned with operator access"
+              ? "New accounts are provisioned with admin access"
               : "All access attempts are recorded in the immutable audit trail"
             }
           </div>

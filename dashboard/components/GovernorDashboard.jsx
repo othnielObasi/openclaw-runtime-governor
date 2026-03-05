@@ -4748,7 +4748,7 @@ function AdminUserManagementTab() {
   const [creating, setCr]   = useState(false);
   const [createErr, setCE]  = useState("");
   const [pending, setPending] = useState(null);
-  const [form, setForm]     = useState({username:"",name:"",password:"",role:"operator"});
+  const [form, setForm]     = useState({username:"",name:"",password:"",role:"admin"});
   const [loginHistory, setLoginHistory] = useState([]);
   const [histLoading, setHistLoad]      = useState(false);
   const [showHistory, setShowHistory]   = useState(false);
@@ -4792,7 +4792,7 @@ function AdminUserManagementTab() {
     try {
       const r = await fetch(`${API_BASE}/auth/users`, {method:"POST",headers:headers(),body:JSON.stringify(form)});
       if (!r.ok) { const e=await r.json().catch(()=>({})); throw new Error(e.detail||"Failed."); }
-      setForm({username:"",name:"",password:"",role:"operator"}); setSC(false); load();
+      setForm({username:"",name:"",password:"",role:"admin"}); setSC(false); load();
     } catch(e) { setCE(e.message); }
     finally { setCr(false); }
   };
@@ -4808,7 +4808,7 @@ function AdminUserManagementTab() {
     finally { setHistLoad(false); }
   };
 
-  const ROLE_C = {superadmin:"#e040fb", admin:C.accent, operator:C.amber, auditor:C.p2};
+  const ROLE_C = {superadmin:"#e040fb", admin:C.accent};
   const active   = users.filter(u=>u.is_active);
   const inactive = users.filter(u=>!u.is_active);
 
@@ -4828,7 +4828,7 @@ function AdminUserManagementTab() {
         <button onClick={()=>setSC(s=>!s)} style={{
           fontFamily:mono,fontSize:12,letterSpacing:1,padding:"6px 14px",
           border:`1px solid ${C.accent}`,color:C.accent,background:C.accentDim,cursor:"pointer"}}>
-          {showCreate?"✕ CANCEL":"+ ADD OPERATOR"}
+          {showCreate?"✕ CANCEL":"+ ADD USER"}
         </button>
       </div>
 
@@ -4837,7 +4837,7 @@ function AdminUserManagementTab() {
         <div style={{padding:16,marginBottom:20,background:C.bg2,
           border:`1px solid ${C.accent}`,borderTop:`2px solid ${C.accent}`}}>
           <div style={{fontFamily:mono,fontSize:12,color:C.accent,letterSpacing:2,marginBottom:14}}>
-            NEW OPERATOR ACCOUNT
+            NEW USER ACCOUNT
           </div>
           {createErr && (
             <div style={{padding:"6px 10px",marginBottom:10,background:C.redDim,
@@ -4866,8 +4866,6 @@ function AdminUserManagementTab() {
               <select value={form.role} onChange={e=>setForm(f=>({...f,role:e.target.value}))}
                 style={{background:C.bg0,border:`1px solid ${C.line2}`,color:C.p1,
                   fontFamily:mono,fontSize:13,padding:"7px 8px",outline:"none"}}>
-                <option value="operator">operator</option>
-                <option value="auditor">auditor</option>
                 <option value="admin">admin</option>
                 <option value="superadmin">superadmin</option>
               </select>
@@ -4896,7 +4894,7 @@ function AdminUserManagementTab() {
           {/* Column headers */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 140px 90px 80px 110px 170px",
             gap:8,padding:"6px 12px",marginBottom:4,borderBottom:`1px solid ${C.line}`}}>
-            {["OPERATOR","USERNAME","ROLE","STATUS","LAST LOGIN","ACTIONS"].map(h=>(
+            {["USER","USERNAME","ROLE","STATUS","LAST LOGIN","ACTIONS"].map(h=>(
               <div key={h} style={{fontFamily:mono,fontSize:11,color:C.p3,letterSpacing:1.5,textTransform:"uppercase"}}>{h}</div>
             ))}
           </div>
@@ -4974,7 +4972,7 @@ function AdminUserManagementTab() {
 
           {users.length===0&&(
             <div style={{fontFamily:mono,fontSize:12,color:C.p3,textAlign:"center",padding:"24px 0"}}>
-              No users yet. Create the first operator above.
+              No users yet. Create the first user above.
             </div>
           )}
         </>
@@ -6420,7 +6418,7 @@ function SurgeTab({ receipts: localReceipts, stakedPolicies: localStaked, setSta
   const [topUpId, setTopUpId]     = useState("");
   const [topUpAmt, setTopUpAmt]   = useState("100");
 
-  const canEdit = userRole==="superadmin" || userRole==="admin" || userRole==="operator";
+  const canEdit = userRole==="superadmin" || userRole==="admin";
 
   const load = async () => {
     if (!API_BASE) { setLoading(false); return; }
@@ -6616,7 +6614,7 @@ function SurgeTab({ receipts: localReceipts, stakedPolicies: localStaked, setSta
       {/* Staking form */}
       {canEdit && (
         <div style={{background:C.bg1, padding:16, marginBottom:20, border:`1px solid ${C.line}`}}>
-          <PanelHd title="Stake $SURGE on Policy" tag="OPERATOR+" tagColor={surgeColor}/>
+          <PanelHd title="Stake $SURGE on Policy" tag="ADMIN+" tagColor={surgeColor}/>
           <div style={{display:"grid", gridTemplateColumns:"1fr 1fr 60px 80px 1fr auto", gap:10, alignItems:"end"}}>
             <Fld label="Policy ID">
               <TextInput value={spId} onChange={e=>setSpId(e.target.value)} placeholder="shell-dangerous"/>
@@ -7923,8 +7921,6 @@ function ReviewQueueTab() {
 const ROLE_TABS = {
   superadmin: ["dashboard","agent","tester","policyEditor","reviewQueue","surge","auditTrail","conversations","traces","topology","apikeys","settings","users"],
   admin:    ["dashboard","agent","tester","policyEditor","reviewQueue","surge","auditTrail","conversations","traces","topology","apikeys","settings"],
-  operator: ["dashboard","agent","tester","policyEditor","reviewQueue","surge","auditTrail","conversations","traces","topology","apikeys","settings"],
-  auditor:  ["dashboard","auditTrail","traces","topology"],
 };
 
 const ALL_TABS = [
@@ -7943,7 +7939,7 @@ const ALL_TABS = [
   { id:"users",        label:"User Management",   icon:"👥" },
 ];
 
-export default function GovernorDashboard({ userRole="operator", userName="", onLogout=()=>{} }) {
+export default function GovernorDashboard({ userRole="admin", userName="", onLogout=()=>{} }) {
   // API access for fetching server-side escalation config
   const API_BASE_ROOT = (typeof process!=="undefined" && process.env?.NEXT_PUBLIC_GOVERNOR_API) || null;
   const getTokenRoot = () => typeof window!=="undefined" ? localStorage.getItem("ocg_token") : null;
@@ -8249,7 +8245,7 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
     return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`;
   };
 
-  const visibleTabs = ALL_TABS.filter(t=>(ROLE_TABS[userRole]||ROLE_TABS.operator).includes(t.id));
+  const visibleTabs = ALL_TABS.filter(t=>(ROLE_TABS[userRole]||ROLE_TABS.admin).includes(t.id));
   const [sidebarCollapsed, setSC] = useState(false);
   const sideW = sidebarCollapsed ? 48 : 200;
 
@@ -8332,7 +8328,7 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
                 {killSwitch?"ON":"OFF"}
               </div>
             </div>
-            {(userRole==="superadmin"||userRole==="admin"||userRole==="operator") && (
+            {(userRole==="superadmin"||userRole==="admin") && (
               <div style={{display:"flex", gap:3, marginBottom:10}}>
                 <Btn onClick={()=>handleKS(true)} variant="red" disabled={killSwitch}
                   style={{fontSize:10, padding:"3px 8px", flex:1}}>HALT</Btn>
@@ -8394,9 +8390,8 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
               <div>
                 <div style={{fontFamily:mono, fontSize:12, color:C.p2}}>{userName}</div>
                 <span style={{fontFamily:mono, fontSize:11, letterSpacing:1.5,
-                  padding:"2px 6px", border:`1px solid ${
-                    (userRole==="superadmin"||userRole==="admin")?C.accent:userRole==="operator"?C.amber:C.p3}`,
-                  color:(userRole==="superadmin"||userRole==="admin")?C.accent:userRole==="operator"?C.amber:C.p3,
+                  padding:"2px 6px", border:`1px solid ${C.accent}`,
+                  color:C.accent,
                   textTransform:"uppercase"}}>{userRole}</span>
               </div>
               <button onClick={onLogout} style={{
@@ -8451,7 +8446,7 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
           {tab==="dashboard" && <DashboardTab gs={gs}/>}
           {tab==="agent" && <AgentRunner onResult={onResult}/>}
           {tab==="tester" && <ActionTesterTab killSwitch={killSwitch} extraPolicies={extraPols} sessionMemory={sessionMemory} onResult={onResult}/>}
-          {tab==="policyEditor" && (userRole==="superadmin"||userRole==="admin"||userRole==="operator") && <PolicyEditorTab extraPolicies={extraPols} setExtraPolicies={setEPWithAudit} policySnapshots={policySnapshots} onRestore={snap => {
+          {tab==="policyEditor" && (userRole==="superadmin"||userRole==="admin") && <PolicyEditorTab extraPolicies={extraPols} setExtraPolicies={setEPWithAudit} policySnapshots={policySnapshots} onRestore={snap => {
               const rebuilt = snap.policies
                 .filter(p => p.source === "runtime")
                 .map(p => {
@@ -8476,7 +8471,7 @@ export default function GovernorDashboard({ userRole="operator", userName="", on
           {tab==="traces" && <TracesTab/>}
           {tab==="topology" && <TopologyTab gs={gs} killSwitch={killSwitch} degraded={degraded}/>}
           {tab==="apikeys" && <ApiKeysTab/>}
-          {tab==="settings" && (userRole==="superadmin"||userRole==="admin"||userRole==="operator") && <SettingsTab onConfigSaved={refreshEscalationConfig} onRestartTour={()=>setShowOnboarding(true)}/>}
+          {tab==="settings" && (userRole==="superadmin"||userRole==="admin") && <SettingsTab onConfigSaved={refreshEscalationConfig} onRestartTour={()=>setShowOnboarding(true)}/>}
           {tab==="users" && userRole==="superadmin" && <AdminUserManagementTab/>}
         </div>
       </div>

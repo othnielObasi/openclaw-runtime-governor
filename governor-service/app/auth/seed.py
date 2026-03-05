@@ -10,7 +10,7 @@ from ..database import db_session
 from ..models import User
 
 
-_DEFAULT_PASSWORD = "changeme"
+_DEFAULT_PASSWORD = "runtime_ocg"
 
 
 def seed_admin() -> None:
@@ -24,9 +24,9 @@ def seed_admin() -> None:
       GOVERNOR_ADMIN_PASSWORD = changeme
       GOVERNOR_ADMIN_NAME     = Governor Admin
     """
-    username = os.getenv("GOVERNOR_ADMIN_USERNAME", "admin")
-    password = os.getenv("GOVERNOR_ADMIN_PASSWORD", _DEFAULT_PASSWORD)
-    name     = os.getenv("GOVERNOR_ADMIN_NAME",     "Governor Admin")
+    username = os.getenv("GOVERNOR_ADMIN_USERNAME", "openclaw_gov")
+    password = os.getenv("GOVERNOR_ADMIN_PASSWORD", "runtime_ocg")
+    name     = os.getenv("GOVERNOR_ADMIN_NAME",     "OpenClaw Governor")
 
     env = os.getenv("GOVERNOR_ENVIRONMENT", "development")
 
