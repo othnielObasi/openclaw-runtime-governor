@@ -3251,7 +3251,7 @@ function AuditTrailTab({ auditLog, policySnapshots }) {
 // tool plans, and interleaved governed actions.
 // ═══════════════════════════════════════════════════════════
 function ConversationsTab() {
-  const API_BASE = (typeof process!=="undefined" && process.env?.NEXT_PUBLIC_GOVERNOR_API) || null;
+  const API_BASE = (typeof process!=="undefined" && process.env?.NEXT_PUBLIC_GOVERNOR_API) || "";
   const getToken = () => typeof window!=="undefined" ? localStorage.getItem("ocg_token") : null;
   const hdrs = () => ({ "Content-Type":"application/json", ...(getToken() ? {"Authorization":`Bearer ${getToken()}`} : {}) });
 
@@ -3264,7 +3264,6 @@ function ConversationsTab() {
 
   // Fetch conversation list
   const fetchConversations = useCallback(async () => {
-    if (!API_BASE) return;
     setLoading(true);
     try {
       const resp = await fetch(`${API_BASE}/conversations?limit=50`, { headers: hdrs() });
@@ -3277,7 +3276,6 @@ function ConversationsTab() {
 
   // Fetch timeline for a selected conversation
   const fetchTimeline = useCallback(async (convId) => {
-    if (!API_BASE) return;
     setLoadingTimeline(true);
     try {
       const resp = await fetch(`${API_BASE}/conversations/${encodeURIComponent(convId)}/timeline`, { headers: hdrs() });
@@ -3333,9 +3331,17 @@ function ConversationsTab() {
         {/* Conversation list */}
         <div style={{flex:1, overflow:"auto"}}>
           {filtered.length === 0 ? (
-            <div style={{padding:"40px 16px", textAlign:"center", fontFamily:mono,
+            <div style={{padding:"32px 16px", textAlign:"center", fontFamily:mono,
               fontSize:12, color:C.p3}}>
-              {loading ? "Loading..." : "No conversations yet."}
+              {loading ? "Loading..." : (
+                <>
+                  <div style={{marginBottom:8, opacity:0.6}}>No conversations yet.</div>
+                  <div style={{fontSize:11, color:C.p3, lineHeight:1.6}}>
+                    Conversations are logged when the Agent Demo runs scenarios.<br/>
+                    Go to <span style={{color:C.accent}}>Agent Demo → Run All</span> to populate this view.
+                  </div>
+                </>
+              )}
             </div>
           ) : filtered.map((conv, i) => {
             const isSelected = selectedConv?.conversation_id === conv.conversation_id;
