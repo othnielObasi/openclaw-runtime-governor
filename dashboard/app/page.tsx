@@ -168,7 +168,6 @@ function SimulatedDecision() {
 }
 
 function LandingPage() {
-  const [hovered, setHovered] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const [showAuthPopup, setShowAuthPopup] = useState(false);
   useEffect(() => { setTimeout(() => setMounted(true), 50); }, []);
@@ -296,14 +295,11 @@ function LandingPage() {
         <div
           style={{
             flex: 1, minWidth: 300, maxWidth: 420,
-            background: hovered === "gov" ? C.bg2 : C.bg1,
-            border: `1px solid ${hovered === "gov" ? C.green : C.line}`,
-            borderTop: `3px solid ${hovered === "gov" ? C.green : C.line}`,
+            background: C.bg1,
+            border: `1px solid ${C.line}`,
+            borderTop: `3px solid ${C.green}`,
             padding: "30px 28px",
-            transition: "all 0.25s ease",
           }}
-          onMouseEnter={() => setHovered("gov")}
-          onMouseLeave={() => setHovered(null)}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
             <div style={{
@@ -339,14 +335,11 @@ function LandingPage() {
         <div
           style={{
             flex: 1, minWidth: 300, maxWidth: 420,
-            background: hovered === "audit" ? C.bg2 : C.bg1,
-            border: `1px solid ${hovered === "audit" ? C.accent : C.line}`,
-            borderTop: `3px solid ${hovered === "audit" ? C.accent : C.line}`,
+            background: C.bg1,
+            border: `1px solid ${C.line}`,
+            borderTop: `3px solid ${C.accent}`,
             padding: "30px 28px",
-            transition: "all 0.25s ease",
           }}
-          onMouseEnter={() => setHovered("audit")}
-          onMouseLeave={() => setHovered(null)}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
             <div style={{
