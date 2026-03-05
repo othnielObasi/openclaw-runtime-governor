@@ -165,7 +165,7 @@ npm run dev
 python demo_agent.py
 
 # Run against production
-python demo_agent.py --url https://openclaw-governor-demo.fly.dev
+python demo_agent.py --url http://45.76.141.204
 
 # Verbose output (full trace per evaluation)
 python demo_agent.py --verbose

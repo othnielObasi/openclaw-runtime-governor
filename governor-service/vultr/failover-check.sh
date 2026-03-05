@@ -11,7 +11,7 @@
 set -euo pipefail
 
 # ── Configuration ──────────────────────────────────────────────────────────
-PRIMARY_URL="${PRIMARY_URL:-https://openclaw-governor-demo.fly.dev/healthz}"
+PRIMARY_URL="${PRIMARY_URL:-http://45.76.141.204/healthz}"
 STANDBY_URL="${STANDBY_URL:-http://localhost:8000/healthz}"
 TIMEOUT=8          # seconds
 MAX_FAILURES=3     # consecutive primary failures before alerting

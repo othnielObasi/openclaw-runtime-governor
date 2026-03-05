@@ -71,7 +71,7 @@ implementation 'dev.openclaw:governor-client:0.2.0'
 import governor_client
 from governor_client import evaluate_action, GovernorBlockedError
 
-governor_client.GOVERNOR_URL = "https://openclaw-governor-demo.fly.dev"
+governor_client.GOVERNOR_URL = "http://45.76.141.204"
 governor_client.GOVERNOR_API_KEY = "ocg_your_key_here"
 
 try:
@@ -86,7 +86,7 @@ except GovernorBlockedError as e:
 Or via environment variables:
 
 ```bash
-export GOVERNOR_URL=https://openclaw-governor-demo.fly.dev
+export GOVERNOR_URL=http://45.76.141.204
 export GOVERNOR_API_KEY=ocg_your_key_here
 python my_agent.py
 ```
@@ -97,7 +97,7 @@ python my_agent.py
 import { GovernorClient, GovernorBlockedError } from "@openclaw/governor-client";
 
 const gov = new GovernorClient({
-  baseUrl: "https://openclaw-governor-demo.fly.dev",
+  baseUrl: "http://45.76.141.204",
   apiKey: "ocg_your_key_here",
 });
 
@@ -126,7 +126,7 @@ import dev.openclaw.governor.*;
 import java.util.Map;
 
 GovernorClient gov = new GovernorClient.Builder()
-    .baseUrl("https://openclaw-governor-demo.fly.dev")
+    .baseUrl("http://45.76.141.204")
     .apiKey("ocg_your_key_here")
     .build();
 

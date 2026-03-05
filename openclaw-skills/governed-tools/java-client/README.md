@@ -29,7 +29,7 @@ import dev.openclaw.governor.*;
 import java.util.Map;
 
 GovernorClient gov = new GovernorClient.Builder()
-    .baseUrl("https://openclaw-governor-demo.fly.dev")
+    .baseUrl("http://45.76.141.204")
     .apiKey("ocg_your_key_here")
     .build();
 

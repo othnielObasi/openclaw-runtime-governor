@@ -19,7 +19,7 @@ import governor_client
 
 # Set your API key (or export GOVERNOR_API_KEY in your environment)
 governor_client.GOVERNOR_API_KEY = "ocg_your_key_here"
-governor_client.GOVERNOR_URL = "https://openclaw-governor-demo.fly.dev"
+governor_client.GOVERNOR_URL = "http://45.76.141.204"
 
 # Evaluate a tool call against the Governor
 try:
@@ -47,7 +47,7 @@ You can also set them programmatically:
 ```python
 import governor_client
 
-governor_client.GOVERNOR_URL = "https://openclaw-governor-demo.fly.dev"
+governor_client.GOVERNOR_URL = "http://45.76.141.204"
 governor_client.GOVERNOR_API_KEY = "ocg_your_key_here"
 ```
 

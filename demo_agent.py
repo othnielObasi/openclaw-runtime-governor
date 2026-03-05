@@ -25,7 +25,7 @@ Usage:
     python demo_agent.py
 
     # Against production
-    python demo_agent.py --url https://openclaw-governor-demo.fly.dev
+    python demo_agent.py --url http://45.76.141.204
 
     # With SURGE fee gating enabled (shows wallet depletion)
     python demo_agent.py --fee-gating

@@ -86,7 +86,7 @@ async def stream_actions(
 
     Connect with ``EventSource`` or ``curl -N``:
     ```
-    curl -N -H "X-API-Key: ocg_..." https://openclaw-governor-demo.fly.dev/actions/stream
+    curl -N -H "X-API-Key: ocg_..." http://45.76.141.204/actions/stream
     ```
 
     Events:

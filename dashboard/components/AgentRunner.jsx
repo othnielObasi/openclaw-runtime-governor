@@ -173,7 +173,7 @@ function tsSnippet(tool, args, context) {
   return `import { GovernorClient } from "@openclaw/governor-client";
 
 const gov = new GovernorClient({
-  baseUrl: "https://openclaw-governor-demo.fly.dev",
+  baseUrl: "http://45.76.141.204",
   apiKey:  process.env.GOVERNOR_API_KEY,
 });
 
@@ -234,12 +234,12 @@ const WALKTHROUGH = [
     title: "Configure Credentials",
     desc: "Set your Governor URL and API key.",
     python: `import os
-os.environ["GOVERNOR_URL"]     = "https://openclaw-governor-demo.fly.dev"
+os.environ["GOVERNOR_URL"]     = "http://45.76.141.204"
 os.environ["GOVERNOR_API_KEY"] = "ocg_your_key_here"`,
     ts: `import { GovernorClient } from "@openclaw/governor-client";
 
 const gov = new GovernorClient({
-  baseUrl: "https://openclaw-governor-demo.fly.dev",
+  baseUrl: "http://45.76.141.204",
   apiKey:  "ocg_your_key_here",
 });`,
   },
@@ -325,7 +325,7 @@ ingest_spans([{
 
 # List all policies
 resp = httpx.get(
-    "https://openclaw-governor-demo.fly.dev/policies/",
+    "http://45.76.141.204/policies/",
     headers={"Authorization": "Bearer <token>"}
 )
 policies = resp.json()
@@ -335,7 +335,7 @@ for p in policies:
     print(f"{p['name']}: {p['tool']} → {p['action']}")`,
     ts: `// Fetch policies via REST
 const resp = await fetch(
-  "https://openclaw-governor-demo.fly.dev/policies/",
+  "http://45.76.141.204/policies/",
   { headers: { Authorization: "Bearer <token>" } }
 );
 const policies = await resp.json();
@@ -681,7 +681,7 @@ export default function AgentRunner({ onResult }) {
             </div>
             <CodeBlock lang="bash" code={`pip install openclaw-governor-client
 
-export GOVERNOR_URL="https://openclaw-governor-demo.fly.dev"
+export GOVERNOR_URL="http://45.76.141.204"
 export GOVERNOR_API_KEY="ocg_your_key_here"`} />
             <div style={{ marginTop: 8 }}>
               <CodeBlock lang="python" code={`from openclaw_governor import evaluate_action
@@ -703,7 +703,7 @@ print(decision["decision"])  # allow | block | review`} />
               <CodeBlock lang="typescript" code={`import { GovernorClient } from "@openclaw/governor-client";
 
 const gov = new GovernorClient({
-  baseUrl: "https://openclaw-governor-demo.fly.dev",
+  baseUrl: "http://45.76.141.204",
   apiKey:  process.env.GOVERNOR_API_KEY,
 });
 
@@ -921,7 +921,7 @@ decision = evaluate_action(
                   : `import { GovernorClient } from "@openclaw/governor-client";
 
 const gov = new GovernorClient({
-  baseUrl: "https://openclaw-governor-demo.fly.dev",
+  baseUrl: "http://45.76.141.204",
   apiKey:  process.env.GOVERNOR_API_KEY,
 });
 

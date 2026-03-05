@@ -368,7 +368,7 @@ except GovernorBlockedError:
 import { GovernorClient, GovernorBlockedError } from "@openclaw/governor-client";
 
 const gov = new GovernorClient({
-  baseUrl: "https://openclaw-governor-demo.fly.dev",
+  baseUrl: "http://45.76.141.204",
   apiKey: "ocg_your_key_here",
 });
 
@@ -383,7 +383,7 @@ try {
 
 ```java
 GovernorClient gov = new GovernorClient.Builder()
-    .baseUrl("https://openclaw-governor-demo.fly.dev")
+    .baseUrl("http://45.76.141.204")
     .apiKey("ocg_your_key_here")
     .build();
 
@@ -483,7 +483,7 @@ Every evaluation includes `trace_id`/`span_id` and `conversation_id`, so the ful
 python demo_agent.py
 
 # Run against production
-python demo_agent.py --url https://openclaw-governor-demo.fly.dev
+python demo_agent.py --url http://45.76.141.204
 
 # Show full execution trace per evaluation
 python demo_agent.py --verbose
@@ -611,8 +611,8 @@ cd openclaw-skills/governed-tools/java-client && mvn test
 
 | Component | Platform | URL | Config |
 |-----------|----------|-----|--------|
-| Governor Service (primary) | Fly.io | `https://openclaw-governor-demo.fly.dev` | [`fly.toml`](governor-service/fly.toml), [`Dockerfile`](governor-service/Dockerfile) |
-| Governor Service (standby) | Vultr VPS | `http://45.76.141.204:8000` | [`vultr/docker-compose.yml`](governor-service/vultr/docker-compose.yml) |
+| Governor Service (primary) | Fly.io | `http://45.76.141.204` | [`fly.toml`](governor-service/fly.toml), [`Dockerfile`](governor-service/Dockerfile) |
+| Governor Service (standby) | Vultr VPS | `http://45.76.141.204` | [`vultr/docker-compose.yml`](governor-service/vultr/docker-compose.yml) |
 | Dashboard (primary) | Vercel | `https://openclaw-runtime-governor.vercel.app` | [`vercel.json`](dashboard/vercel.json) |
 | Dashboard (mirror) | Vercel | `https://openclaw-runtime-governor-j9py.vercel.app` | Same source |
 | Dashboard (standby) | Vultr VPS | `http://45.76.141.204:3000` | Docker (Next.js standalone) |

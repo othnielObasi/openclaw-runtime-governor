@@ -9,7 +9,6 @@
  */
 
 import React, { useState, useEffect } from "react";
-import Link from "next/link";
 import { useAuth } from "../components/AuthContext";
 import GovernorLogin from "../components/GovernorLogin";
 import GovernorDashboard from "../components/GovernorDashboard";
@@ -373,7 +372,7 @@ function LandingPage() {
       </div>
 
       {/* ── Documentation link ── */}
-      <Link href="/docs" style={{
+      <a href="http://45.76.141.204:3000/docs" target="_blank" rel="noopener noreferrer" style={{
         fontFamily: mono, fontSize: 12, fontWeight: 600,
         color: C.p3, letterSpacing: 2, textDecoration: "none",
         padding: "10px 24px", marginTop: 32,
@@ -391,7 +390,7 @@ function LandingPage() {
         }}
       >
         📖 Documentation
-      </Link>
+      </a>
 
       {/* ── Footer ── */}
       <div style={{
