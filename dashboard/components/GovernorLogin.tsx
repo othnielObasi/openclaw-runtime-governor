@@ -51,9 +51,10 @@ const SCAN_STEPS_SIGNUP = [
 
 interface GovernorLoginProps {
   onBack?: () => void;
+  inline?: boolean;
 }
 
-export default function GovernorLogin({ onBack }: GovernorLoginProps) {
+export default function GovernorLogin({ onBack, inline = false }: GovernorLoginProps) {
   const { login, signup } = useAuth();
 
   // Form mode: signup is primary
@@ -141,6 +142,145 @@ export default function GovernorLogin({ onBack }: GovernorLoginProps) {
   const isError    = phase === "error";
   const isSuccess  = phase === "success";
 
+  // ── Inline/popup mode — no full-page chrome ──────────────────────────────
+  if (inline) {
+    return (
+      <div style={{ fontFamily: mono, background: C.bg1, padding: "24px 24px 20px" }}>
+        {/* Mode tabs */}
+        <div style={{ display:"flex", marginBottom:16, borderBottom:`1px solid ${C.line}` }}>
+          <button onClick={() => !isScanning && !isSuccess && setMode("signup")}
+            style={{ flex:1, padding:"9px 0", fontFamily:mono, fontSize:12,
+              fontWeight:mode==="signup"?700:400, letterSpacing:2, textTransform:"uppercase",
+              color:mode==="signup"?C.accent:C.p3, background:"transparent", border:"none",
+              cursor:"pointer", borderBottom:mode==="signup"?`2px solid ${C.accent}`:`2px solid transparent`,
+              transition:"all 0.2s" }}>
+            Create Account
+          </button>
+          <button onClick={() => !isScanning && !isSuccess && setMode("login")}
+            style={{ flex:1, padding:"9px 0", fontFamily:mono, fontSize:12,
+              fontWeight:mode==="login"?700:400, letterSpacing:2, textTransform:"uppercase",
+              color:mode==="login"?C.accent:C.p3, background:"transparent", border:"none",
+              cursor:"pointer", borderBottom:mode==="login"?`2px solid ${C.accent}`:`2px solid transparent`,
+              transition:"all 0.2s" }}>
+            Sign In
+          </button>
+        </div>
+
+        {isError && (
+          <div style={{ padding:"7px 12px", marginBottom:12, background:C.redDim,
+            border:`1px solid ${C.red}`, fontSize:"9px", letterSpacing:1,
+            color:C.red, textTransform:"uppercase", textAlign:"center" }}>
+            ⚠ {errorMsg}
+          </div>
+        )}
+        {isSuccess && (
+          <div style={{ padding:"7px 12px", marginBottom:12, background:C.greenDim,
+            border:`1px solid ${C.green}`, fontSize:"9px", letterSpacing:1,
+            color:C.green, textTransform:"uppercase", textAlign:"center" }}>
+            ✓ {mode === "signup" ? "ACCOUNT CREATED" : "AUTHENTICATED"} — Loading…
+          </div>
+        )}
+
+        <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:14 }}>
+          {mode === "signup" && (
+            <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+              <label style={{ fontSize:"8px", letterSpacing:2, color:C.p3, textTransform:"uppercase" }}>Display Name</label>
+              <input type="text" value={name} onChange={e => setName(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleSubmit()}
+                disabled={isScanning||isSuccess} placeholder="Your name" autoFocus
+                style={{ background:C.bg0, border:`1px solid ${C.line2}`,
+                  borderBottom:`1px solid ${name?C.accent:C.line2}`,
+                  color:C.p1, fontFamily:mono, fontSize:13, padding:"9px 12px",
+                  outline:"none", width:"100%", boxSizing:"border-box" }} />
+            </div>
+          )}
+          <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+            <label style={{ fontSize:"8px", letterSpacing:2, color:C.p3, textTransform:"uppercase" }}>Username</label>
+            <input type="text" value={username} onChange={e => setUsername(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleSubmit()}
+              disabled={isScanning||isSuccess} placeholder="your-username"
+              autoFocus={mode==="login"}
+              style={{ background:C.bg0, border:`1px solid ${C.line2}`,
+                borderBottom:`1px solid ${username?C.accent:C.line2}`,
+                color:C.p1, fontFamily:mono, fontSize:13, padding:"9px 12px",
+                outline:"none", width:"100%", boxSizing:"border-box" }} />
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+            <label style={{ fontSize:"8px", letterSpacing:2, color:C.p3, textTransform:"uppercase" }}>Password</label>
+            <div style={{ position:"relative" }}>
+              <input type={showPass?"text":"password"} value={password}
+                onChange={e => setPassword(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleSubmit()}
+                disabled={isScanning||isSuccess}
+                placeholder={mode==="signup"?"Min 6 characters":"••••••••"}
+                style={{ background:C.bg0, border:`1px solid ${C.line2}`,
+                  borderBottom:`1px solid ${password?C.accent:C.line2}`,
+                  color:C.p1, fontFamily:mono, fontSize:13, padding:"9px 44px 9px 12px",
+                  outline:"none", width:"100%", boxSizing:"border-box" }} />
+              <button onClick={() => setShowPass(s=>!s)}
+                style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)",
+                  background:"none", border:"none", cursor:"pointer",
+                  fontSize:"9px", letterSpacing:1, color:C.p3, fontFamily:mono }}>
+                {showPass?"HIDE":"SHOW"}
+              </button>
+            </div>
+          </div>
+          {mode === "signup" && (
+            <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+              <label style={{ fontSize:"8px", letterSpacing:2, color:C.p3, textTransform:"uppercase" }}>Confirm Password</label>
+              <input type="password" value={confirmPass}
+                onChange={e => setConfirmPass(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleSubmit()}
+                disabled={isScanning||isSuccess} placeholder="Re-enter password"
+                style={{ background:C.bg0, border:`1px solid ${C.line2}`,
+                  borderBottom:`1px solid ${confirmPass?(confirmPass===password?C.green:C.red):C.line2}`,
+                  color:C.p1, fontFamily:mono, fontSize:13, padding:"9px 12px",
+                  outline:"none", width:"100%", boxSizing:"border-box" }} />
+              {confirmPass && confirmPass !== password && (
+                <span style={{ fontSize:"8px", color:C.red, letterSpacing:1 }}>PASSWORDS DO NOT MATCH</span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {isScanning && (
+          <div style={{ marginBottom:12, padding:"9px 12px", background:C.bg0, border:`1px solid ${C.line2}` }}>
+            {scanSteps.map((step, i) => (
+              <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"2px 0",
+                opacity:i<scanStep?1:i===scanStep?0.5:0.15, transition:"opacity 0.3s" }}>
+                <span style={{ fontSize:"9px", color:i<scanStep?C.green:C.amber, width:12, textAlign:"center" }}>
+                  {i<scanStep?"✓":i===scanStep?"›":"○"}
+                </span>
+                <span style={{ fontSize:"9px", letterSpacing:0.5, color:i<scanStep?C.p2:C.p3 }}>{step}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <button onClick={handleSubmit} disabled={isScanning||isSuccess||!canSubmit}
+          style={{ width:"100%", padding:"11px", fontFamily:mono, fontSize:13,
+            fontWeight:700, letterSpacing:2, textTransform:"uppercase",
+            cursor:isScanning||isSuccess||!canSubmit?"not-allowed":"pointer",
+            border:`1px solid ${isSuccess?C.green:isError?C.red:C.accent}`,
+            color:isSuccess?C.green:isError?C.red:C.accent,
+            background:isSuccess?C.greenDim:isError?C.redDim:C.accentDim,
+            transition:"all 0.2s", opacity:!canSubmit?0.4:1 }}>
+          {isScanning?"PROCESSING…":isSuccess?"✓ "+(mode==="signup"?"ACCOUNT CREATED":"AUTHORISED"):
+            isError?"FAILED":mode==="signup"?"CREATE ACCOUNT →":"SIGN IN →"}
+        </button>
+
+        <div style={{ marginTop:12, textAlign:"center" }}>
+          <button onClick={switchMode} disabled={isScanning||isSuccess}
+            style={{ background:"none", border:"none", cursor:"pointer",
+              fontFamily:mono, fontSize:11, letterSpacing:1, color:C.p2 }}>
+            {mode==="signup"?"Already have an account? SIGN IN":"Need an account? CREATE ONE"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Full-page mode ────────────────────────────────────────────────────────
   return (
     <div style={{
       minHeight:"100vh", background:C.bg0,

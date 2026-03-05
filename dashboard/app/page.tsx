@@ -170,6 +170,7 @@ function SimulatedDecision() {
 function LandingPage({ onSelect }: { onSelect: (mode: "demo" | "live") => void }) {
   const [hovered, setHovered] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [showAuthPopup, setShowAuthPopup] = useState(false);
   useEffect(() => { setTimeout(() => setMounted(true), 50); }, []);
 
   return (
@@ -179,7 +180,49 @@ function LandingPage({ onSelect }: { onSelect: (mode: "demo" | "live") => void }
       display: "flex", flexDirection: "column", alignItems: "center",
       padding: "60px 32px 48px",
       opacity: mounted ? 1 : 0, transition: "opacity 0.6s ease",
+      position: "relative",
     }}>
+
+      {/* ── Top-right Login / Sign Up button ── */}
+      <div style={{ position: "fixed", top: 16, right: 24, zIndex: 200 }}>
+        <button
+          onClick={() => setShowAuthPopup(v => !v)}
+          style={{
+            fontFamily: mono, fontSize: 11, letterSpacing: 2,
+            textTransform: "uppercase", cursor: "pointer",
+            padding: "8px 18px",
+            background: showAuthPopup ? C.accentDim : "transparent",
+            border: `1px solid ${showAuthPopup ? C.accent : C.line2}`,
+            color: showAuthPopup ? C.accent : C.p2,
+            transition: "all 0.18s",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
+          onMouseLeave={e => { if (!showAuthPopup) { e.currentTarget.style.borderColor = C.line2; e.currentTarget.style.color = C.p2; } }}
+        >
+          {showAuthPopup ? "✕ Close" : "Sign In / Sign Up"}
+        </button>
+
+        {/* Popup panel */}
+        {showAuthPopup && (
+          <div style={{
+            position: "absolute", top: "calc(100% + 10px)", right: 0,
+            width: 400, zIndex: 300,
+            background: C.bg1, border: `1px solid ${C.line2}`,
+            borderTop: `2px solid ${C.accent}`,
+            boxShadow: "0 12px 40px rgba(0,0,0,0.7)",
+            animation: "popupIn 0.2s ease-out",
+          }}>
+            <GovernorLogin onBack={() => setShowAuthPopup(false)} />
+          </div>
+        )}
+      </div>
+
+      <style>{`
+        @keyframes popupIn {
+          from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+      `}</style>
       {/* ── Header ── */}
       <div style={{ display: "flex", alignItems: "center", gap: 18, marginBottom: 12 }}>
         <ClawIcon size={64} />
@@ -288,10 +331,7 @@ function LandingPage({ onSelect }: { onSelect: (mode: "demo" | "live") => void }
             padding: "7px 14px", background: C.bg0,
             border: `1px solid ${C.line}`, letterSpacing: 0.5,
           }}>
-            <span style={{ color: C.p3 }}>credentials:</span>{" "}
-            <span style={{ color: C.p2 }}>admin</span>{" "}
-            <span style={{ color: C.p3 }}>/</span>{" "}
-            <span style={{ color: C.p2 }}>Gov3rnor-Pr0d!</span>
+            <span style={{ color: C.p3 }}>sign in or create an account to begin</span>
           </div>
         </div>
 
@@ -334,8 +374,7 @@ function LandingPage({ onSelect }: { onSelect: (mode: "demo" | "live") => void }
             padding: "7px 14px", background: C.bg0,
             border: `1px solid ${C.line}`, letterSpacing: 0.5,
           }}>
-            <span style={{ color: C.p3 }}>requires:</span>{" "}
-            <span style={{ color: C.p2 }}>governor-service backend</span>
+            <span style={{ color: C.p3 }}>connects to governor-service · JWT auth</span>
           </div>
         </div>
       </div>
