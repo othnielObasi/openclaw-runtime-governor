@@ -1141,14 +1141,106 @@ function MultiAgentLab({ API_BASE, getToken, onResult }) {
   const [running, setRunning] = useState({}); // key: index, val: true/false
   const [runAllStatus, setRunAllStatus] = useState("idle"); // idle | running | done
 
+  // Stable IDs for the whole lab session (survives re-runs within same mount)
+  const labTraceId = useRef(`trace-lab-${hexId(8)}`);
+  const labConvId  = useRef(`conv-lab-${hexId(8)}`);
+  const spanCounter = useRef(0);
+
+  // Helper: POST conversation turn for a scenario result
+  const postConversationTurn = async (sc, idx, r, sessionId) => {
+    try {
+      await fetch(`${API_BASE}/conversations/turns`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversation_id: labConvId.current,
+          turn_index: idx,
+          agent_id: sc.agent,
+          session_id: sessionId,
+          user_id: "dashboard-operator",
+          channel: "scenario-lab",
+          prompt: `[Scenario: ${sc.label}] ${sc.desc}`,
+          agent_reasoning: `Tool: ${sc.tool} | Trust: ${sc.trust} | Args: ${JSON.stringify(sc.args).slice(0,200)}`,
+          agent_response: `Decision: ${r.decision} | Risk: ${r.risk} | ${r.explanation.slice(0,300)}`,
+          tool_plan: [{ tool: sc.tool, args: sc.args }],
+        }),
+      });
+    } catch { /* best-effort */ }
+  };
+
+  // Helper: ingest trace spans for all completed scenarios
+  const ingestLabTraceSpans = async (completedResults) => {
+    const now = new Date().toISOString();
+    const spans = [
+      // Root span for the whole lab run
+      {
+        trace_id: labTraceId.current,
+        span_id: "span-lab-root",
+        kind: "agent",
+        name: "Multi-Agent Scenario Lab",
+        status: "ok",
+        start_time: now,
+        end_time: now,
+        agent_id: "scenario-lab",
+        session_id: labConvId.current,
+        attributes: {
+          "lab.total_scenarios": SCENARIOS.length,
+          "lab.completed": Object.keys(completedResults).length,
+          "lab.allowed": Object.values(completedResults).filter(r => r.decision === "allow").length,
+          "lab.blocked": Object.values(completedResults).filter(r => r.decision === "block").length,
+          "lab.reviewed": Object.values(completedResults).filter(r => r.decision === "review").length,
+        },
+      },
+      // One child span per scenario that was run
+      ...Object.entries(completedResults).map(([idx, r]) => {
+        const sc = SCENARIOS[parseInt(idx)];
+        return {
+          trace_id: labTraceId.current,
+          span_id: `span-lab-s${idx}`,
+          parent_span_id: "span-lab-root",
+          kind: "tool",
+          name: `${sc.label} (${sc.agent})`,
+          status: r.decision === "error" ? "error" : "ok",
+          start_time: now,
+          end_time: now,
+          duration_ms: r.duration || 0,
+          agent_id: sc.agent,
+          session_id: labConvId.current,
+          attributes: {
+            "scenario.tool": sc.tool,
+            "scenario.trust": sc.trust,
+            "scenario.decision": r.decision,
+            "scenario.risk": r.risk,
+            "scenario.expected": sc.expect,
+            "scenario.explanation": (r.explanation || "").slice(0, 300),
+          },
+        };
+      }),
+    ];
+    try {
+      await fetch(`${API_BASE}/traces/ingest`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ spans }),
+      });
+    } catch { /* best-effort */ }
+  };
+
   const runScenario = async (idx) => {
     const sc = SCENARIOS[idx];
     setRunning(prev => ({ ...prev, [idx]: true }));
+    spanCounter.current += 1;
     const sessionId = `scenario-${hexId(6)}`;
+    const spanId = `span-lab-eval-${String(spanCounter.current).padStart(3, "0")}`;
     const context = {
       agent_id: sc.agent,
       session_id: sessionId,
       trust_level: sc.trust,
+      trace_id: labTraceId.current,
+      span_id: spanId,
+      conversation_id: labConvId.current,
+      user_id: "dashboard-operator",
+      channel: "scenario-lab",
       ...(sc.scope ? { allowed_tools: sc.scope } : {}),
     };
     const t0 = performance.now();
@@ -1168,6 +1260,10 @@ function MultiAgentLab({ API_BASE, getToken, onResult }) {
           chain_pattern: data.chain_pattern || null, fee: data.governance_fee_surge || null,
           trace: data.execution_trace || null, policy: data.matched_policies || [] };
         setResults(prev => ({ ...prev, [idx]: r }));
+        // Post conversation turn so it appears in Conversations tab
+        postConversationTurn(sc, idx, r, sessionId);
+        // Ingest a parent trace span so this shows in the Traces tab even for single runs
+        ingestLabTraceSpans({ [idx]: r });
         if (onResult && r.decision !== "error") {
           onResult(sc.tool, {
             decision: r.decision, risk: r.risk, policy: (r.policy || []).join(", ") || "api-pipeline",
@@ -1185,12 +1281,24 @@ function MultiAgentLab({ API_BASE, getToken, onResult }) {
   };
 
   const runAll = async () => {
+    // Reset IDs for a fresh run
+    labTraceId.current = `trace-lab-${hexId(8)}`;
+    labConvId.current  = `conv-lab-${hexId(8)}`;
+    spanCounter.current = 0;
     setRunAllStatus("running");
     setResults({});
     for (let i = 0; i < SCENARIOS.length; i++) {
       await runScenario(i);
       await new Promise(r => setTimeout(r, 300));
     }
+    // After all scenarios complete, upload trace spans in one batch
+    // Use a small delay to ensure React state has settled, then read directly
+    await new Promise(r => setTimeout(r, 200));
+    setResults(prev => {
+      // Fire trace ingestion with the latest state
+      ingestLabTraceSpans(prev);
+      return prev;
+    });
     setRunAllStatus("done");
   };
 
