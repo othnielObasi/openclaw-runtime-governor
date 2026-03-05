@@ -31,24 +31,12 @@ def seed_admin() -> None:
     env = os.getenv("GOVERNOR_ENVIRONMENT", "development")
 
     with db_session() as session:
-        existing = session.execute(select(User)).scalars().first()
+        # Only ensure the target account exists — never touch other users
+        existing = session.execute(
+            select(User).where(User.username == username)
+        ).scalars().first()
         if existing:
-            return  # Users already seeded — don't overwrite
-
-        if password == _DEFAULT_PASSWORD:
-            print(
-                "\n⚠️  WARNING: Seeding admin with DEFAULT password 'changeme'.\n"
-                "   Set GOVERNOR_ADMIN_PASSWORD before deploying to production.\n",
-                file=sys.stderr,
-            )
-            if env != "development":
-                print(
-                    "🚨 REFUSING to seed default password in non-development "
-                    f"environment ({env}).\n"
-                    "   Set GOVERNOR_ADMIN_PASSWORD env var.\n",
-                    file=sys.stderr,
-                )
-                return
+            return  # Account already exists
 
         admin = User(
             username=username,
@@ -59,4 +47,4 @@ def seed_admin() -> None:
             is_active=True,
         )
         session.add(admin)
-        print(f"[seed] Default admin created: {username}")
+        print(f"[seed] Created account: {username}")
