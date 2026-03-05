@@ -167,7 +167,7 @@ function SimulatedDecision() {
   );
 }
 
-function LandingPage({ onSelect }: { onSelect: (mode: "demo" | "live") => void }) {
+function LandingPage() {
   const [hovered, setHovered] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const [showAuthPopup, setShowAuthPopup] = useState(false);
@@ -287,26 +287,23 @@ function LandingPage({ onSelect }: { onSelect: (mode: "demo" | "live") => void }
         <SimulatedDecision />
       </div>
 
-      {/* ── Mode selection ── */}
+      {/* ── Capability cards ── */}
       <div style={{
         display: "flex", gap: 24, flexWrap: "wrap", justifyContent: "center",
         width: "100%", maxWidth: 900,
       }}>
-        {/* Demo */}
+        {/* Runtime Governance */}
         <div
           style={{
             flex: 1, minWidth: 300, maxWidth: 420,
-            background: hovered === "demo" ? C.bg2 : C.bg1,
-            border: `1px solid ${hovered === "demo" ? C.green : C.line}`,
-            borderTop: `3px solid ${hovered === "demo" ? C.green : C.line}`,
-            padding: "30px 28px", cursor: "pointer",
+            background: hovered === "gov" ? C.bg2 : C.bg1,
+            border: `1px solid ${hovered === "gov" ? C.green : C.line}`,
+            borderTop: `3px solid ${hovered === "gov" ? C.green : C.line}`,
+            padding: "30px 28px",
             transition: "all 0.25s ease",
-            transform: hovered === "demo" ? "translateY(-3px)" : "none",
-            boxShadow: hovered === "demo" ? `0 6px 24px ${C.green}18` : "none",
           }}
-          onMouseEnter={() => setHovered("demo")}
+          onMouseEnter={() => setHovered("gov")}
           onMouseLeave={() => setHovered(null)}
-          onClick={() => onSelect("demo")}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
             <div style={{
@@ -317,39 +314,39 @@ function LandingPage({ onSelect }: { onSelect: (mode: "demo" | "live") => void }
               fontFamily: mono, fontSize: 16, fontWeight: 700,
               color: C.green, letterSpacing: 2.5, textTransform: "uppercase", margin: 0,
             }}>
-              Demo Mode
+              Runtime Governance
             </h2>
           </div>
           <p style={{
             fontFamily: sans, fontSize: 14, color: C.p2, margin: "0 0 16px", lineHeight: 1.6,
           }}>
-            Multi-agent governance lab with real API calls.
-            Run scenarios across 6 agent identities — live policy enforcement.
+            5-layer evaluation pipeline intercepts every tool call.
+            Policy-as-code rules, injection firewall, scope enforcement, and kill switch.
           </p>
           <div style={{
             fontFamily: mono, fontSize: 11, color: C.p3,
             padding: "7px 14px", background: C.bg0,
             border: `1px solid ${C.line}`, letterSpacing: 0.5,
+            display: "flex", gap: 12, flexWrap: "wrap",
           }}>
-            <span style={{ color: C.p3 }}>sign in or create an account to begin</span>
+            <span>policy engine</span><span style={{ color: C.line2 }}>·</span>
+            <span>risk scoring</span><span style={{ color: C.line2 }}>·</span>
+            <span>multi-agent</span>
           </div>
         </div>
 
-        {/* Live */}
+        {/* Audit & Compliance */}
         <div
           style={{
             flex: 1, minWidth: 300, maxWidth: 420,
-            background: hovered === "live" ? C.bg2 : C.bg1,
-            border: `1px solid ${hovered === "live" ? C.accent : C.line}`,
-            borderTop: `3px solid ${hovered === "live" ? C.accent : C.line}`,
-            padding: "30px 28px", cursor: "pointer",
+            background: hovered === "audit" ? C.bg2 : C.bg1,
+            border: `1px solid ${hovered === "audit" ? C.accent : C.line}`,
+            borderTop: `3px solid ${hovered === "audit" ? C.accent : C.line}`,
+            padding: "30px 28px",
             transition: "all 0.25s ease",
-            transform: hovered === "live" ? "translateY(-3px)" : "none",
-            boxShadow: hovered === "live" ? `0 6px 24px ${C.accent}18` : "none",
           }}
-          onMouseEnter={() => setHovered("live")}
+          onMouseEnter={() => setHovered("audit")}
           onMouseLeave={() => setHovered(null)}
-          onClick={() => onSelect("live")}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
             <div style={{
@@ -360,21 +357,24 @@ function LandingPage({ onSelect }: { onSelect: (mode: "demo" | "live") => void }
               fontFamily: mono, fontSize: 16, fontWeight: 700,
               color: C.accent, letterSpacing: 2.5, textTransform: "uppercase", margin: 0,
             }}>
-              Live Mode
+              Audit &amp; Compliance
             </h2>
           </div>
           <p style={{
             fontFamily: sans, fontSize: 14, color: C.p2, margin: "0 0 16px", lineHeight: 1.6,
           }}>
-            Connect to governor-service with JWT auth. Real-time policy enforcement,
-            telemetry streams, and admin controls for production governance.
+            Full decision trace for every evaluation. Telemetry streams,
+            conversation history, RBAC auth, and admin controls.
           </p>
           <div style={{
             fontFamily: mono, fontSize: 11, color: C.p3,
             padding: "7px 14px", background: C.bg0,
             border: `1px solid ${C.line}`, letterSpacing: 0.5,
+            display: "flex", gap: 12, flexWrap: "wrap",
           }}>
-            <span style={{ color: C.p3 }}>connects to governor-service · JWT auth</span>
+            <span>audit trail</span><span style={{ color: C.line2 }}>·</span>
+            <span>telemetry</span><span style={{ color: C.line2 }}>·</span>
+            <span>RBAC</span>
           </div>
         </div>
       </div>
@@ -427,7 +427,6 @@ function LandingPage({ onSelect }: { onSelect: (mode: "demo" | "live") => void }
 
 export default function Page() {
   const { user, logout, loading } = useAuth();
-  const [mode, setMode] = useState<"landing" | "demo" | "live">("landing");
 
   // Loading auth state from localStorage
   if (loading) {
@@ -443,19 +442,16 @@ export default function Page() {
     );
   }
 
-  // Both demo and live mode use the same dashboard — requires auth
-  if (mode === "demo" || mode === "live") {
-    if (!user) {
-      return <GovernorLogin onBack={() => setMode("landing")} />;
-    }
+  // Authenticated → go straight to dashboard
+  if (user) {
     return (
       <GovernorDashboard
         userRole={user.role}
         userName={user.name}
-        onLogout={() => { logout(); setMode("landing"); }}
+        onLogout={logout}
       />
     );
   }
 
-  return <LandingPage onSelect={setMode} />;
+  return <LandingPage />;
 }
